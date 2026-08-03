@@ -1,0 +1,142 @@
+<template lang="pug">
+.tryon
+  .consent-bar(v-if="!consented")
+    i.ti.ti-alert-triangle
+    .consent-bar__text
+      strong 上傳真人照片前，請先完成肖像使用同意
+      span 真人顧客涉及肖像與個資權；建議優先使用內建模特。同意一次即全站生效。
+    button.consent-bar__btn(@click="showConsent = true") 查看同意條款
+
+  .tryon__body
+    section.panel.tryon__input
+      .step
+        .step__title 1. 選擇模特
+        .subtabs
+          button.subtab(v-for="s in modelTabs" :key="s" :class="{ 'is-active': modelTab === s }" @click="modelTab = s") {{ s }}
+        .models
+          button.model(v-for="m in models" :key="m" :class="{ 'is-active': model === m }" @click="model = m")
+            span.model__avatar
+              i.ti.ti-user
+            span.model__label {{ m }}
+        button.link 檢視完整模特庫（內建 12 位）
+      .step
+        .step__title 2. 選擇服飾素材
+        .dropzone
+          i.ti.ti-hanger.dropzone__icon
+          span.dropzone__name(v-if="apparel") {{ apparel.name }}
+        .dropzone__actions
+          button.btn-outline(@click="pickerOpen = true") 從圖庫選擇
+          span.dropzone__hint 建議先去背
+      p.err(v-if="errorMsg") {{ errorMsg }}
+      .tryon__footer
+        .cost
+          .cost__label 預估消耗
+          .cost__value 15 顆飼料
+        button.btn-primary(:disabled="generating" @click="onGenerate")
+          i.ti(:class="generating ? 'ti-loader spin' : 'ti-sparkles'")
+          span {{ generating ? '生成中…' : '生成試穿' }}
+
+    section.panel.tryon__result
+      .result__head
+        h2.result__title 試穿結果
+        span.result__hint 多角度為進階選項
+      .result__box
+        template(v-if="done")
+          i.ti.ti-user
+          span.result__placeholder 試穿圖已生成
+        template(v-else)
+          i.ti.ti-user
+          span.result__placeholder 選好模特與服飾後生成
+
+  ImagePickerDialog(v-model:open="pickerOpen" title="選擇服飾素材" @select="onPick")
+
+  Teleport(to="body")
+    .cmodal(v-if="showConsent" @click.self="showConsent = false")
+      .cmodal__box
+        h3.cmodal__title 肖像使用同意
+        p.cmodal__text 上傳真人照片代表你已取得當事人同意，將其肖像用於 AI 試穿生成。同意一次即在此帳號全站生效，可於設定中撤回。
+        .cmodal__actions
+          button.btn-plain(@click="showConsent = false") 取消
+          button.btn-primary(@click="agree") 我同意（全站一次生效）
+</template>
+
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import { storeToRefs } from 'pinia'
+import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
+import { useConsentStore } from '@/stores/consent'
+import { useFeedStore } from '@/stores/feed'
+import { api } from '@/api'
+import { isInsufficientFeed } from '@/utils/error'
+import type { Asset } from '@/types/api'
+
+const consentStore = useConsentStore()
+const { consented } = storeToRefs(consentStore)
+const feed = useFeedStore()
+
+const modelTabs = ['內建模特庫', '上傳模特照']
+const modelTab = ref('內建模特庫')
+const models = ['女·休閒', '男·正裝', '女·運動', '女·優雅']
+const model = ref('女·休閒')
+const apparel = ref<Asset | null>(null)
+const pickerOpen = ref(false)
+const showConsent = ref(false)
+const generating = ref(false)
+const done = ref(false)
+const errorMsg = ref('')
+
+onMounted(() => { consentStore.load() })
+
+const onPick = (a: Asset) => { apparel.value = a }
+const agree = async () => { await consentStore.give(); showConsent.value = false }
+
+async function onGenerate() {
+  if (!consented.value) { showConsent.value = true; return } // 未同意 → 擋住並要求同意
+  errorMsg.value = ''
+  generating.value = true
+  done.value = false
+  try {
+    await api.tryOn()
+    await feed.refresh()
+    done.value = true
+  } catch (e: unknown) {
+    errorMsg.value = isInsufficientFeed(e) ? '飼料不足，請先儲值。' : '生成失敗，請再試一次。'
+  } finally {
+    generating.value = false
+  }
+}
+</script>
+
+<style scoped lang="scss">
+.consent-bar { @include flex(flex-start, center, 12px); background: #FAEEDA; color: #854F0B; border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; i { font-size: 18px; flex-shrink: 0; }
+  &__text { flex: 1; display: flex; flex-direction: column; strong { font-size: 14px; } span { font-size: 12.5px; color: #96601a; } }
+  &__btn { border: 1px solid #BA7517; color: #854F0B; background: $white; border-radius: 999px; padding: 7px 14px; font-size: 13px; white-space: nowrap; } }
+.tryon__body { display: grid; grid-template-columns: 380px 1fr; gap: 20px; align-items: start; }
+.panel { @include card; padding: 22px; }
+.step { margin-bottom: 22px; &__title { font-size: 15px; font-weight: 700; color: $blue-dark-300; margin-bottom: 12px; } }
+.subtabs { @include flex(flex-start, center, 8px); margin-bottom: 14px; }
+.subtab { padding: 6px 14px; border-radius: 999px; font-size: 13px; color: $gray-400; border: 1px solid $gray; background: $white;
+  &.is-active { background: $blue-dark-300; color: $white; border-color: $blue-dark-300; } }
+.models { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
+.model { @include flex(center, center, 6px); flex-direction: column; padding: 12px 4px; border: 2px solid transparent; border-radius: 10px; background: $white;
+  &__avatar { width: 44px; height: 44px; border-radius: 50%; background: $blue-light; color: $babyBlue; font-size: 22px; @include flex(center, center); }
+  &__label { font-size: 12px; color: $gray-400; } &.is-active { border-color: $blue; .model__label { color: $blue-dark-300; font-weight: 600; } } }
+.link { font-size: 13px; color: $blue; }
+.dropzone { @include flex(center, center); flex-direction: column; aspect-ratio: 4 / 3; border: 1.5px dashed $gray; border-radius: 10px; background: $blue-light; color: $babyBlue; font-size: 34px; margin-bottom: 12px;
+  &__name { font-size: 13px; color: $gray-400; margin-top: 8px; } &__actions { @include flex(flex-start, center, 12px); } &__hint { font-size: 12px; color: $gray-100; } }
+.err { color: $red; font-size: 13px; margin-bottom: 12px; }
+.tryon__footer { @include flex(space-between, flex-end); border-top: 1px solid $lightGray; padding-top: 16px; }
+.cost { &__label { font-size: 12px; color: $gray-100; } &__value { font-size: 17px; font-weight: 700; color: $blue-dark-300; } }
+.btn-outline { border: 1px solid $gray; border-radius: 999px; padding: 8px 16px; font-size: 14px; color: $blue-dark-300; background: $white; &:hover { border-color: $blue; } }
+.btn-primary { @include flex(center, center, 6px); background: $blue-dark-300; color: $white; font-weight: 600; padding: 11px 20px; border-radius: 10px; font-size: 14px; box-shadow: $btnBoxShadow; &:disabled { opacity: .5; } }
+.btn-plain { border: 1px solid $gray; border-radius: 999px; padding: 9px 20px; font-size: 14px; color: $blue-dark-300; background: $white; }
+.result__head { @include flex(space-between, baseline); margin-bottom: 16px; .result__title { font-size: 18px; font-weight: 700; color: $blue-dark-300; } .result__hint { font-size: 12px; color: $gray-100; } }
+.result__box { @include flex(center, center); flex-direction: column; gap: 10px; aspect-ratio: 3 / 4; max-width: 320px; margin: 0 auto; background: $blue-light; border-radius: 12px; color: $babyBlue; font-size: 40px; }
+.result__placeholder { font-size: 13px; color: $gray-100; }
+.cmodal { position: fixed; inset: 0; z-index: 1000; background: rgba(23,30,82,.45); @include flex(center, center); padding: 24px; }
+.cmodal__box { width: 440px; max-width: 100%; background: $white; border-radius: 16px; padding: 24px; }
+.cmodal__title { font-size: 17px; font-weight: 700; color: $blue-dark-300; margin-bottom: 10px; }
+.cmodal__text { font-size: 14px; color: $gray-400; line-height: 1.6; margin-bottom: 18px; }
+.cmodal__actions { @include flex(flex-end, center, 10px); }
+.spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
+</style>

@@ -1,0 +1,13 @@
+@use 'variables' as *;
+
+@mixin flex($justify: flex-start, $align: center, $gap: 0) {
+  display: flex;
+  justify-content: $justify;
+  align-items: $align;
+  @if $gap != 0 { gap: $gap; }
+}
+@mixin card {
+  background: $white;
+  border: 1px solid $gray;
+  border-radius: 12px;
+}
