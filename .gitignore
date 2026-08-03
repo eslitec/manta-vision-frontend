@@ -1,0 +1,51 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+.DS_Store
+dist
+dist-ssr
+coverage
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+*.tsbuildinfo
+
+.eslintcache
+
+# Cypress
+/cypress/videos/
+/cypress/screenshots/
+
+# Vitest
+__screenshots__/
+
+# Vite
+*.timestamp-*-*.mjs
+
+# 環境變數（含機密，勿進版控；保留範例檔）
+.env
+.env.*
+!.env.example
+
+# 本機筆記（僅供個人參考，不進版控）
+Figma-MCP-功能說明.md
+
+# 除錯產物（Playwright MCP 暫存、手動截圖）
+.playwright-mcp/
+library-*.png
