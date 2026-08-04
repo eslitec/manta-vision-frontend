@@ -1,8 +1,8 @@
 <template lang="pug">
 .feed-badge
   span.feed-badge__icon 🪙
-  span.feed-badge__num {{ balance.toLocaleString() }} {{ $t('feedBadge.unit') }}
-  button.feed-badge__topup {{ $t('feedBadge.topup') }}
+  span.feed-badge__num {{ balance.toLocaleString() }} 顆
+  button.feed-badge__topup 儲值
 </template>
 
 <script setup lang="ts">

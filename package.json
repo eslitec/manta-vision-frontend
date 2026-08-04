@@ -13,12 +13,11 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@vueuse/core": "^11.0.0",
     "@tabler/icons-webfont": "^3.0.0",
+    "@vueuse/core": "^11.0.0",
     "axios": "^1.7.0",
     "pinia": "^3.0.0",
     "vue": "^3.4.0",
-    "vue-i18n": "^9.13.0",
     "vue-router": "^4.4.0"
   },
   "devDependencies": {
