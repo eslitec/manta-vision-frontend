@@ -33,8 +33,8 @@
 
 ## 7. 圖示與品牌區塊補強（第一輪驗收後，比對更細的設計稿截圖發現的落差）
 
-- [x] 7.1 卡片圖示（`圖生圖`／`AI 產生行銷 PO 文`／`圖生影片`／`AI 試穿衣服`）從 emoji 換成 `@tabler/icons-webfont`（跟專案其他 8 個畫面既有的 `i.ti.ti-*` 慣例一致）
-- [x] 7.2 側邊欄導覽圖示（`AI 生成工作台`／`圖庫管理中心`／`飼料用量`／`設定`）同樣從 emoji 換成 `i.ti.ti-*`
+- [x] 7.1 卡片圖示（`圖生圖`／`AI 產生行銷 PO 文`／`圖生影片`／`AI 試穿衣服`）從 emoji 換成 `@tabler/icons-webfont`（跟專案其他 8 個畫面既有的 `i.ti.ti-*` 慣例一致，後續在任務 8.6 被使用者提供的精確 SVG 素材取代）
+- [x] 7.2 側邊欄導覽圖示（`AI 生成工作台`／`圖庫管理中心`／`飼料用量`／`設定`）同樣從 emoji 換成 `i.ti.ti-*`（後續在任務 8.4 被使用者提供的精確 SVG 素材取代）
 - [x] 7.3 消耗飼料徽章從純文字「AI」換成設計稿提供的實際 SVG 插圖（帶「AI」字樣的瓶子圖形）
 - [x] 7.4 側邊欄品牌區塊（「日安選物／Manta Vision」）加上跟使用中導覽項目一致的反白＋左側強調色條樣式
 - [x] 7.5 狀態列（`AI 飼料餘額`／`本月已生成`／`品牌設定`）之間的分隔線改用 `::before` 偽元素實作在 `.stats__item:not(:first-child)` 上，移除獨立的 `.stats__divider` DOM 節點，間距改用 flex `gap`
@@ -44,3 +44,10 @@
 - [x] 7.9 修正 `.sidebar__item.is-active` 的反白背景，改成貼齊側邊欄左右邊緣（`margin: 0 -14px` 抵銷父層 padding，`padding` 補回等量），對齊設計稿標註的「200 Fill」；強調色條 `::before` 的 `left` 從 `-14px` 改成 `0`
 
 ## 8. 精確數值比對（使用者透過 Figma Inspect 逐一提供，持續進行中，本節會隨進度增補）
+
+- [x] 8.1 「日安選物」文字：`font-size 15px→16px`、補上 `font-weight: 700`、`line-height` 改用比例 `1.375`（= 22px ÷ 16px，不寫死 px，字級調整時行高自動跟著縮放）
+- [x] 8.2 `.sidebar__brand`（品牌區塊）反白背景改成貼齊側邊欄左右邊緣，做法跟任務 7.9 的使用中導覽項目相同（`margin: 0 -16px` 抵銷父層 padding、`padding` 補回等量、`::before` 的 `left` 改成 `0`）
+- [x] 8.3 「Manta Vision」文字：補上 `font-weight: 400`、`line-height` 改用比例 `1.4286`（= 20px ÷ 14px）、顏色從 `$gray-400`（#606472）改成設計稿精確色碼 `#606692`（兩者非常接近但不是同一個色號）
+- [x] 8.4 側邊欄 4 個導覽圖示換成使用者提供的精確 SVG 素材（多色、多路徑，無法用圖示字型表示），新增 `src/components/icons/`（`IconAiSparkle`、`IconLibraryPhoto`、`IconFeedBottleSmall`、`IconSettings`）4 個小型元件，樣板改用 `<component :is="item.icon">` 動態渲染
+- [x] 8.5 側邊欄強調色條（`.sidebar__brand::before`、`.sidebar__item.is-active::before`）從貼滿整個區塊高度（`top:0;bottom:0`），改成跟文字/圖示等高、垂直居中（`top:50%; transform: translateY(-50%); height:20px`）
+- [x] 8.6 首頁 5 個卡片圖示（`圖生圖`／`AI 產生行銷 PO 文`／`圖生影片`／`AI 試穿衣服`／`圖庫管理中心`）換成使用者提供的精確 SVG 素材，新增對應的 5 個 `src/components/icons/` 元件；這些 SVG 自帶圓角背景色（`rect rx="8" fill="#EFF2FA"`，剛好等於 `$blue-light`），因此移除 `.card__icon` 原本額外補上的 `background`／`border-radius`／`color`／`font-size`（不再需要，SVG 已自帶）

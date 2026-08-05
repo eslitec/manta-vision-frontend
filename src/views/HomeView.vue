@@ -26,7 +26,7 @@
   .cards
     router-link.card(v-for="t in genTools" :key="t.key" :to="t.to")
       .card__icon
-        i.ti(:class="t.icon")
+        component(:is="t.icon")
       .card__body
         .card__title {{ t.title }}
         .card__desc {{ t.desc }}
@@ -42,7 +42,7 @@
 
   router-link.card.card--wide(to="/library")
     .card__icon
-      i.ti.ti-photo
+      IconLibraryPhotoLarge
     .card__body
       .card__title 圖庫管理中心
       .card__desc 所有素材與生成結果的單一來源，模組輸入從這裡取、結果自動存回並記錄來源鏈。
@@ -56,6 +56,11 @@ import { useFeedStore } from '@/stores/feed'
 import { useBrandStore } from '@/stores/brand'
 import { api } from '@/api'
 import type { UsageSummary } from '@/types/api'
+import IconGenImage from '@/components/icons/IconGenImage.vue'
+import IconMarketingPost from '@/components/icons/IconMarketingPost.vue'
+import IconGenVideo from '@/components/icons/IconGenVideo.vue'
+import IconTryOn from '@/components/icons/IconTryOn.vue'
+import IconLibraryPhotoLarge from '@/components/icons/IconLibraryPhotoLarge.vue'
 
 const feed = useFeedStore()
 const { balance } = storeToRefs(feed)
@@ -84,28 +89,28 @@ const brandReady = computed(() => {
 const genTools = [
   {
     key: 'image',
-    icon: 'ti-sparkles',
+    icon: IconGenImage,
     to: '/generate/image',
     title: '圖生圖',
     desc: '以參考圖＋文字描述生成新圖，AI 輔助撰寫 prompt。',
   },
   {
     key: 'post',
-    icon: 'ti-file-text-ai',
+    icon: IconMarketingPost,
     to: '/generate/post',
     title: 'AI 產生行銷 PO 文',
     desc: '商品圖一鍵生成貼文文案與配圖，支援多種比例。',
   },
   {
     key: 'video',
-    icon: 'ti-player-play',
+    icon: IconGenVideo,
     to: '/generate/video',
     title: '圖生影片',
     desc: '單張圖套用動態模板，生成 5-10 秒短影片。',
   },
   {
     key: 'tryon',
-    icon: 'ti-user',
+    icon: IconTryOn,
     to: '/generate/tryon',
     title: 'AI 試穿衣服',
     desc: '模特照＋服飾素材合成試穿圖，與圖庫直接打通。',
@@ -192,7 +197,7 @@ const genTools = [
   }
   &__topup {
     align-self: center;
-    background: $orange;
+    background: $golden;
     color: $white;
     font-weight: 700;
     padding: 12px 20px;
@@ -224,12 +229,8 @@ const genTools = [
   &__icon {
     width: 40px;
     height: 40px;
-    border-radius: 10px;
     flex-shrink: 0;
     @include flex(center, center);
-    font-size: 20px;
-    color: $blue-dark-300;
-    background: $blue-light;
   }
   &__feed-badge {
     position: absolute;

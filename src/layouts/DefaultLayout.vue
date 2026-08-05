@@ -15,7 +15,7 @@
         :class="{ 'is-active': isActive(item.to) }"
       )
         span.sidebar__item-icon
-          i.ti(:class="item.icon")
+          component(:is="item.icon")
         span {{ item.label }}
     .sidebar__footer
       span.sidebar__footer-link 教學文件
@@ -41,14 +41,18 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import FeedBadge from '@/components/FeedBadge.vue'
+import IconAiSparkle from '@/components/icons/IconAiSparkle.vue'
+import IconLibraryPhoto from '@/components/icons/IconLibraryPhoto.vue'
+import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
+import IconSettings from '@/components/icons/IconSettings.vue'
 
 const route = useRoute()
 const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.startsWith(to))
 const navItems = [
-  { label: 'AI 生成工作台', icon: 'ti-sparkles', to: '/' },
-  { label: '圖庫管理中心', icon: 'ti-library-photo', to: '/library' },
-  { label: '飼料用量', icon: 'ti-chart-bar', to: '/usage' },
-  { label: '設定', icon: 'ti-settings', to: '/settings' },
+  { label: 'AI 生成工作台', icon: IconAiSparkle, to: '/' },
+  { label: '圖庫管理中心', icon: IconLibraryPhoto, to: '/library' },
+  { label: '飼料用量', icon: IconFeedBottleSmall, to: '/usage' },
+  { label: '設定', icon: IconSettings, to: '/settings' },
 ]
 </script>
 
@@ -64,30 +68,31 @@ const navItems = [
   flex-shrink: 0;
   background: $blue-dark-200;
   color: $white;
-  padding: 20px 14px;
+  padding: 20px 16px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 2px;
   &__logo {
     font-size: 20px;
     font-weight: 700;
-    padding: 4px 10px;
+    padding: 4px 0;
   }
   &__brand {
     @include flex(flex-start, center, 10px);
     background: $white;
     border-radius: 10px;
-    padding: 10px;
+    margin: 0 -16px;
+    padding: 10px 16px;
     position: relative;
     &::before {
       content: '';
       position: absolute;
-      left: -14px;
-      top: 0;
-      bottom: 0;
-      width: 3px;
-      background: $orange;
-      border-radius: 0 2px 2px 0;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 20px;
+      width: 4px;
+      background: $golden;
     }
   }
   &__avatar {
@@ -102,12 +107,16 @@ const navItems = [
     flex-direction: column;
     line-height: 1.3;
     strong {
-      font-size: 15px;
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.375;
       color: $blue-dark-300;
     }
     small {
-      color: $gray-400;
+      color: #606692;
       font-size: 14px;
+      font-weight: 400;
+      line-height: 1.4286;
     }
   }
   &__nav {
@@ -135,11 +144,11 @@ const navItems = [
         content: '';
         position: absolute;
         left: 0;
-        top: 0;
-        bottom: 0;
-        width: 3px;
-        background: $orange;
-        border-radius: 0 2px 2px 0;
+        top: 50%;
+        transform: translateY(-50%);
+        height: 20px;
+        width: 4px;
+        background: $golden;
       }
     }
   }
