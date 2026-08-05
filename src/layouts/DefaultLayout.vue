@@ -16,6 +16,9 @@
       )
         span.sidebar__item-icon {{ item.icon }}
         span {{ item.label }}
+    .sidebar__footer
+      span.sidebar__footer-link 教學文件
+      span.sidebar__footer-link 登出
   .main
     header.topbar
       .topbar__crumb
@@ -23,10 +26,13 @@
         span.topbar__sep ›
         span.topbar__cur Manta Vision
       .topbar__right
+        button.topbar__tasks
+          span.topbar__tasks-icon ▶
+          | 任務
         FeedBadge
         .topbar__user
           span.topbar__user-dot
-          span Mavis｜管理者
+          span Mavis｜擁有者
     main.content
       router-view
 </template>
@@ -110,11 +116,34 @@ const navItems = [
       background: $white;
       color: $blue-dark-300;
       font-weight: 600;
+      position: relative;
+      &::before {
+        content: '';
+        position: absolute;
+        left: -14px;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: $orange;
+        border-radius: 0 2px 2px 0;
+      }
     }
   }
   &__item-icon {
     width: 20px;
     text-align: center;
+  }
+  &__footer {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0px 12px;
+  }
+  &__footer-link {
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 13px;
+    padding: 6px 0;
   }
 }
 
@@ -156,6 +185,20 @@ const navItems = [
     height: 26px;
     border-radius: 50%;
     background: $gray;
+  }
+  &__tasks {
+    @include flex(flex-start, center, 6px);
+    height: 32px;
+    padding: 0 14px;
+    border: none;
+    border-radius: 999px;
+    background: $blue-light;
+    color: $blue-dark-300;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  &__tasks-icon {
+    font-size: 10px;
   }
 }
 

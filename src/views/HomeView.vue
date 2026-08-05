@@ -15,7 +15,11 @@
       .stats__label 本月已生成
     .stats__divider
     .stats__item
-      .stats__num.is-ok(v-if="brandReady") ✓ 品牌設定已完成
+      .stats__num.is-ok(v-if="brandReady")
+        svg.icon-check(viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg")
+          circle(cx="10" cy="10" r="9" fill="currentColor" opacity="0.15")
+          path(d="M6 10.2l2.6 2.6L14.2 6.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+        | 品牌設定已完成
       .stats__num.is-muted(v-else) ○ 品牌設定待完成
       .stats__hint {{ brandReady ? '色票・語氣・浮水印皆已設定' : '前往設定補齊品牌資料' }}
     button.stats__topup ＋ 儲值飼料
@@ -23,16 +27,17 @@
   h2.home__section 要生成什麼？
   .cards
     router-link.card(v-for="t in genTools" :key="t.key" :to="t.to")
-      .card__icon(:style="{ background: t.tint }") {{ t.emoji }}
+      .card__icon {{ t.emoji }}
       .card__body
         .card__title {{ t.title }}
         .card__desc {{ t.desc }}
+      span.card__feed-badge AI
 
   router-link.card.card--wide(to="/library")
     .card__icon(:style="{ background: '#EFF2FA' }") 🖼
     .card__body
       .card__title 圖庫管理中心
-      .card__desc 所有素材與生成結果的單一來源；各模組從這裡取用，結果可存回並記錄來源鏈。
+      .card__desc 所有素材與生成結果的單一來源，模組輸入從這裡取、結果自動存回並記錄來源鏈。
     span.card__go 前往圖庫
 </template>
 
@@ -72,7 +77,6 @@ const genTools = [
   {
     key: 'image',
     emoji: '🅰',
-    tint: '#E8F0FF',
     to: '/generate/image',
     title: '圖生圖',
     desc: '以參考圖＋文字描述生成新圖，AI 輔助撰寫 prompt。',
@@ -80,7 +84,6 @@ const genTools = [
   {
     key: 'post',
     emoji: '📝',
-    tint: '#EAF7EE',
     to: '/generate/post',
     title: 'AI 產生行銷 PO 文',
     desc: '商品圖一鍵生成貼文文案與配圖，支援多種比例。',
@@ -88,7 +91,6 @@ const genTools = [
   {
     key: 'video',
     emoji: '🎬',
-    tint: '#E8F0FF',
     to: '/generate/video',
     title: '圖生影片',
     desc: '單張圖套用動態模板，生成 5-10 秒短影片。',
@@ -96,7 +98,6 @@ const genTools = [
   {
     key: 'tryon',
     emoji: '👕',
-    tint: '#FDF3E7',
     to: '/generate/tryon',
     title: 'AI 試穿衣服',
     desc: '模特照＋服飾素材合成試穿圖，與圖庫直接打通。',
@@ -154,11 +155,17 @@ const genTools = [
     &.is-ok {
       font-size: 18px;
       color: $green;
+      @include flex(flex-start, center, 6px);
     }
     &.is-muted {
       font-size: 18px;
       color: $gray-400;
     }
+  }
+  .icon-check {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
   }
   &__label {
     color: $gray-400;
@@ -191,6 +198,7 @@ const genTools = [
   @include flex(flex-start, flex-start, 14px);
   padding: 20px;
   text-align: left;
+  position: relative;
   transition:
     box-shadow 0.15s,
     transform 0.15s;
@@ -205,6 +213,20 @@ const genTools = [
     flex-shrink: 0;
     @include flex(center, center);
     font-size: 20px;
+    background: $blue-light;
+  }
+  &__feed-badge {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: $blue-light;
+    color: $blue-dark-300;
+    font-size: 10px;
+    font-weight: 700;
+    @include flex(center, center);
   }
   &__body {
     flex: 1;
