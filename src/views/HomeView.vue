@@ -135,7 +135,7 @@ const genTools = [
 }
 
 .stats {
-  @include flex(flex-start, stretch, 48px);
+  @include flex(flex-start, stretch, 0);
   @include card;
   margin-top: 22px;
   padding: 22px 26px;
@@ -145,14 +145,17 @@ const genTools = [
     flex-direction: column;
     gap: 4px;
     position: relative;
-    &:not(:first-child)::before {
-      content: '';
-      position: absolute;
-      left: -24px;
-      top: 0;
-      bottom: 0;
-      width: 1px;
-      background: $gray;
+    &:not(:first-child) {
+      margin-left: 48px;
+      &::before {
+        content: '';
+        position: absolute;
+        left: -24px;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: $gray;
+      }
     }
   }
   &__num {
