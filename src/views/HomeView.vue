@@ -115,7 +115,6 @@ const genTools = [
 
 <style scoped lang="scss">
 .home {
-  max-width: 1120px;
   &__title {
     font-size: 28px;
     font-weight: 800;

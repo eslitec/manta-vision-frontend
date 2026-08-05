@@ -60,7 +60,7 @@ const navItems = [
 }
 
 .sidebar {
-  width: 240px;
+  width: 200px;
   flex-shrink: 0;
   background: $blue-dark-200;
   color: $white;
@@ -107,7 +107,7 @@ const navItems = [
     }
     small {
       color: $gray-400;
-      font-size: 12px;
+      font-size: 14px;
     }
   }
   &__nav {
@@ -118,7 +118,8 @@ const navItems = [
   }
   &__item {
     @include flex(flex-start, center, 10px);
-    padding: 11px 12px;
+    margin: 0 -14px;
+    padding: 11px 26px;
     border-radius: 8px;
     font-size: 15px;
     color: rgba(255, 255, 255, 0.85);
@@ -133,7 +134,7 @@ const navItems = [
       &::before {
         content: '';
         position: absolute;
-        left: -14px;
+        left: 0;
         top: 0;
         bottom: 0;
         width: 3px;
@@ -218,6 +219,6 @@ const navItems = [
 .content {
   flex: 1;
   overflow-y: auto;
-  padding: 28px 32px;
+  padding: 32px;
 }
 </style>

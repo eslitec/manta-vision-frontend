@@ -40,3 +40,7 @@
 - [x] 7.5 狀態列（`AI 飼料餘額`／`本月已生成`／`品牌設定`）之間的分隔線改用 `::before` 偽元素實作在 `.stats__item:not(:first-child)` 上，移除獨立的 `.stats__divider` DOM 節點，間距改用 flex `gap`
 - [x] 7.6 修正 `$blue-dark-300`（`_variables.scss`）色碼：原本是 `#171E52`，比對設計稿實際用色 `#2E3567` 後修正——這是全站基礎文字色（`body { color: $blue-dark-300 }`），只改變數定義本身，不用逐一改 14 個檔案的用法
 - [x] 7.7 修正 `.stats` 的間距寫法：`gap` 誤把「項目 3 → 儲值飼料按鈕」之間也算進去，擠壓項目寬度導致文字換行；改成只在 `.stats__item:not(:first-child)` 用 `margin-left: 48px`。同時確認畫面版面假設桌機寬螢幕（≥1440px），窄視窗換行是預期內、不特別做響應式
+- [x] 7.8 修正 `.sidebar` 寬度：`240px` → `200px`（用 Figma Inspect 量到的精確值）
+- [x] 7.9 修正 `.sidebar__item.is-active` 的反白背景，改成貼齊側邊欄左右邊緣（`margin: 0 -14px` 抵銷父層 padding，`padding` 補回等量），對齊設計稿標註的「200 Fill」；強調色條 `::before` 的 `left` 從 `-14px` 改成 `0`
+
+## 8. 精確數值比對（使用者透過 Figma Inspect 逐一提供，持續進行中，本節會隨進度增補）
