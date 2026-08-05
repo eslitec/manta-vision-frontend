@@ -197,7 +197,7 @@ const genTools = [
   }
   &__topup {
     align-self: center;
-    background: $golden;
+    background: $orange;
     color: $white;
     font-weight: 700;
     padding: 12px 20px;

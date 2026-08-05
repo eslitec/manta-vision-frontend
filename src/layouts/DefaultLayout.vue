@@ -29,7 +29,7 @@
       .topbar__right
         button.topbar__tasks
           span.topbar__tasks-icon
-            IconPlayTriangle
+            IconTasksBadge
           | 任務
         FeedBadge
         .topbar__user
@@ -42,7 +42,7 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import FeedBadge from '@/components/FeedBadge.vue'
-import IconPlayTriangle from '@/components/icons/IconPlayTriangle.vue'
+import IconTasksBadge from '@/components/icons/IconTasksBadge.vue'
 import IconAiSparkle from '@/components/icons/IconAiSparkle.vue'
 import IconLibraryPhoto from '@/components/icons/IconLibraryPhoto.vue'
 import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
