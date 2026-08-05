@@ -37,6 +37,7 @@
 - **側邊欄 4 個導覽圖示改成使用者提供的精確 SVG 素材，用 `<component :is>` 動態渲染，不再套用圖示字型 class。** 這些圖示是多色、多路徑的插畫（例如「AI 生成工作台」是方形底色＋雙色「AI」字樣＋金色星芒），`@tabler/icons-webfont` 這種單色圖示字型表達不出來，只能用行內 SVG。為了保留 `navItems` 的 `v-for` 資料驅動寫法（不想拆成 4 段重複的樣板），把每個圖示拆成 `src/components/icons/` 底下的小型元件（`IconAiSparkle`、`IconLibraryPhoto`、`IconFeedBottleSmall`、`IconSettings`），`navItems` 的 `icon` 欄位直接放元件本身（不是字串），樣板用 `component(:is="item.icon")` 渲染——這是 Vue 處理「資料驅動、但每一項對應到不同元件」情境的標準寫法。這幾個圖示元件目前是一次性、無 props 的靜態元件，沒有跟 `HomeView.vue` 卡片右上角既有的瓶子圖示（`card__feed-badge`）共用，雖然視覺概念相同，但兩者是 Figma 針對不同顯示尺寸（28 vs 20 viewBox）分別匯出的素材，路徑座標不是單純縮放關係，勉強合併反而可能跑掉，先各自獨立。
 - **側邊欄強調色條改成跟文字／圖示等高、垂直居中**（`top:0;bottom:0` 改成 `top:50%; transform: translateY(-50%); height:20px`），不再貼滿整個項目的 padding 範圍。20px 對應圖示本身的高度，是目前最自然的高度基準。
 - **首頁 5 個卡片圖示（4 張生成工具卡＋圖庫橫幅）同樣改用使用者提供的精確 SVG 素材**，新增 `IconGenImage`／`IconMarketingPost`／`IconGenVideo`／`IconTryOn`／`IconLibraryPhotoLarge` 5 個元件，做法跟側邊欄圖示一致（`<component :is>` + `genTools` 的 `icon` 欄位放元件本身）。這批 SVG 每個都自帶 `rect rx="8" fill="#EFF2FA"` 當背景（色碼剛好等於 `$blue-light`），所以把 `.card__icon` 原本額外補上的 `background`／`border-radius`／`color`／`font-size`（原本是為了幫圖示字型 class 上色、畫底）整段移除，避免背景畫兩層。跟側邊欄圖示同理，這批 40×40 的素材跟卡片右上角瓶子圖示（22px）、側邊欄圖示（20px）都是不同顯示尺寸各自匯出的版本，不強行合併共用。
+- **側邊欄圖示垂直對齊修正：`.sidebar__item-icon` 改成 flex 容器，內部 `svg` 加 `display: block`。** 換上真的 SVG 圖示後，肉眼看起來比文字略高——根本原因是 SVG 預設是行內（inline）元素，行內元素照文字基線（baseline）排版，基線下方會保留一點給文字降部（descender，例如英文字母 g、y 垂下的部分）的空間，這段空間會讓圖示的「盒子」比看起來的視覺範圍更高，連帶讓置中計算跑掉。把容器改成 flex（`align-items:center`）並讓 `svg` 變成 `display:block`，圖示就會脫離文字排版邏輯，改用單純的盒模型置中，才會跟文字準確對齊。
 
 ## Risks / Trade-offs
 

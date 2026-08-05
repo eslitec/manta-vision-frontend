@@ -51,3 +51,4 @@
 - [x] 8.4 側邊欄 4 個導覽圖示換成使用者提供的精確 SVG 素材（多色、多路徑，無法用圖示字型表示），新增 `src/components/icons/`（`IconAiSparkle`、`IconLibraryPhoto`、`IconFeedBottleSmall`、`IconSettings`）4 個小型元件，樣板改用 `<component :is="item.icon">` 動態渲染
 - [x] 8.5 側邊欄強調色條（`.sidebar__brand::before`、`.sidebar__item.is-active::before`）從貼滿整個區塊高度（`top:0;bottom:0`），改成跟文字/圖示等高、垂直居中（`top:50%; transform: translateY(-50%); height:20px`）
 - [x] 8.6 首頁 5 個卡片圖示（`圖生圖`／`AI 產生行銷 PO 文`／`圖生影片`／`AI 試穿衣服`／`圖庫管理中心`）換成使用者提供的精確 SVG 素材，新增對應的 5 個 `src/components/icons/` 元件；這些 SVG 自帶圓角背景色（`rect rx="8" fill="#EFF2FA"`，剛好等於 `$blue-light`），因此移除 `.card__icon` 原本額外補上的 `background`／`border-radius`／`color`／`font-size`（不再需要，SVG 已自帶）
+- [x] 8.7 修正側邊欄圖示看起來偏高的問題：SVG 預設是行內元素、照文字基線對齊，基線下方會留描述符（descender）空間；`.sidebar__item-icon` 改成 flex 容器並讓內部 `svg { display: block }`，脫離行內基線邏輯，圖示才會真正跟文字置中對齊

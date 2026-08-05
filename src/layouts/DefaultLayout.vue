@@ -90,7 +90,7 @@ const navItems = [
       left: 0;
       top: 50%;
       transform: translateY(-50%);
-      height: 20px;
+      height: 38px;
       width: 4px;
       background: $golden;
     }
@@ -154,14 +154,18 @@ const navItems = [
   }
   &__item-icon {
     width: 20px;
-    text-align: center;
+    flex-shrink: 0;
+    @include flex(center, center);
+    svg {
+      display: block;
+    }
   }
   &__footer {
     margin-top: auto;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 0px 12px;
+    gap: 15px;
+    padding: 15px 0;
   }
   &__footer-link {
     color: rgba(255, 255, 255, 0.35);
