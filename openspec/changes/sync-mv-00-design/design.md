@@ -28,6 +28,7 @@
 - **側邊欄品牌區塊（「日安選物／Manta Vision」）套用跟使用中導覽項目相同的反白＋左側強調色條樣式**，因為目前只有一個品牌、且設計稿裡這個區塊本來就是常駐的「反白」狀態，不是靠某個互動事件觸發，所以直接套用靜態樣式，不需要額外的狀態或點擊邏輯。
 - **語言切換器直接移除**（`DefaultLayout.vue` 的 `.topbar__right` 裡的 `<select>`，以及該元件 `<script setup>` 裡現在用不到的 `locale`／`SUPPORTED_LOCALES` 相關程式碼）。`en.ts`／`zh-Hant.ts` 語言檔和底層的 `vue-i18n` 設定都不受影響，只移除讓使用者切換語言的畫面控制項。考慮過的替代方案：用 CSS 隱藏——已否決，這樣會留下死程式碼和用不到的 import。
 - **消耗飼料徽章固定顯示在全部 4 張卡片**，不加 per-card 的旗標／設定欄位。因為 4 張卡片行為一致（都會消耗飼料），如果只挑卡片加欄位控制顯示與否，反而是為了不存在的差異多寫一層不必要的資料結構。考慮過的替代方案：在 `genTools` 資料裡加 `consumesFeed: boolean` 欄位——已否決，YAGNI，等真的出現「有些工具不消耗飼料」的情境再加。
+- **狀態列分隔線改用 `::before` 偽元素**，實作在 `.stats__item:not(:first-child)` 上，移除原本 2 個獨立的 `.stats__divider` DOM 節點；間距改用 `.stats` 本身的 flex `gap: 48px`，不再靠 divider 元素的 `margin` 撐開。跟側邊欄強調色條同一個原則：純視覺裝飾、不帶語意，用 CSS 生成即可，不需要對應的 HTML 元素。
 
 ## Risks / Trade-offs
 

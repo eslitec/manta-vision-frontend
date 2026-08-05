@@ -9,11 +9,9 @@
       .stats__num {{ balance.toLocaleString() }} #[small 顆]
       .stats__label AI 飼料餘額
       .stats__hint ≈ 可生成 {{ imgEst }} 張圖 / {{ vidEst }} 支短影片
-    .stats__divider
     .stats__item
       .stats__num {{ generatedThisMonth.toLocaleString() }} #[small 張]
       .stats__label 本月已生成
-    .stats__divider
     .stats__item
       .stats__num.is-ok(v-if="brandReady")
         svg.icon-check(viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg")
@@ -137,7 +135,7 @@ const genTools = [
 }
 
 .stats {
-  @include flex(flex-start, stretch, 0);
+  @include flex(flex-start, stretch, 48px);
   @include card;
   margin-top: 22px;
   padding: 22px 26px;
@@ -146,11 +144,16 @@ const genTools = [
     display: flex;
     flex-direction: column;
     gap: 4px;
-  }
-  &__divider {
-    width: 1px;
-    background: $gray;
-    margin: 0 24px;
+    position: relative;
+    &:not(:first-child)::before {
+      content: '';
+      position: absolute;
+      left: -24px;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: $gray;
+    }
   }
   &__num {
     font-size: 26px;
