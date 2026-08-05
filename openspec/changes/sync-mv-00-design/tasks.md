@@ -55,4 +55,7 @@
 - [x] 8.8 頂部工具列「任務」按鈕的圖示從文字字元 `▶` 換成使用者提供的精確 SVG 三角形，新增 `IconPlayTriangle` 元件；原始 SVG 的 `fill="white"` 改成 `fill="currentColor"`（按鈕底色是淺藍、文字是深藍，字面白色在這個背景上幾乎看不見，改用跟隨文字色，已跟使用者說明這個判斷、等待確認）——**後續作廢，見任務 8.10**：那個三角形只有 6×7px，太小幾乎看不見，使用者改提供完整的 20×20 帶底色徽章圖示
 - [x] 8.9 排查「圖庫管理中心」圖示回報沒顯示的問題：比對程式碼、元件內容、編譯產物（`grep` 確認圖示路徑資料確實在 build 出來的 JS 裡）、實際啟動瀏覽器截圖，三方都確認圖示正常渲染——判定是使用者端瀏覽器快取到舊畫面，不是程式碼問題，沒有修改任何程式碼
 - [x] 8.10 頂部「任務」按鈕圖示換成使用者提供的完整 20×20 素材（帶 `#A5C8E6` 底色圓角方塊＋白色播放三角），新增 `IconTasksBadge` 元件取代任務 8.8 的 `IconPlayTriangle`；`IconPlayTriangle.vue` 確認無其他引用後刪除，不留孤兒檔案
+- [x] 8.11 「儲值飼料」按鈕元件化：新增 `TopupButton.vue`（`src/components/`），套用 Figma 量到的精確規格（Hug 寬高、`padding: 9px 14px`、`border-radius: 16px`、`gap: 6px`、底色 `#EA903A` 剛好等於既有 `$orange`、陰影剛好等於既有 `$btnBoxShadow`）；`HomeView.vue` 的 `.stats__topup` 換成這個元件，用 `:deep(.topup-btn) { align-self: center }` 讓它在 `.stats` 這個 flex 容器裡維持置中、不被拉伸
+- [x] 8.12 確認 `FeedBadge.vue`（頂部「儲值」按鈕）也要套用同一份規格，改用 `TopupButton`（透過 `slot` 傳入不同文字：「＋ 儲值飼料」／「儲值」），移除各自原本寫死的 `&__topup` CSS，統一由元件管理樣式
+- [x] 8.13 `TopupButton` 補上 hover（`#FFB670`）與 active／按下（`#C97722`）兩個互動狀態的背景色，新增對應的 `$orange-light`／`$orange-dark` 變數；因為兩處使用都共用同一個元件，這次補上的互動效果自動套用到兩個按鈕，不用個別處理
 - [x] 8.9 `FeedBadge.vue`（頂部「1,240 顆」徽章）的圖示從 emoji `🪙` 換成使用者提供的 SVG——比對路徑後發現跟任務 8.4 已經建立的 `IconFeedBottleSmall` 幾乎完全一致（只有小數點幾位的四捨五入差異），直接重用既有元件，沒有新增檔案

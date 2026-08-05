@@ -20,7 +20,7 @@
         | 品牌設定已完成
       .stats__num.is-muted(v-else) ○ 品牌設定待完成
       .stats__hint {{ brandReady ? '色票・語氣・浮水印皆已設定' : '前往設定補齊品牌資料' }}
-    button.stats__topup ＋ 儲值飼料
+    TopupButton ＋ 儲值飼料
 
   h2.home__section 要生成什麼？
   .cards
@@ -61,6 +61,7 @@ import IconMarketingPost from '@/components/icons/IconMarketingPost.vue'
 import IconGenVideo from '@/components/icons/IconGenVideo.vue'
 import IconTryOn from '@/components/icons/IconTryOn.vue'
 import IconLibraryPhotoLarge from '@/components/icons/IconLibraryPhotoLarge.vue'
+import TopupButton from '@/components/TopupButton.vue'
 
 const feed = useFeedStore()
 const { balance } = storeToRefs(feed)
@@ -195,15 +196,8 @@ const genTools = [
     color: $gray-100;
     font-size: 12px;
   }
-  &__topup {
+  :deep(.topup-btn) {
     align-self: center;
-    background: $orange;
-    color: $white;
-    font-weight: 700;
-    padding: 12px 20px;
-    border-radius: 10px;
-    font-size: 15px;
-    box-shadow: $btnBoxShadow;
   }
 }
 
