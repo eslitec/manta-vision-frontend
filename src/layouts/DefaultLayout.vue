@@ -217,14 +217,13 @@ const navItems = [
   }
   &__tasks {
     @include flex(flex-start, center, 6px);
-    height: 32px;
-    padding: 0 14px;
+    padding: 12px;
     border: none;
     border-radius: 999px;
     background: $blue-light;
     color: $blue-dark-300;
-    font-size: 13px;
-    font-weight: 700;
+    font-size: 14px;
+    font-weight: 500;
   }
   &__tasks-icon {
     @include flex(center, center);

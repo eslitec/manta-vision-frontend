@@ -14,18 +14,28 @@ import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
 import TopupButton from '@/components/TopupButton.vue'
 const feed = useFeedStore()
 const { balance } = storeToRefs(feed)
-onMounted(() => { if (!feed.loaded) feed.refresh() })
+onMounted(() => {
+  if (!feed.loaded) feed.refresh()
+})
 </script>
 
 <style scoped lang="scss">
 .feed-badge {
   @include flex(flex-start, center, 8px);
-  background: $white; border: 1px solid $gray; border-radius: 999px;
-  padding: 4px 4px 4px 12px; font-size: 14px;
+  background: $white;
+  border: 1px solid $gray;
+  border-radius: 999px;
+  padding: 4px 4px 4px 12px;
+  font-size: 14px;
   &__icon {
     @include flex(center, center);
-    svg { display: block; }
+    svg {
+      display: block;
+    }
   }
-  &__num { font-weight: 700; color: $blue-dark-300; }
+  &__num {
+    font-weight: 700;
+    color: $blue-dark-300;
+  }
 }
 </style>

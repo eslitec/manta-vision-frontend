@@ -10,10 +10,12 @@
 ## Goals / Non-Goals
 
 **Goals:**
+
 - 完成 proposal.md「What Changes」裡列出的、屬於 MV-00 的文案與視覺調整。
 - 每一項異動都只動畫面呈現層：不動 store、API 或路由。
 
 **Non-Goals:**
+
 - MV-01~05——各自開獨立的 change 處理。
 
 ## Decisions
@@ -42,7 +44,14 @@
 - **「任務」圖示最終定案：改用使用者提供的完整 20×20 素材（帶底色圓角方塊＋白色播放三角），新增 `IconTasksBadge`。** 前一版 `IconPlayTriangle` 只有 6×7px 的裸三角形，實際渲染出來太小、幾乎看不見，使用者回報「icon 沒顯示」——排查後確認不是渲染 bug，是素材本身尺寸就小到肉眼難以注意到。這次改用的新素材本身帶有跟其他圖示一致的圓角色底（`#A5C8E6`），視覺份量足夠，不需要再靠 `currentColor` 或額外樣式撐場面。`IconPlayTriangle.vue` 確認沒有其他引用後直接刪除，不留用不到的檔案。
 - **「圖庫管理中心」圖示回報異常的排查方式：程式碼比對 → 編譯產物 `grep` 確認路徑資料存在 → 實際啟動瀏覽器截圖，三方都正常。** 判定是使用者端瀏覽器快取到修正前的舊畫面，不是程式碼問題，沒有做任何程式碼變更；這也是為什麼「先跑起來看過再回覆」比單看程式碼推論更可靠的一個例證——這次反過來是程式碼沒問題、但視覺回報看起來像有問題，跟之前幾次「程式碼看起來對、但視覺上有落差」正好相反，兩種情況都得靠實際渲染結果驗證，不能只憑其中一邊判斷。
 - **「儲值飼料」按鈕獨立成 `TopupButton.vue` 元件，用 `<slot>` 傳入文字內容，不是寫死「儲值飼料」四個字。** 原因是這個規格同時要套用在兩個文案不同的地方（`HomeView.vue` 的「＋ 儲值飼料」、`FeedBadge.vue` 的「儲值」），用 slot 讓外觀規格（顏色、圓角、陰影、間距、互動狀態）統一由元件管理，文字內容留給呼叫端決定，這是 Vue 元件「外觀與內容分離」的標準做法。互動色（hover `#FFB670`、active `#C97722`）新增對應的 `$orange-light`／`$orange-dark` 變數，跟既有的 `$orange` 命名風格一致。
-- **`TopupButton` 放進 `.stats`（flex 容器，`align-items: stretch`）裡時，用 `:deep(.topup-btn) { align-self: center }` 蓋掉預設的 `stretch`。** 因為 Vue 元件的 `scoped` 樣式各自帶有獨立的 hash 屬性，父層元件不能直接用一般選擇器命中子元件內部的 class（`.topup-btn` 是 `TopupButton` 自己的 scoped class，不是 `HomeView` 的），必須用 `:deep()` 跳過這層 scoped 屬性比對才能從外部覆寫子元件內部元素的樣式。
+- **`TopupButton` 放進 `.stats`（flex 容器，`align-items: stretch`）裡時，用 `:deep(.secondary-btn) { align-self: center }` 蓋掉預設的 `stretch`。** 因為 Vue 元件的 `scoped` 樣式各自帶有獨立的 hash 屬性，父層元件不能直接用一般選擇器命中子元件內部的 class（`.secondary-btn` 是 `TopupButton` 自己的 scoped class，不是 `HomeView` 的），必須用 `:deep()` 跳過這層 scoped 屬性比對才能從外部覆寫子元件內部元素的樣式。
+- **「前往圖庫」按鈕獨立成 `OutlineButton.vue`，元件加上 `tag` prop（預設 `'button'`），用 `<component :is="tag">` 當根節點。** 這顆按鈕包在 `router-link.card--wide` 裡面——整張卡片本身就是一個連結（`<a>`），如果元件固定渲染 `<button>`，會變成「連結裡面包按鈕」，這是不合法的 HTML 巢狀（互動元素不能巢狀互動元素），瀏覽器會自動把巢狀的 `<button>` „抽出＂到 `<a>` 外面，破壞版面結構。跟先前「任務按鈕」旁的 `FeedBadge` 差點巢狀進 `.topbar__right` 的 `<button>` 裡是同一類問題，這次是預先設計成可調整標籤來避免，不是事後修。使用時指定 `OutlineButton(tag="span")`，已用瀏覽器渲染結果確認輸出是合法的 `<span class="outline-btn">`。
+- **`.stats__num` 統一加上 `@include flex(flex-start, center, 6px)`（原本只有 `.is-ok` 這個變體才有），讓「AI 飼料餘額」數字前也能放圖示並跟文字對齊。** 沒有圖示的「本月已生成」項目套用同一個 flex 規則不影響外觀（單一子節點置中效果等同原本的塊狀排列），比起只在需要圖示的項目個別加規則，統一寫在共用的 `&__num` 上更省一份重複程式碼。圖示元件本身透過 `:deep(.stats__num-icon) { flex-shrink: 0 }` 防止在數字文字較長時被壓縮變形——原因跟之前 `.secondary-btn` 需要 `:deep()` 一樣：圖示元件的 scoped class 不屬於 `HomeView` 這層的 scoped 屬性，一般選擇器命中不到。
+- **「品牌設定已完成」打勾圖示從描邊（stroke，用 `currentColor` 跟文字色連動）換成使用者提供的實心填色版本（綠色圓底＋白色勾勾），viewBox 不變仍是 `0 0 20 20`，但兩個 `path` 的顏色直接寫在 `fill` 裡（`#54C14F`、`white`），不再用 `currentColor`。** 因為新素材本身就是雙色插畫（不是單色線稿），沒有「跟隨外部文字色」的需求，`currentColor` 的彈性在這裡不適用；圖示尺寸也從原本外掛的 `18px` 微調成 `20px`，對齊素材原生的 viewBox 尺寸，不用縮放。
+- **`.stats__item` 分隔線改成置中、高度貼合文字，不再用 `top:0;bottom:0` 貼滿整個項目。** 根本原因是 `.stats` 這個 flex 容器用 `align-items: stretch`，會把 3 個 `.stats__item` 都拉成跟內容最多的那個一樣高，讓內容較短的項目（「本月已生成」只有 2 行、「品牌設定已完成」只有 1 行＋提示）留下視覺上看不見、但實際佔用高度的空白——分隔線原本貼著這個「被撐高」的框，長度就跟著多出這段空白，比旁邊的文字長一截。改成 `top:50%; transform: translateY(-50%)` 讓分隔線的中心點對齊項目框的中心點（因為 3 個項目框仍是同一高度，中心點也會對齊），`height` 則改成量測各自實際文字內容的高度，不再繼承整個框的高度。兩種內容形狀（有獨立 `.stats__label` 的兩行式／`.is-ok`／`.is-muted` 沒有獨立標籤的一行式）需要的高度不同，用 `:has(.is-ok, .is-muted)` 判斷套用較短的高度，而不是寫死同一個數值。
+- **`HomeView.vue` 剩下的兩個行內 SVG（打勾圖示、卡片右上角飼料徽章）補齊成獨立元件（`IconCheckCircle`、`IconFeedBottleBadge`），統一全站「圖示都是獨立元件」的規則，不允許畫面樣板裡直接寫 `svg`／`path`。** 這兩個是這次視覺校對過程中，先前每次都隨著文字/顏色調整直接就地改寫，沒有跟著任務 8.4／8.6 一起搬成元件，屬於遺漏補齊，不是新規則。用元件的好處：往後如果同一個圖示要在別的地方重複使用（例如飼料徽章的造型如果哪天出現在第三個地方），可以直接 import，不用再複製貼上一長串 `path`；也讓 `HomeView.vue` 的樣板維持只描述「畫面長什麼樣」的結構，而不是混雜著圖形資料。因為 `class` 加在元件標籤上時，實際落在子元件自己的 scoped 屬性下，父層要用 `:deep()` 才能從外部設定該圖示的尺寸／定位（跟 `.stats__num-icon`、`.secondary-btn` 是同一個原理）。
+- **「1,240 顆」「128 張」的單位字改成貼齊數字底部，而不是垂直置中。** 原本 `.stats__num` 這個 flex row 用 `align-items: center`，讓字級較小的 `<small>` 單位字垂直居中對齊字級較大的數字，視覺上單位字會浮在數字中間偏高的位置；改成只在 `small` 自己身上加 `align-self: flex-end`，讓它的底部貼齊整行的底部（近似對齊數字的字腳），不動整行的 `align-items`，避免連帶影響同一行的飼料瓶圖示（`.stats__num-icon` 也是這個 flex row 的子項，只覆寫 `small` 一個子項的對齊方式，其他子項不受影響）。
+- **修正記錄：`$blue-dark-300` 再次確認為 `#171E52`，取代任務 7.6／commit `ba2869a` 當時認定的 `#2E3567`。** 使用者用 Figma Inspect 重新核對後確認 `#171E52` 才是目前設計稿的實際色碼，`#2E3567` 反而是當時比對錯的值。這代表色碼比對這件事本身也可能出錯（不只肉眼比對截圖會錯，量到的數值如果核對的圖層/狀態不對，也會抓錯），之後如果同一個變數的色碼又被回報「跟設計稿不一樣」，先假設是新的 Inspect 結果更準，不要直接假設是舊值被誤還原。
 
 ## Risks / Trade-offs
 

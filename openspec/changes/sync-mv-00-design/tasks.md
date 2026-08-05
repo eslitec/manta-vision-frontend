@@ -55,7 +55,14 @@
 - [x] 8.8 頂部工具列「任務」按鈕的圖示從文字字元 `▶` 換成使用者提供的精確 SVG 三角形，新增 `IconPlayTriangle` 元件；原始 SVG 的 `fill="white"` 改成 `fill="currentColor"`（按鈕底色是淺藍、文字是深藍，字面白色在這個背景上幾乎看不見，改用跟隨文字色，已跟使用者說明這個判斷、等待確認）——**後續作廢，見任務 8.10**：那個三角形只有 6×7px，太小幾乎看不見，使用者改提供完整的 20×20 帶底色徽章圖示
 - [x] 8.9 排查「圖庫管理中心」圖示回報沒顯示的問題：比對程式碼、元件內容、編譯產物（`grep` 確認圖示路徑資料確實在 build 出來的 JS 裡）、實際啟動瀏覽器截圖，三方都確認圖示正常渲染——判定是使用者端瀏覽器快取到舊畫面，不是程式碼問題，沒有修改任何程式碼
 - [x] 8.10 頂部「任務」按鈕圖示換成使用者提供的完整 20×20 素材（帶 `#A5C8E6` 底色圓角方塊＋白色播放三角），新增 `IconTasksBadge` 元件取代任務 8.8 的 `IconPlayTriangle`；`IconPlayTriangle.vue` 確認無其他引用後刪除，不留孤兒檔案
-- [x] 8.11 「儲值飼料」按鈕元件化：新增 `TopupButton.vue`（`src/components/`），套用 Figma 量到的精確規格（Hug 寬高、`padding: 9px 14px`、`border-radius: 16px`、`gap: 6px`、底色 `#EA903A` 剛好等於既有 `$orange`、陰影剛好等於既有 `$btnBoxShadow`）；`HomeView.vue` 的 `.stats__topup` 換成這個元件，用 `:deep(.topup-btn) { align-self: center }` 讓它在 `.stats` 這個 flex 容器裡維持置中、不被拉伸
+- [x] 8.11 「儲值飼料」按鈕元件化：新增 `TopupButton.vue`（`src/components/`），套用 Figma 量到的精確規格（Hug 寬高、`padding: 9px 14px`、`border-radius: 16px`、`gap: 6px`、底色 `#EA903A` 剛好等於既有 `$orange`、陰影剛好等於既有 `$btnBoxShadow`）；`HomeView.vue` 的 `.stats__topup` 換成這個元件，用 `:deep(.secondary-btn) { align-self: center }` 讓它在 `.stats` 這個 flex 容器裡維持置中、不被拉伸
 - [x] 8.12 確認 `FeedBadge.vue`（頂部「儲值」按鈕）也要套用同一份規格，改用 `TopupButton`（透過 `slot` 傳入不同文字：「＋ 儲值飼料」／「儲值」），移除各自原本寫死的 `&__topup` CSS，統一由元件管理樣式
 - [x] 8.13 `TopupButton` 補上 hover（`#FFB670`）與 active／按下（`#C97722`）兩個互動狀態的背景色，新增對應的 `$orange-light`／`$orange-dark` 變數；因為兩處使用都共用同一個元件，這次補上的互動效果自動套用到兩個按鈕，不用個別處理
-- [x] 8.9 `FeedBadge.vue`（頂部「1,240 顆」徽章）的圖示從 emoji `🪙` 換成使用者提供的 SVG——比對路徑後發現跟任務 8.4 已經建立的 `IconFeedBottleSmall` 幾乎完全一致（只有小數點幾位的四捨五入差異），直接重用既有元件，沒有新增檔案
+- [x] 8.14 `FeedBadge.vue`（頂部「1,240 顆」徽章）的圖示從 emoji `🪙` 換成使用者提供的 SVG——比對路徑後發現跟任務 8.4 已經建立的 `IconFeedBottleSmall` 幾乎完全一致（只有小數點幾位的四捨五入差異），直接重用既有元件，沒有新增檔案
+- [x] 8.15 「前往圖庫」按鈕元件化：新增 `OutlineButton.vue`（`src/components/`），套用 Figma 量到的精確規格（Hug 88×36、`padding: 9px 16px`、`border-radius: 18px`、1px 邊框、底色 `#FFFFFF`、邊框/文字色 `#2E3567`、陰影 `$btnBoxShadow`）；因為這顆按鈕包在 `router-link.card--wide`（整張卡片本身就是連結）裡面，做成固定 `<button>` 會變成「連結包按鈕」的不合法巢狀，所以元件加上 `tag` prop（預設 `'button'`），這裡改用 `OutlineButton(tag="span")` 渲染成 `<span>`；已用瀏覽器實際渲染確認輸出是合法的 `<span class="outline-btn">` 而不是巢狀 `<button>`
+- [x] 8.16 `.stats` 區塊兩個圖示更新：「AI 飼料餘額」數字前補上瓶子圖示（重用任務 8.4／8.14 已建立的 `IconFeedBottleSmall`，SVG 路徑比對後確認一致，沒有新增檔案）；「品牌設定已完成」原本用 `currentColor` 描邊畫的打勾圖示，換成使用者提供的實心綠色圓底＋白色勾勾 SVG（顏色已內建在路徑的 `fill` 裡，不再需要 `currentColor`）
+- [x] 8.17 修正 `.stats__item` 分隔線：原本 `top:0;bottom:0` 貼滿整個項目的伸展高度（`.stats` 用 `align-items: stretch`，讓「本月已生成」「品牌設定已完成」這兩個內容較短的項目也被拉成跟「AI 飼料餘額」一樣高），分隔線因此比自己的文字內容長一截；改成 `top:50%; transform: translateY(-50%)` 置中，`height` 改成貼合各自文字區塊的實際量測高度（數字＋標籤兩行約 52px；「品牌設定已完成」／「品牌設定待完成」只有單行、無獨立標籤，約 23px，用 `:has(.is-ok, .is-muted)` 判斷套用較短的高度）
+- [x] 8.18 `HomeView.vue` 剩下的兩處行內 SVG（「品牌設定已完成」打勾圖示、卡片右上角消耗飼料徽章）改成獨立元件：新增 `IconCheckCircle.vue`、`IconFeedBottleBadge.vue`（`src/components/icons/`），樣板改用元件標籤，全站圖示統一走「獨立元件＋動態渲染／直接引用」的模式，不再有寫在畫面樣板裡的行內 `svg`／`path`
+- [x] 8.19 「1,240 顆」「128 張」的單位字（`<small>`）從跟數字垂直置中，改成貼齊數字底部：`.stats__num small` 加上 `align-self: flex-end`，只調整單位字自己的對齊方式，不影響同一行內飼料瓶圖示（`.stats__num-icon`）原本的置中對齊
+- [x] 8.20 重新核對 `$blue-dark-300`：使用者用 Figma Inspect 再次核對後確認正確色碼是 `#171E52`，取代任務 7.6（commit `ba2869a`）當時認定的 `#2E3567`——那次的比對結果才是錯的，這次修正回來
+- [x] 8.21 MV-00 這輪視覺校對收尾，後續若有新一輪落差再繼續增補本節任務
