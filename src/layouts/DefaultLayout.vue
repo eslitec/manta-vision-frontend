@@ -14,7 +14,8 @@
         :to="item.to"
         :class="{ 'is-active': isActive(item.to) }"
       )
-        span.sidebar__item-icon {{ item.icon }}
+        span.sidebar__item-icon
+          i.ti(:class="item.icon")
         span {{ item.label }}
     .sidebar__footer
       span.sidebar__footer-link 教學文件
@@ -44,10 +45,10 @@ import FeedBadge from '@/components/FeedBadge.vue'
 const route = useRoute()
 const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.startsWith(to))
 const navItems = [
-  { label: 'AI 生成工作台', icon: '🅰', to: '/' },
-  { label: '圖庫管理中心', icon: '🖼', to: '/library' },
-  { label: '飼料用量', icon: '📊', to: '/usage' },
-  { label: '設定', icon: '⚙', to: '/settings' },
+  { label: 'AI 生成工作台', icon: 'ti-sparkles', to: '/' },
+  { label: '圖庫管理中心', icon: 'ti-library-photo', to: '/library' },
+  { label: '飼料用量', icon: 'ti-chart-bar', to: '/usage' },
+  { label: '設定', icon: 'ti-settings', to: '/settings' },
 ]
 </script>
 
@@ -74,9 +75,20 @@ const navItems = [
   }
   &__brand {
     @include flex(flex-start, center, 10px);
-    background: rgba(255, 255, 255, 0.08);
+    background: $white;
     border-radius: 10px;
     padding: 10px;
+    position: relative;
+    &::before {
+      content: '';
+      position: absolute;
+      left: -14px;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: $orange;
+      border-radius: 0 2px 2px 0;
+    }
   }
   &__avatar {
     width: 34px;
@@ -91,9 +103,10 @@ const navItems = [
     line-height: 1.3;
     strong {
       font-size: 15px;
+      color: $blue-dark-300;
     }
     small {
-      color: $gray-100;
+      color: $gray-400;
       font-size: 12px;
     }
   }
