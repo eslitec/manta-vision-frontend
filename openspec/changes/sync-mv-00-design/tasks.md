@@ -52,3 +52,5 @@
 - [x] 8.5 側邊欄強調色條（`.sidebar__brand::before`、`.sidebar__item.is-active::before`）從貼滿整個區塊高度（`top:0;bottom:0`），改成跟文字/圖示等高、垂直居中（`top:50%; transform: translateY(-50%); height:20px`）
 - [x] 8.6 首頁 5 個卡片圖示（`圖生圖`／`AI 產生行銷 PO 文`／`圖生影片`／`AI 試穿衣服`／`圖庫管理中心`）換成使用者提供的精確 SVG 素材，新增對應的 5 個 `src/components/icons/` 元件；這些 SVG 自帶圓角背景色（`rect rx="8" fill="#EFF2FA"`，剛好等於 `$blue-light`），因此移除 `.card__icon` 原本額外補上的 `background`／`border-radius`／`color`／`font-size`（不再需要，SVG 已自帶）
 - [x] 8.7 修正側邊欄圖示看起來偏高的問題：SVG 預設是行內元素、照文字基線對齊，基線下方會留描述符（descender）空間；`.sidebar__item-icon` 改成 flex 容器並讓內部 `svg { display: block }`，脫離行內基線邏輯，圖示才會真正跟文字置中對齊
+- [x] 8.8 頂部工具列「任務」按鈕的圖示從文字字元 `▶` 換成使用者提供的精確 SVG 三角形，新增 `IconPlayTriangle` 元件；原始 SVG 的 `fill="white"` 改成 `fill="currentColor"`（按鈕底色是淺藍、文字是深藍，字面白色在這個背景上幾乎看不見，改用跟隨文字色，已跟使用者說明這個判斷、等待確認）
+- [x] 8.9 `FeedBadge.vue`（頂部「1,240 顆」徽章）的圖示從 emoji `🪙` 換成使用者提供的 SVG——比對路徑後發現跟任務 8.4 已經建立的 `IconFeedBottleSmall` 幾乎完全一致（只有小數點幾位的四捨五入差異），直接重用既有元件，沒有新增檔案

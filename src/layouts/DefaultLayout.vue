@@ -23,12 +23,13 @@
   .main
     header.topbar
       .topbar__crumb
-        span 日安選物
+        span.topbar__cur 日安選物
         span.topbar__sep ›
         span.topbar__cur Manta Vision
       .topbar__right
         button.topbar__tasks
-          span.topbar__tasks-icon ▶
+          span.topbar__tasks-icon
+            IconPlayTriangle
           | 任務
         FeedBadge
         .topbar__user
@@ -41,6 +42,7 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import FeedBadge from '@/components/FeedBadge.vue'
+import IconPlayTriangle from '@/components/icons/IconPlayTriangle.vue'
 import IconAiSparkle from '@/components/icons/IconAiSparkle.vue'
 import IconLibraryPhoto from '@/components/icons/IconLibraryPhoto.vue'
 import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
@@ -128,7 +130,7 @@ const navItems = [
   &__item {
     @include flex(flex-start, center, 10px);
     margin: 0 -14px;
-    padding: 11px 26px;
+    padding: 13px 12px;
     border-radius: 8px;
     font-size: 15px;
     color: rgba(255, 255, 255, 0.85);
@@ -138,7 +140,7 @@ const navItems = [
     &.is-active {
       background: $white;
       color: $blue-dark-300;
-      font-weight: 600;
+      font-weight: 700;
       position: relative;
       &::before {
         content: '';
@@ -190,11 +192,11 @@ const navItems = [
   &__crumb {
     @include flex(flex-start, center, 6px);
     color: $gray-400;
-    font-size: 15px;
+    font-size: 16px;
   }
   &__cur {
     color: $blue-dark-300;
-    font-weight: 600;
+    font-weight: 700;
   }
   &__sep {
     color: $gray-100;
@@ -222,10 +224,13 @@ const navItems = [
     background: $blue-light;
     color: $blue-dark-300;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 700;
   }
   &__tasks-icon {
-    font-size: 10px;
+    @include flex(center, center);
+    svg {
+      display: block;
+    }
   }
 }
 

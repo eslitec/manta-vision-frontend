@@ -38,6 +38,7 @@
 - **側邊欄強調色條改成跟文字／圖示等高、垂直居中**（`top:0;bottom:0` 改成 `top:50%; transform: translateY(-50%); height:20px`），不再貼滿整個項目的 padding 範圍。20px 對應圖示本身的高度，是目前最自然的高度基準。
 - **首頁 5 個卡片圖示（4 張生成工具卡＋圖庫橫幅）同樣改用使用者提供的精確 SVG 素材**，新增 `IconGenImage`／`IconMarketingPost`／`IconGenVideo`／`IconTryOn`／`IconLibraryPhotoLarge` 5 個元件，做法跟側邊欄圖示一致（`<component :is>` + `genTools` 的 `icon` 欄位放元件本身）。這批 SVG 每個都自帶 `rect rx="8" fill="#EFF2FA"` 當背景（色碼剛好等於 `$blue-light`），所以把 `.card__icon` 原本額外補上的 `background`／`border-radius`／`color`／`font-size`（原本是為了幫圖示字型 class 上色、畫底）整段移除，避免背景畫兩層。跟側邊欄圖示同理，這批 40×40 的素材跟卡片右上角瓶子圖示（22px）、側邊欄圖示（20px）都是不同顯示尺寸各自匯出的版本，不強行合併共用。
 - **側邊欄圖示垂直對齊修正：`.sidebar__item-icon` 改成 flex 容器，內部 `svg` 加 `display: block`。** 換上真的 SVG 圖示後，肉眼看起來比文字略高——根本原因是 SVG 預設是行內（inline）元素，行內元素照文字基線（baseline）排版，基線下方會保留一點給文字降部（descender，例如英文字母 g、y 垂下的部分）的空間，這段空間會讓圖示的「盒子」比看起來的視覺範圍更高，連帶讓置中計算跑掉。把容器改成 flex（`align-items:center`）並讓 `svg` 變成 `display:block`，圖示就會脫離文字排版邏輯，改用單純的盒模型置中，才會跟文字準確對齊。
+- **頂部「任務」按鈕圖示新增 `IconPlayTriangle` 元件，`FeedBadge.vue` 的圖示直接重用既有的 `IconFeedBottleSmall`。** 使用者提供的瓶子圖示 SVG 路徑跟側邊欄「飼料用量」已經用的那個幾乎一致（只有小數點幾位四捨五入差異），判定是同一份素材、不同時間點匯出，直接共用元件，不重複建立檔案。`IconPlayTriangle` 的原始 SVG 是 `fill="white"`，但這裡改成 `fill="currentColor"`——`.topbar__tasks` 的底色是淺藍、文字是深藍，字面白色在這個背景上對比度太低幾乎看不見，改成跟隨文字色更合理；這是先動手改、同時明確告知使用者的判斷，不是靜默覆蓋設計稿的指定值。
 
 ## Risks / Trade-offs
 
