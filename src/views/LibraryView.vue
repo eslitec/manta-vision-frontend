@@ -2,14 +2,25 @@
 .library
   p.library__note
     span.library__note-dot
-    span 此圖庫隸屬於機器人「日安選物」。切換機器人會顯示該機器人專屬的素材與生成產物。
+    span {{ noteText }}
   .tabs
     button.tabs__item(v-for="t in tabs" :key="t" :class="{ 'is-active': activeTab === t }" @click="activeTab = t") {{ t }}
   .library__body
     aside.folders
-      .folders__title 資料夾
-      button.folders__item(:class="{ 'is-active': activeFolder === ALL }" @click="activeFolder = ALL") 全部素材
-      button.folders__item(v-for="f in folders" :key="f" :class="{ 'is-active': activeFolder === f }" @click="activeFolder = f") {{ f }}
+      button.folders__item(:class="{ 'is-active': activeView.kind === 'all' }" @click="setView({ kind: 'all' })")
+        span 全部素材
+        span.folders__count {{ assets.length }}
+      .folders__section 系統分類
+      button.folders__item(v-for="c in categoryTags" :key="c.tag" :class="{ 'is-active': activeView.kind === 'category' && activeView.tag === c.tag }" @click="setView({ kind: 'category', tag: c.tag })")
+        span {{ c.label }}
+        span.folders__count {{ categoryCounts.get(c.tag) ?? 0 }}
+      .folders__section.folders__section--folders
+        span 我的資料夾
+        button.folders__add-icon(@click="startAddFolder" aria-label="新增資料夾") +
+      button.folders__item.folders__item--folder(v-for="f in folders" :key="f" :class="{ 'is-active': activeView.kind === 'folder' && activeView.name === f }" @click="setView({ kind: 'folder', name: f })")
+        i.ti.ti-folder.folders__item-icon
+        span.folders__item-name {{ f }}
+        span.folders__count {{ folderCounts.get(f) ?? 0 }}
       .folders__new(v-if="addingFolder")
         input.folders__input(
           ref="folderInput"
@@ -20,9 +31,7 @@
           @keyup.esc="cancelAddFolder"
           @blur="confirmAddFolder"
         )
-      button.folders__add(v-else @click="startAddFolder")
-        span +
-        span 新增資料夾
+      p.folders__hint 可將素材拖曳至資料夾，或用批次選擇移動
     section.assets
       .assets__toolbar
         .search
@@ -32,16 +41,33 @@
           span.sources__label 來源
           button.chip(v-for="s in sources" :key="s.label" :class="{ 'is-active': activeSource === s.value }" @click="activeSource = s.value") {{ s.label }}
         .assets__actions
-          button.fromlib(v-if="activeFolder !== ALL" @click="pickerOpen = true")
+          button.fromlib(v-if="activeView.kind === 'folder'" @click="pickerOpen = true")
             i.ti.ti-library-photo
             span 從圖庫加入
           label.upload
             i.ti.ti-upload
             span 上傳圖片
             input.upload__input(type="file" accept="image/*" multiple @change="onUpload")
+
+      .batchbar(v-if="selectedIds.size")
+        .batchbar__left
+          span.batchbar__minus
+          span 已選 {{ selectedIds.size }} 筆
+          button.batchbar__link(@click="selectAllOnPage") 全選本頁 {{ paged.length }} 筆
+          button.batchbar__link(@click="clearSelection") 清除
+        .batchbar__right
+          button.batchbar__action(@click="openMoveDialog") 移至資料夾
+          button.batchbar__action(v-if="activeView.kind === 'folder'" @click="removeSelectedFromFolder") 移出資料夾
+          button.batchbar__action(@click="downloadSelected") 下載
+          button.batchbar__action.batchbar__action--danger(@click="openDeleteDialog") 刪除
+
       .assets__empty(v-if="!filtered.length") 沒有符合的素材
       .assets__grid(v-else)
-        .asset(v-for="a in filtered" :key="a.id")
+        .asset(v-for="a in paged" :key="a.id" :class="{ 'is-selected': selectedIds.has(a.id) }")
+          label.asset__check
+            input(type="checkbox" :checked="selectedIds.has(a.id)" @change="toggleSelect(a.id)")
+            span.asset__check-box
+              i.ti.ti-check(v-if="selectedIds.has(a.id)")
           .asset__thumb
             i.ti(:class="a.type === 'video' ? 'ti-player-play' : 'ti-photo'")
           .asset__name {{ a.name }}
@@ -49,27 +75,83 @@
             span.tag(:class="'tag--' + a.tag") {{ a.source }}
             span.asset__dim {{ a.dim }}
 
+      .pagination(v-if="filtered.length")
+        span.pagination__total 共 {{ filtered.length }} 筆素材
+        .pagination__pages(v-if="totalPages > 1")
+          button.pagination__nav(:disabled="page === 1" @click="page = page - 1") ‹
+          template(v-for="(p, i) in pageItems" :key="i")
+            span.pagination__ellipsis(v-if="p === '…'") …
+            button.pagination__page(v-else :class="{ 'is-active': p === page }" @click="page = p") {{ p }}
+          button.pagination__nav(:disabled="page === totalPages" @click="page = page + 1") ›
+
   ImagePickerDialog(
     v-model:open="pickerOpen"
     :multiple="true"
-    :title="`從圖庫加入到「${activeFolder}」`"
+    :title="`從圖庫加入到「${activeFolderName}」`"
     @select-many="onAddFromLibrary"
   )
+
+  Teleport(to="body")
+    .modal(v-if="moveDialogOpen" @click.self="moveDialogOpen = false")
+      .modal__box
+        header.modal__head
+          h3.modal__title 移至資料夾
+          button.modal__close(@click="moveDialogOpen = false" aria-label="關閉")
+            i.ti.ti-x
+        p.modal__desc 將選取的 {{ selectedIds.size }} 筆素材加入資料夾。素材可同時屬於多個資料夾。
+        ul.modal__list
+          li.modal__list-item(v-for="f in folders" :key="f" :class="{ 'is-active': moveTargetFolder === f }" @click="moveTargetFolder = f")
+            i.ti.ti-folder
+            span.modal__list-name {{ f }}
+            span.modal__list-count {{ folderCounts.get(f) ?? 0 }}
+        .modal__create
+          input.modal__create-input(v-model="moveNewFolderName" type="text" placeholder="或建立新資料夾…" @keyup.enter="createFolderForMove")
+          button.modal__create-btn(@click="createFolderForMove") 建立
+        footer.modal__foot
+          button.btn-plain(@click="moveDialogOpen = false") 取消
+          button.btn-primary(:disabled="!moveTargetFolder" @click="confirmMoveToFolder") 移入{{ moveTargetFolder }}
+
+  Teleport(to="body")
+    .modal(v-if="deleteDialogOpen" @click.self="deleteDialogOpen = false")
+      .modal__box
+        header.modal__head
+          h3.modal__title 刪除 {{ selectedIds.size }} 筆素材？
+          button.modal__close(@click="deleteDialogOpen = false" aria-label="關閉")
+            i.ti.ti-x
+        .modal__preview
+          .modal__preview-item(v-for="a in selectedAssets" :key="a.id")
+            .modal__preview-thumb
+              i.ti(:class="a.type === 'video' ? 'ti-player-play' : 'ti-photo'")
+            span.modal__preview-name {{ a.name }}
+        label.modal__checkline
+          input(type="checkbox" v-model="deleteConfirmed")
+          span 我了解此操作無法復原
+        footer.modal__foot
+          button.btn-plain(@click="deleteDialogOpen = false") 取消
+          button.btn-danger(:disabled="!deleteConfirmed" @click="confirmDelete") 永久刪除 {{ selectedIds.size }} 筆
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useAssets } from '@/composables/useAssets'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
-import type { Asset } from '@/types/asset'
+import { CATEGORY_TAGS, type Asset, type AssetTag } from '@/types/asset'
 
-const { assets, folders, load, loadFolders, addFolder, addToFolder, upload } = useAssets()
+const { assets, folders, load, loadFolders, addFolder, addToFolder, removeFromFolder, deleteAssets, upload } =
+  useAssets()
 
-const ALL = '全部素材' // 特殊項：不套用資料夾過濾
+const categoryTags = CATEGORY_TAGS
+
+// 左側主要篩選：全部素材／系統分類（依 tag）／我的資料夾（使用者自訂），三者互斥、單選
+type ActiveView = { kind: 'all' } | { kind: 'category'; tag: AssetTag } | { kind: 'folder'; name: string }
+const activeView = ref<ActiveView>({ kind: 'all' })
+function setView(v: ActiveView) {
+  activeView.value = v
+}
+const activeFolderName = computed(() => (activeView.value.kind === 'folder' ? activeView.value.name : ''))
 
 const tabs = ['素材庫', '編輯圖片', 'AI 修圖']
 const activeTab = ref('素材庫')
-const activeFolder = ref(ALL)
 const sources = [
   { label: '全部', value: 'all' },
   { label: '上傳', value: 'upload' },
@@ -84,24 +166,137 @@ onMounted(() => {
   loadFolders()
 })
 
-// 資料夾（左）與來源（右上）是獨立維度，可疊加過濾
+// 頂部提示文字：檢視「全部素材」／系統分類時顯示機器人情境；檢視某個資料夾時改顯示該資料夾的說明
+const noteText = computed(() => {
+  if (activeView.value.kind === 'folder') {
+    const count = folderCounts.value.get(activeView.value.name) ?? 0
+    return `資料夾「${activeView.value.name}」・${count} 筆素材。移出後素材仍保留在圖庫，只是不再屬於此資料夾。`
+  }
+  return '此圖庫隸屬於機器人「日安選物」。切換機器人會顯示該機器人專屬的素材與生成產物。'
+})
+
+// 系統分類／我的資料夾的數量，都是從目前已載入的 assets 即時算出，不是後端另外提供的欄位
+const categoryCounts = computed(() => {
+  const map = new Map<AssetTag, number>()
+  for (const c of categoryTags) map.set(c.tag, assets.value.filter((a) => a.tag === c.tag).length)
+  return map
+})
+const folderCounts = computed(() => {
+  const map = new Map<string, number>()
+  for (const f of folders.value) map.set(f, assets.value.filter((a) => a.folders?.includes(f)).length)
+  return map
+})
+
+// 資料夾／系統分類（左）與來源（右上）、關鍵字是不同維度，可疊加過濾
 const filtered = computed(() =>
   assets.value.filter((a) => {
-    const byFolder = activeFolder.value === ALL || (a.folders?.includes(activeFolder.value) ?? false)
+    const v = activeView.value
+    const byView = v.kind === 'all' ? true : v.kind === 'category' ? a.tag === v.tag : (a.folders?.includes(v.name) ?? false)
     const bySource = activeSource.value === 'all' || a.tag === activeSource.value
     const byKeyword = !keyword.value || a.name.includes(keyword.value)
-    return byFolder && bySource && byKeyword
+    return byView && bySource && byKeyword
   }),
 )
+
+// 分頁（純前端切頁，8 筆一頁）
+const page = ref(1)
+const pageSize = 8
+const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize)))
+const paged = computed(() => filtered.value.slice((page.value - 1) * pageSize, page.value * pageSize))
+watch([activeView, activeSource, keyword], () => {
+  page.value = 1
+})
+// 篩選條件跟著切換時，先前的批次選取多半已經不對應目前畫面上看到的素材，直接清空避免誤操作
+watch([activeView, activeSource, keyword], () => {
+  clearSelection()
+})
+
+// 分頁按鈕清單（帶省略號），例如總頁數 16、目前第 1 頁 → [1, 2, 3, '…', 16]
+const pageItems = computed<(number | '…')[]>(() => {
+  const total = totalPages.value
+  const cur = page.value
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const keep = new Set<number>([1, 2, 3, total, cur - 1, cur, cur + 1])
+  const nums = [...keep].filter((n) => n >= 1 && n <= total).sort((a, b) => a - b)
+  const items: (number | '…')[] = []
+  let prev = 0
+  for (const n of nums) {
+    if (prev && n - prev > 1) items.push('…')
+    items.push(n)
+    prev = n
+  }
+  return items
+})
+
+// 批次選取（可跨頁累積，切換篩選條件時清空，見上方 watch）
+const selectedIds = ref<Set<string>>(new Set())
+function toggleSelect(id: string) {
+  const next = new Set(selectedIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selectedIds.value = next
+}
+function selectAllOnPage() {
+  const next = new Set(selectedIds.value)
+  for (const a of paged.value) next.add(a.id)
+  selectedIds.value = next
+}
+function clearSelection() {
+  selectedIds.value = new Set()
+}
+
+// 移至資料夾：完整彈窗（單選目標資料夾，可就地建立新資料夾）
+const moveDialogOpen = ref(false)
+const moveTargetFolder = ref('')
+const moveNewFolderName = ref('')
+function openMoveDialog() {
+  moveTargetFolder.value = folders.value[0] ?? ''
+  moveNewFolderName.value = ''
+  moveDialogOpen.value = true
+}
+async function createFolderForMove() {
+  const name = moveNewFolderName.value.trim()
+  if (!name) return
+  if (!folders.value.includes(name)) await addFolder(name)
+  moveTargetFolder.value = name
+  moveNewFolderName.value = ''
+}
+async function confirmMoveToFolder() {
+  if (!moveTargetFolder.value) return
+  await addToFolder([...selectedIds.value], moveTargetFolder.value)
+  moveDialogOpen.value = false
+  clearSelection()
+}
+
+async function removeSelectedFromFolder() {
+  if (activeView.value.kind !== 'folder') return
+  await removeFromFolder([...selectedIds.value], activeView.value.name)
+  clearSelection()
+}
+
+// 刪除確認：完整彈窗（縮圖預覽＋勾選「我了解此操作無法復原」才能刪除）
+const deleteDialogOpen = ref(false)
+const deleteConfirmed = ref(false)
+const selectedAssets = computed(() => assets.value.filter((a) => selectedIds.value.has(a.id)))
+function openDeleteDialog() {
+  deleteConfirmed.value = false
+  deleteDialogOpen.value = true
+}
+async function confirmDelete() {
+  await deleteAssets([...selectedIds.value])
+  deleteDialogOpen.value = false
+  clearSelection()
+}
+
+function downloadSelected() {
+  // 目前素材沒有實際檔案 URL，先做畫面呈現；等後端提供真實檔案來源後再接上真正的下載行為
+}
 
 // 從圖庫（遠端資料庫）挑既有素材加入目前資料夾
 const pickerOpen = ref(false)
 async function onAddFromLibrary(picked: Asset[]) {
-  if (activeFolder.value === ALL) return
-  await addToFolder(
-    picked.map((a) => a.id),
-    activeFolder.value,
-  )
+  if (activeView.value.kind !== 'folder') return
+  await addToFolder(picked.map((a) => a.id), activeView.value.name)
 }
 
 // 新增資料夾（行內輸入）
@@ -119,7 +314,7 @@ async function confirmAddFolder() {
   const name = newFolderName.value.trim()
   if (name && !folders.value.includes(name)) {
     await addFolder(name)
-    activeFolder.value = name // 建好即切到新資料夾
+    setView({ kind: 'folder', name }) // 建好即切到新資料夾
   }
   addingFolder.value = false
 }
@@ -131,8 +326,8 @@ async function onUpload(e: Event) {
   const input = e.target as HTMLInputElement
   const files = input.files
   if (!files || !files.length) return
-  // 上傳落到目前所在資料夾（在「全部素材」時進未分類）；傳整個 File，後端就緒後改上傳 blob 到 R2
-  const target = activeFolder.value === ALL ? undefined : activeFolder.value
+  // 上傳落到目前所在資料夾（不在特定資料夾時進「未分類」）；傳整個 File，後端就緒後改上傳 blob 到 R2
+  const target = activeView.value.kind === 'folder' ? activeView.value.name : undefined
   for (const f of Array.from(files)) {
     await upload(f, target)
   }
@@ -141,38 +336,555 @@ async function onUpload(e: Event) {
 </script>
 
 <style scoped lang="scss">
-.library { &__note { @include flex(flex-start, center, 8px); color: $gray-400; font-size: 14px; margin-bottom: 16px; }
-  &__note-dot { width: 6px; height: 6px; border-radius: 50%; background: $blue; flex-shrink: 0; }
-  &__body { display: flex; gap: 20px; } }
-.tabs { @include flex(flex-start, center, 8px); margin-bottom: 18px; }
-.tabs__item { padding: 7px 16px; border-radius: 999px; font-size: 14px; color: $gray-400; background: $white; border: 1px solid $gray;
-  &.is-active { background: $blue-dark-300; color: $white; border-color: $blue-dark-300; } }
-.folders { width: 160px; flex-shrink: 0; display: flex; flex-direction: column; gap: 2px;
-  &__title { font-size: 15px; font-weight: 700; color: $blue-dark-300; margin-bottom: 10px; }
-  &__item { text-align: left; padding: 9px 12px; border-radius: 8px; font-size: 14px; color: $gray-400;
-    &:hover { background: $blue-light; } &.is-active { background: $blue-light; color: $blue-dark-300; font-weight: 600; } }
-  &__add { @include flex(flex-start, center, 6px); padding: 9px 12px; font-size: 14px; color: $blue; margin-top: 4px; }
-  &__new { margin-top: 4px; }
-  &__input { width: 100%; height: 36px; border: 1px solid $blue; border-radius: 8px; padding: 0 10px; font-size: 14px; color: $blue-dark-300; outline: none; } }
-.assets { flex: 1; min-width: 0; }
-.assets__toolbar { @include flex(flex-start, center, 12px); margin-bottom: 18px; }
-.assets__actions { @include flex(flex-start, center, 12px); margin-left: auto; }
-.search { position: relative; flex: 0 1 320px; max-width: 320px;
-  &__icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: $gray-100; font-size: 16px; }
-  &__input { width: 100%; height: 38px; border: 1px solid $gray; border-radius: 999px; padding: 0 14px 0 34px; font-size: 14px; color: $blue-dark-300; outline: none; &:focus { border-color: $blue; } } }
-.sources { @include flex(flex-start, center, 8px); &__label { font-size: 13px; color: $gray-400; margin-right: 2px; } }
-.chip { padding: 5px 12px; border-radius: 999px; font-size: 13px; color: $gray-400; border: 1px solid $gray; background: $white;
-  &.is-active { background: $blue-dark-300; color: $white; border-color: $blue-dark-300; } }
-.fromlib { @include flex(center, center, 6px); border: 1px solid $gray; color: $blue-dark-300; background: $white; font-weight: 600; padding: 9px 16px; border-radius: 999px; font-size: 14px; white-space: nowrap; cursor: pointer;
-  &:hover { border-color: $blue; } }
-.upload { @include flex(center, center, 6px); background: $blue-dark-300; color: $white; font-weight: 600; padding: 9px 16px; border-radius: 999px; font-size: 14px; white-space: nowrap; cursor: pointer;
-  &__input { display: none; } }
-.assets__empty { color: $gray-100; font-size: 14px; padding: 40px 0; text-align: center; }
-.assets__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; }
-.asset { &__thumb { @include flex(center, center); aspect-ratio: 4 / 3; background: $blue-light; border-radius: 10px; color: $babyBlue; font-size: 30px; margin-bottom: 8px; }
-  &__name { font-size: 14px; color: $blue-dark-300; margin-bottom: 5px; }
-  &__meta { @include flex(flex-start, center, 8px); } &__dim { font-size: 12px; color: $gray-100; } }
-.tag { font-size: 12px; padding: 2px 8px; border-radius: 6px; font-weight: 500;
-  &--upload { background: #E6F1FB; color: #185FA5; } &--object { background: #EEEDFE; color: #534AB7; }
-  &--ai { background: #FAEEDA; color: #854F0B; } &--edit { background: #EAF3DE; color: #3B6D11; } &--video { background: #FBEAF0; color: #993556; } }
+.library {
+  &__note {
+    @include flex(flex-start, center, 8px);
+    color: $gray-400;
+    font-size: 14px;
+    margin-bottom: 16px;
+  }
+  &__note-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: $blue;
+    flex-shrink: 0;
+  }
+  &__body {
+    display: flex;
+    gap: 20px;
+  }
+}
+.tabs {
+  @include flex(flex-start, center, 8px);
+  margin-bottom: 18px;
+}
+.tabs__item {
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  color: $gray-400;
+  background: $white;
+  border: 1px solid $gray;
+  &.is-active {
+    background: $blue-dark-300;
+    color: $white;
+    border-color: $blue-dark-300;
+  }
+}
+.folders {
+  width: 180px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  &__section {
+    @include flex(space-between, center);
+    font-size: 12px;
+    color: $gray-100;
+    margin: 14px 0 6px;
+    padding: 0 12px;
+  }
+  &__add-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    color: $gray-400;
+    font-size: 14px;
+    line-height: 1;
+    &:hover {
+      background: $blue-light;
+      color: $blue-dark-300;
+    }
+  }
+  &__item {
+    @include flex(flex-start, center, 8px);
+    text-align: left;
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    color: $gray-400;
+    &:hover {
+      background: $blue-light;
+    }
+    &.is-active {
+      background: $blue-light;
+      color: $blue-dark-300;
+      font-weight: 600;
+    }
+    > span:first-child,
+    &--folder &-name {
+      flex: 1;
+    }
+  }
+  &__item-icon {
+    color: $gray-100;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  &__item-name {
+    flex: 1;
+  }
+  &__count {
+    color: $gray-100;
+    font-size: 12px;
+  }
+  &.is-active &__count,
+  &__item.is-active &__count {
+    color: $blue-dark-300;
+  }
+  &__new {
+    margin-top: 4px;
+    padding: 0 12px;
+  }
+  &__input {
+    width: 100%;
+    height: 36px;
+    border: 1px solid $blue;
+    border-radius: 8px;
+    padding: 0 10px;
+    font-size: 14px;
+    color: $blue-dark-300;
+    outline: none;
+  }
+  &__hint {
+    color: $gray-100;
+    font-size: 12px;
+    line-height: 1.5;
+    margin-top: 12px;
+    padding: 0 12px;
+  }
+}
+.assets {
+  flex: 1;
+  min-width: 0;
+}
+.assets__toolbar {
+  @include flex(flex-start, center, 12px);
+  margin-bottom: 14px;
+}
+.assets__actions {
+  @include flex(flex-start, center, 12px);
+  margin-left: auto;
+}
+.search {
+  position: relative;
+  flex: 0 1 320px;
+  max-width: 320px;
+  &__icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: $gray-100;
+    font-size: 16px;
+  }
+  &__input {
+    width: 100%;
+    height: 38px;
+    border: 1px solid $gray;
+    border-radius: 999px;
+    padding: 0 14px 0 34px;
+    font-size: 14px;
+    color: $blue-dark-300;
+    outline: none;
+    &:focus {
+      border-color: $blue;
+    }
+  }
+}
+.sources {
+  @include flex(flex-start, center, 8px);
+  flex-shrink: 0;
+  &__label {
+    font-size: 13px;
+    color: $gray-400;
+    margin-right: 2px;
+    white-space: nowrap;
+  }
+}
+.chip {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: $gray-400;
+  border: 1px solid $gray;
+  background: $white;
+  white-space: nowrap;
+  flex-shrink: 0;
+  &.is-active {
+    background: $blue-dark-300;
+    color: $white;
+    border-color: $blue-dark-300;
+  }
+}
+.fromlib {
+  @include flex(center, center, 6px);
+  border: 1px solid $gray;
+  color: $blue-dark-300;
+  background: $white;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+  &:hover {
+    border-color: $blue;
+  }
+}
+.upload {
+  @include flex(center, center, 6px);
+  background: $blue-dark-300;
+  color: $white;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+  &__input {
+    display: none;
+  }
+}
+
+.batchbar {
+  @include flex(space-between, center);
+  background: $blue-dark-300;
+  color: $white;
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  &__left {
+    @include flex(flex-start, center, 14px);
+  }
+  &__minus {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba($white, 0.2);
+    flex-shrink: 0;
+    position: relative;
+    &::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 8px;
+      height: 1.5px;
+      background: $white;
+      transform: translate(-50%, -50%);
+    }
+  }
+  &__link {
+    color: rgba($white, 0.85);
+    font-size: 14px;
+    text-decoration: underline;
+    &:hover {
+      color: $white;
+    }
+  }
+  &__right {
+    @include flex(flex-start, center, 20px);
+  }
+  &__action {
+    font-size: 14px;
+    color: $white;
+    &:hover {
+      color: rgba($white, 0.8);
+    }
+    &--danger {
+      background: $white;
+      color: $red;
+      border: 1px solid $red;
+      border-radius: 999px;
+      padding: 6px 16px;
+    }
+  }
+}
+
+.assets__empty {
+  color: $gray-100;
+  font-size: 14px;
+  padding: 40px 0;
+  text-align: center;
+}
+.assets__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 18px;
+}
+.asset {
+  position: relative;
+  &.is-selected .asset__thumb {
+    outline: 2px solid $blue-dark-300;
+    outline-offset: 2px;
+  }
+  &__check {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 1;
+    cursor: pointer;
+    input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+  }
+  &__check-box {
+    @include flex(center, center);
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    background: $white;
+    border: 1px solid $gray;
+    font-size: 12px;
+    color: $white;
+  }
+  &.is-selected &__check-box {
+    background: $blue-dark-300;
+    border-color: $blue-dark-300;
+  }
+  &__thumb {
+    @include flex(center, center);
+    aspect-ratio: 4 / 3;
+    background: $blue-light;
+    border-radius: 10px;
+    color: $babyBlue;
+    font-size: 30px;
+    margin-bottom: 8px;
+  }
+  &__name {
+    font-size: 14px;
+    color: $blue-dark-300;
+    margin-bottom: 5px;
+  }
+  &__meta {
+    @include flex(flex-start, center, 8px);
+  }
+  &__dim {
+    font-size: 12px;
+    color: $gray-100;
+  }
+}
+.tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 500;
+  &--upload {
+    background: #e6f1fb;
+    color: #185fa5;
+  }
+  &--object {
+    background: #eeedfe;
+    color: #534ab7;
+  }
+  &--ai {
+    background: #faeeda;
+    color: #854f0b;
+  }
+  &--edit {
+    background: #eaf3de;
+    color: #3b6d11;
+  }
+  &--video {
+    background: #fbeaf0;
+    color: #993556;
+  }
+}
+
+.pagination {
+  @include flex(space-between, center);
+  margin-top: 20px;
+  &__total {
+    font-size: 13px;
+    color: $gray-100;
+  }
+  &__pages {
+    @include flex(flex-start, center, 4px);
+  }
+  &__nav,
+  &__page {
+    min-width: 28px;
+    height: 28px;
+    padding: 0 6px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: $gray-400;
+    &:hover:not(:disabled) {
+      background: $blue-light;
+    }
+    &:disabled {
+      color: $gray;
+      cursor: not-allowed;
+    }
+    &.is-active {
+      background: $blue-dark-300;
+      color: $white;
+    }
+  }
+  &__ellipsis {
+    color: $gray-100;
+    font-size: 13px;
+    padding: 0 4px;
+  }
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(23, 30, 82, 0.45);
+  @include flex(center, center);
+  padding: 24px;
+}
+.modal__box {
+  width: 440px;
+  max-width: 100%;
+  max-height: 88vh;
+  background: $white;
+  border-radius: 16px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.modal__head {
+  @include flex(space-between, center);
+  margin-bottom: 8px;
+}
+.modal__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: $blue-dark-300;
+}
+.modal__close {
+  color: $gray-400;
+  font-size: 20px;
+}
+.modal__desc {
+  font-size: 13px;
+  color: $gray-400;
+  margin-bottom: 14px;
+}
+.modal__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+.modal__list-item {
+  @include flex(flex-start, center, 8px);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: $blue-dark-300;
+  cursor: pointer;
+  &:hover {
+    background: $blue-light;
+  }
+  &.is-active {
+    background: $blue-light;
+    font-weight: 700;
+  }
+}
+.modal__list-name {
+  flex: 1;
+  text-align: left;
+}
+.modal__list-count {
+  color: $gray-100;
+  font-size: 12px;
+}
+.modal__create {
+  @include flex(flex-start, center, 8px);
+  margin-bottom: 18px;
+}
+.modal__create-input {
+  flex: 1;
+  height: 40px;
+  border: 1px solid $gray;
+  border-radius: 999px;
+  padding: 0 16px;
+  font-size: 14px;
+  color: $blue-dark-300;
+  outline: none;
+  &:focus {
+    border-color: $blue;
+  }
+}
+.modal__create-btn {
+  height: 40px;
+  padding: 0 18px;
+  border: 1px solid $gray;
+  border-radius: 999px;
+  font-size: 14px;
+  color: $blue-dark-300;
+  white-space: nowrap;
+}
+.modal__foot {
+  @include flex(flex-end, center, 10px);
+}
+.modal__preview {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.modal__preview-thumb {
+  @include flex(center, center);
+  aspect-ratio: 4 / 3;
+  background: $blue-light;
+  border-radius: 8px;
+  color: $babyBlue;
+  font-size: 22px;
+  margin-bottom: 6px;
+}
+.modal__preview-name {
+  display: block;
+  font-size: 12px;
+  color: $blue-dark-300;
+}
+.modal__checkline {
+  @include flex(flex-start, center, 8px);
+  font-size: 14px;
+  color: $blue-dark-300;
+  margin-bottom: 18px;
+  cursor: pointer;
+}
+.btn-plain {
+  border: 1px solid $gray;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 14px;
+  color: $blue-dark-300;
+  background: $white;
+}
+.btn-primary {
+  background: $blue-dark-300;
+  color: $white;
+  font-weight: 600;
+  padding: 9px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  &:disabled {
+    opacity: 0.45;
+  }
+}
+.btn-danger {
+  background: $red;
+  color: $white;
+  font-weight: 600;
+  padding: 9px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  &:disabled {
+    opacity: 0.45;
+  }
+}
 </style>

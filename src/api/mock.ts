@@ -123,6 +123,21 @@ export const mockApi = {
     }
   },
 
+  // PATCH /images/folders/remove（把素材移出資料夾；素材本身與其他歸屬不受影響）
+  async removeFromFolder(assetIds: string[], folder: string): Promise<void> {
+    await delay(250)
+    for (const a of db.assets) {
+      if (!assetIds.includes(a.id)) continue
+      a.folders = (a.folders ?? []).filter((f) => f !== folder)
+    }
+  },
+
+  // DELETE /images（批次刪除素材）
+  async deleteImages(assetIds: string[]): Promise<void> {
+    await delay(300)
+    db.assets = db.assets.filter((a) => !assetIds.includes(a.id))
+  },
+
   // POST /images (上傳) — 落到指定資料夾，未指定則進「未分類」
   async uploadImage(file: File, folder?: string): Promise<Asset> {
     await delay(400)

@@ -40,6 +40,18 @@ async function addToFolder(assetIds: string[], folder: string) {
   await load(true)
 }
 
+// 把素材移出資料夾（素材仍保留在圖庫，只是不再屬於這個資料夾）
+async function removeFromFolder(assetIds: string[], folder: string) {
+  await api.removeFromFolder(assetIds, folder)
+  await load(true)
+}
+
+// 批次刪除素材
+async function deleteAssets(assetIds: string[]) {
+  await api.deleteImages(assetIds)
+  await load(true)
+}
+
 // 生成結果「存入圖庫」（選用）→ 落地成 AI 生成素材
 async function saveGenerated(name: string) {
   const a = await api.saveGenerated(name)
@@ -48,5 +60,17 @@ async function saveGenerated(name: string) {
 }
 
 export function useAssets() {
-  return { assets, loaded, folders, load, loadFolders, addFolder, addToFolder, upload, saveGenerated }
+  return {
+    assets,
+    loaded,
+    folders,
+    load,
+    loadFolders,
+    addFolder,
+    addToFolder,
+    removeFromFolder,
+    deleteAssets,
+    upload,
+    saveGenerated,
+  }
 }

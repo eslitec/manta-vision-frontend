@@ -13,3 +13,11 @@ export interface Asset {
 
 // 未歸檔素材所屬的預設資料夾
 export const UNFILED_FOLDER = '未分類'
+
+// 圖庫左側「系統分類」：依素材本身的 tag 分類，跟使用者自訂的「我的資料夾」是不同維度
+export const CATEGORY_TAGS: { tag: AssetTag; label: string }[] = [
+  { tag: 'object', label: '物件素材' },
+  { tag: 'ai', label: 'AI 生成' },
+  { tag: 'edit', label: '編輯產物' },
+  { tag: 'video', label: '影片' },
+]
