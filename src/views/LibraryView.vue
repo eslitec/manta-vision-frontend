@@ -41,7 +41,7 @@
           span.sources__label 來源
           button.chip(v-for="s in sources" :key="s.label" :class="{ 'is-active': activeSource === s.value }" @click="activeSource = s.value") {{ s.label }}
         .assets__actions
-          button.btn-primary(v-if="activeView.kind === 'folder'" @click="pickerOpen = true")
+          DialogButton(variant="primary" v-if="activeView.kind === 'folder'" @click="pickerOpen = true")
             i.ti.ti-library-photo
             span 從圖庫加入
           label.upload
@@ -110,8 +110,8 @@
           input.modal__create-input(v-model="moveNewFolderName" type="text" placeholder="或建立新資料夾…" @keyup.enter="createFolderForMove")
           button.modal__create-btn(@click="createFolderForMove") 建立
         footer.modal__foot
-          button.btn-plain(@click="moveDialogOpen = false") 取消
-          button.btn-primary(:disabled="!moveTargetFolder" @click="confirmMoveToFolder") 移入{{ moveTargetFolder }}
+          DialogButton(@click="moveDialogOpen = false") 取消
+          DialogButton(variant="primary" :disabled="!moveTargetFolder" @click="confirmMoveToFolder") 移入{{ moveTargetFolder }}
 
   Teleport(to="body")
     .modal(v-if="deleteDialogOpen" @click.self="deleteDialogOpen = false")
@@ -129,8 +129,8 @@
           input(type="checkbox" v-model="deleteConfirmed")
           span 我了解此操作無法復原
         footer.modal__foot
-          button.btn-plain(@click="deleteDialogOpen = false") 取消
-          button.btn-danger(:disabled="!deleteConfirmed" @click="confirmDelete") 永久刪除 {{ selectedIds.size }} 筆
+          DialogButton(@click="deleteDialogOpen = false") 取消
+          DialogButton(variant="danger" :disabled="!deleteConfirmed" @click="confirmDelete") 永久刪除 {{ selectedIds.size }} 筆
 </template>
 
 <script setup lang="ts">
@@ -138,6 +138,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useAssets } from '@/composables/useAssets'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import OutlineButton from '@/components/OutlineButton.vue'
+import DialogButton from '@/components/DialogButton.vue'
 import { CATEGORY_TAGS, type Asset, type AssetTag } from '@/types/asset'
 
 const { assets, folders, load, loadFolders, addFolder, addToFolder, removeFromFolder, deleteAssets, upload } =
@@ -385,6 +386,8 @@ async function onUpload(e: Event) {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  background: $white;
+  padding: 16px 0;
   &__section {
     @include flex(space-between, center);
     font-size: 12px;
@@ -470,6 +473,8 @@ async function onUpload(e: Event) {
 .assets {
   flex: 1;
   min-width: 0;
+  background: $white;
+  padding: 16px 0;
 }
 .assets__toolbar {
   @include flex(flex-start, center, 12px);
@@ -528,21 +533,6 @@ async function onUpload(e: Event) {
     background: $blue-dark-300;
     color: $white;
     border-color: $blue-dark-300;
-  }
-}
-.fromlib {
-  @include flex(center, center, 6px);
-  border: 1px solid $gray;
-  color: $blue-dark-300;
-  background: $white;
-  font-weight: 600;
-  padding: 9px 16px;
-  border-radius: 999px;
-  font-size: 14px;
-  white-space: nowrap;
-  cursor: pointer;
-  &:hover {
-    border-color: $blue;
   }
 }
 .upload {
@@ -861,35 +851,5 @@ async function onUpload(e: Event) {
   color: $blue-dark-300;
   margin-bottom: 18px;
   cursor: pointer;
-}
-.btn-plain {
-  border: 1px solid $gray;
-  border-radius: 999px;
-  padding: 8px 18px;
-  font-size: 14px;
-  color: $blue-dark-300;
-  background: $white;
-}
-.btn-primary {
-  background: $blue-dark-300;
-  color: $white;
-  font-weight: 600;
-  padding: 9px 18px;
-  border-radius: 999px;
-  font-size: 14px;
-  &:disabled {
-    opacity: 0.45;
-  }
-}
-.btn-danger {
-  background: $red;
-  color: $white;
-  font-weight: 600;
-  padding: 9px 18px;
-  border-radius: 999px;
-  font-size: 14px;
-  &:disabled {
-    opacity: 0.45;
-  }
 }
 </style>

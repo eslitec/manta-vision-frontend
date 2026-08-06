@@ -31,7 +31,7 @@ withDefaults(defineProps<{ tag?: string; variant?: 'default' | 'danger' }>(), { 
   }
   /* pressed/active style: translate and remove shadow for a pressed effect */
   &:active {
-    border-color: #14193f;
+    background: #14193f;
     transform: translateY(1px);
   }
   &--danger {
@@ -40,9 +40,11 @@ withDefaults(defineProps<{ tag?: string; variant?: 'default' | 'danger' }>(), { 
     border-radius: 16px;
     &:focus,
     &:hover,
-    &:active,
     &:disabled {
       border-color: #ff6148;
+    }
+    &:active {
+      background: $white;
     }
   }
 }

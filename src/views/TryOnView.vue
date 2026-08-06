@@ -25,14 +25,14 @@
           i.ti.ti-hanger.dropzone__icon
           span.dropzone__name(v-if="apparel") {{ apparel.name }}
         .dropzone__actions
-          button.btn-outline(@click="pickerOpen = true") 從圖庫選擇
+          GhostButton(@click="pickerOpen = true") 從圖庫選擇
           span.dropzone__hint 建議先去背
       p.err(v-if="errorMsg") {{ errorMsg }}
       .tryon__footer
         .cost
           .cost__label 預估消耗
           .cost__value 15 顆飼料
-        button.btn-primary(:disabled="generating" @click="onGenerate")
+        PrimaryButton(:disabled="generating" @click="onGenerate")
           i.ti(:class="generating ? 'ti-loader spin' : 'ti-sparkles'")
           span {{ generating ? '生成中…' : '生成試穿' }}
 
@@ -56,14 +56,17 @@
         h3.cmodal__title 肖像使用同意
         p.cmodal__text 上傳真人照片代表你已取得當事人同意，將其肖像用於 AI 試穿生成。同意一次即在此帳號全站生效，可於設定中撤回。
         .cmodal__actions
-          button.btn-plain(@click="showConsent = false") 取消
-          button.btn-primary(@click="agree") 我同意（全站一次生效）
+          DialogButton(@click="showConsent = false") 取消
+          PrimaryButton(@click="agree") 我同意（全站一次生效）
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
+import GhostButton from '@/components/GhostButton.vue'
+import PrimaryButton from '@/components/PrimaryButton.vue'
+import DialogButton from '@/components/DialogButton.vue'
 import { useConsentStore } from '@/stores/consent'
 import { useFeedStore } from '@/stores/feed'
 import { api } from '@/api'
@@ -127,9 +130,6 @@ async function onGenerate() {
 .err { color: $red; font-size: 13px; margin-bottom: 12px; }
 .tryon__footer { @include flex(space-between, flex-end); border-top: 1px solid $lightGray; padding-top: 16px; }
 .cost { &__label { font-size: 12px; color: $gray-100; } &__value { font-size: 17px; font-weight: 700; color: $blue-dark-300; } }
-.btn-outline { border: 1px solid $gray; border-radius: 999px; padding: 8px 16px; font-size: 14px; color: $blue-dark-300; background: $white; &:hover { border-color: $blue; } }
-.btn-primary { @include flex(center, center, 6px); background: $blue-dark-300; color: $white; font-weight: 600; padding: 11px 20px; border-radius: 10px; font-size: 14px; box-shadow: $btnBoxShadow; &:disabled { opacity: .5; } }
-.btn-plain { border: 1px solid $gray; border-radius: 999px; padding: 9px 20px; font-size: 14px; color: $blue-dark-300; background: $white; }
 .result__head { @include flex(space-between, baseline); margin-bottom: 16px; .result__title { font-size: 18px; font-weight: 700; color: $blue-dark-300; } .result__hint { font-size: 12px; color: $gray-100; } }
 .result__box { @include flex(center, center); flex-direction: column; gap: 10px; aspect-ratio: 3 / 4; max-width: 320px; margin: 0 auto; background: $blue-light; border-radius: 12px; color: $babyBlue; font-size: 40px; }
 .result__placeholder { font-size: 13px; color: $gray-100; }

@@ -7,7 +7,7 @@
         i.ti.ti-photo.dropzone__icon
         span.dropzone__name(v-if="sourceImage") {{ sourceImage.name }}
       .dropzone__actions
-        button.btn-outline(@click="pickerOpen = true") 從圖庫選擇
+        GhostButton(@click="pickerOpen = true") 從圖庫選擇
         span.dropzone__hint 或拖曳上傳
     .step
       .step__title 2. 選擇動態模板
@@ -27,7 +27,7 @@
       .cost
         .cost__label 預估消耗
         .cost__value 45 顆飼料
-      button.btn-primary(:disabled="busy" @click="confirmOpen = true")
+      PrimaryButton(:disabled="busy" @click="confirmOpen = true")
         i.ti.ti-player-play
         span 生成影片
 
@@ -52,6 +52,8 @@
 import { computed, onUnmounted, ref } from 'vue'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import ConfirmGenerateDialog from '@/components/ConfirmGenerateDialog.vue'
+import PrimaryButton from '@/components/PrimaryButton.vue'
+import GhostButton from '@/components/GhostButton.vue'
 import { useFeedStore } from '@/stores/feed'
 import { api } from '@/api'
 import { isInsufficientFeed } from '@/utils/error'
@@ -133,8 +135,6 @@ onUnmounted(clear)
 .err { color: $red; font-size: 13px; margin-bottom: 12px; }
 .video__footer { @include flex(space-between, flex-end); border-top: 1px solid $lightGray; padding-top: 16px; }
 .cost { &__label { font-size: 12px; color: $gray-100; } &__value { font-size: 17px; font-weight: 700; color: $blue-dark-300; } }
-.btn-outline { border: 1px solid $gray; border-radius: 999px; padding: 8px 16px; font-size: 14px; color: $blue-dark-300; background: $white; &:hover { border-color: $blue; } }
-.btn-primary { @include flex(center, center, 6px); background: $blue-dark-300; color: $white; font-weight: 600; padding: 11px 20px; border-radius: 10px; font-size: 14px; box-shadow: $btnBoxShadow; &:disabled { opacity: .5; } }
 .preview__title { font-size: 18px; font-weight: 700; color: $blue-dark-300; margin-bottom: 16px; }
 .preview__box { @include flex(center, center); flex-direction: column; gap: 12px; flex: 1; min-height: 320px; background: $blue-light; border-radius: 12px; color: $babyBlue; font-size: 40px; }
 .preview__hint { font-size: 13px; color: $gray-400; }

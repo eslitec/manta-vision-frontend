@@ -12,7 +12,7 @@
         i.ti.ti-photo.dropzone__icon
         span.dropzone__name(v-if="refImage") {{ refImage.name }}
       .dropzone__actions
-        button.btn-outline(@click="pickerOpen = true") 從圖庫選擇
+        GhostButton(@click="pickerOpen = true") 從圖庫選擇
         span.dropzone__hint 或拖曳上傳
 
     .step
@@ -49,7 +49,7 @@
       .cost
         .cost__label 預估消耗
         .cost__value {{ estCost }} 顆飼料
-      button.btn-primary(:disabled="generating || !prompt" @click="generate")
+      PrimaryButton(:disabled="generating || !prompt" @click="generate")
         i.ti(:class="generating ? 'ti-loader spin' : 'ti-plus'")
         span {{ generating ? '生成中…' : '生成圖片' }}
 
@@ -64,9 +64,9 @@
           span.result__badge(v-if="r.adopted") 已選用
           i.ti.ti-photo
         .result__actions
-          button.chip-dark(@click="saveToLib(r)") {{ r.savedAssetId ? '已存入' : '存入圖庫' }}
-          button.chip-plain(@click="download(r)") 下載
-          button.chip-plain(@click="regen(r)") 重生成
+          ChipButton(@click="saveToLib(r)") {{ r.savedAssetId ? '已存入' : '存入圖庫' }}
+          ChipButton(variant="plain" @click="download(r)") 下載
+          ChipButton(variant="plain" @click="regen(r)") 重生成
 
   ImagePickerDialog(v-model:open="pickerOpen" title="從圖庫選擇參考圖" @select="onPickReference")
 </template>
@@ -75,6 +75,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
+import PrimaryButton from '@/components/PrimaryButton.vue'
+import GhostButton from '@/components/GhostButton.vue'
+import ChipButton from '@/components/ChipButton.vue'
 import { useModelsStore } from '@/stores/models'
 import { useFeedStore } from '@/stores/feed'
 import { useAssets } from '@/composables/useAssets'
@@ -217,9 +220,6 @@ const onPickReference = (a: Asset) => { refImage.value = a }
 .err { color: $red; font-size: 13px; margin-bottom: 12px; }
 .genimg__footer { @include flex(space-between, flex-end); border-top: 1px solid $lightGray; padding-top: 16px; }
 .cost { &__label { font-size: 12px; color: $gray-100; } &__value { font-size: 17px; font-weight: 700; color: $blue-dark-300; } }
-.btn-outline { border: 1px solid $gray; border-radius: 999px; padding: 8px 16px; font-size: 14px; color: $blue-dark-300; background: $white; &:hover { border-color: $blue; } }
-.btn-primary { @include flex(center, center, 6px); background: $blue-dark-300; color: $white; font-weight: 600; padding: 11px 20px; border-radius: 10px; font-size: 14px; box-shadow: $btnBoxShadow;
-  &:disabled { opacity: .5; } }
 .result__head { @include flex(space-between, baseline); margin-bottom: 16px;
   .result__title { font-size: 18px; font-weight: 700; color: $blue-dark-300; }
   .result__hint { font-size: 12px; color: $gray-100; } }
@@ -228,7 +228,5 @@ const onPickReference = (a: Asset) => { refImage.value = a }
 .result__thumb { @include flex(center, center); position: relative; aspect-ratio: 4 / 3; background: $blue-light; border-radius: 10px; color: $babyBlue; font-size: 30px; margin-bottom: 10px; }
 .result__badge { position: absolute; top: 10px; left: 10px; background: $green; color: $white; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
 .result__actions { @include flex(flex-start, center, 8px); }
-.chip-dark { background: $blue-dark-300; color: $white; font-weight: 600; padding: 7px 14px; border-radius: 999px; font-size: 13px; }
-.chip-plain { background: $blue-light; color: $blue-dark-300; padding: 7px 14px; border-radius: 999px; font-size: 13px; }
 .spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
 </style>

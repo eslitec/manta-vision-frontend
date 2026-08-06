@@ -91,13 +91,14 @@
 
   .brand__foot
     span.brand__saved(v-if="saved") 已儲存
-    button.btn-primary(:disabled="saving" @click="onSave") {{ saving ? '儲存中…' : '儲存設定' }}
+    PrimaryButton(:disabled="saving" @click="onSave") {{ saving ? '儲存中…' : '儲存設定' }}
 </template>
 
 <script setup lang="ts">
 import { nextTick, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useBrandStore } from '@/stores/brand'
+import PrimaryButton from '@/components/PrimaryButton.vue'
 import { extractColors } from '@/utils/colors'
 
 const store = useBrandStore()
@@ -246,5 +247,4 @@ async function onSave() {
 .tagadd { height: 32px; border: 1px solid $blue; border-radius: 999px; padding: 0 14px; font-size: 13px; font-family: inherit; color: $blue-dark-300; outline: none; }
 .brand__foot { @include flex(flex-end, center, 12px); margin-top: 20px; }
 .brand__saved { font-size: 13px; color: $green; }
-.btn-primary { background: $blue-dark-300; color: $white; font-weight: 600; padding: 11px 24px; border-radius: 10px; font-size: 14px; box-shadow: $btnBoxShadow; &:disabled { opacity: .5; } }
 </style>

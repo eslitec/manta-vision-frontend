@@ -7,7 +7,7 @@
         i.ti.ti-photo.dropzone__icon
         span.dropzone__name(v-if="productImage") {{ productImage.name }}
       .dropzone__actions
-        button.btn-outline(@click="pickerOpen = true") 從圖庫選擇
+        GhostButton(@click="pickerOpen = true") 從圖庫選擇
         span.dropzone__hint 或拖曳上傳（賣什麼放什麼）
     .step
       .step__title 2. 商品介紹
@@ -22,7 +22,7 @@
       .cost
         .cost__label 預估消耗
         .cost__value 12 顆飼料
-      button.btn-primary(:disabled="generating" @click="generate")
+      PrimaryButton(:disabled="generating" @click="generate")
         i.ti(:class="generating ? 'ti-loader spin' : 'ti-sparkles'")
         span {{ generating ? '生成中…' : '生成貼文' }}
 
@@ -44,17 +44,17 @@
           i.ti.ti-photo
           span.poster__tag 形象貼圖・廣告海報風
         .poster__actions
-          button.chip-dark(@click="savePoster") {{ savedId ? '已存入' : '存入圖庫' }}
-          button.chip-plain(@click="downloadPoster") 下載
-          button.chip-plain(@click="generate") 重生成
+          ChipButton(@click="savePoster") {{ savedId ? '已存入' : '存入圖庫' }}
+          ChipButton(variant="plain" @click="downloadPoster") 下載
+          ChipButton(variant="plain" @click="generate") 重生成
         .copy
           p.copy__text(v-for="(line, i) in copyLines" :key="i") {{ line }}
           p.copy__tags {{ result.hashtags.join(' ') }}
         .copy__actions
-          button.chip-dark(@click="copyText")
+          ChipButton(@click="copyText")
             i.ti.ti-copy
             span {{ copied ? '已複製' : '複製文案' }}
-          button.chip-plain(@click="generate")
+          ChipButton(variant="plain" @click="generate")
             i.ti.ti-refresh
             span 重寫文案
 
@@ -80,9 +80,9 @@
             span.igcard__text  {{ result.copy }}
             p.igcard__tags {{ result.hashtags.join(' ') }}
         .poster__actions
-          button.chip-dark(@click="savePoster") {{ savedId ? '已存入' : '存入圖庫' }}
-          button.chip-plain(@click="downloadPoster") 下載
-          button.chip-plain(@click="copyText") {{ copied ? '已複製' : '複製整篇' }}
+          ChipButton(@click="savePoster") {{ savedId ? '已存入' : '存入圖庫' }}
+          ChipButton(variant="plain" @click="downloadPoster") 下載
+          ChipButton(variant="plain" @click="copyText") {{ copied ? '已複製' : '複製整篇' }}
 
   ImagePickerDialog(v-model:open="pickerOpen" title="選擇商品圖片" @select="onPick")
 </template>
@@ -91,6 +91,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
+import PrimaryButton from '@/components/PrimaryButton.vue'
+import GhostButton from '@/components/GhostButton.vue'
+import ChipButton from '@/components/ChipButton.vue'
 import { useFeedStore } from '@/stores/feed'
 import { useBrandStore } from '@/stores/brand'
 import { useAssets } from '@/composables/useAssets'
@@ -181,8 +184,6 @@ async function copyText() {
 .err { color: $red; font-size: 13px; margin: 8px 0; }
 .post__footer { @include flex(space-between, flex-end); border-top: 1px solid $lightGray; padding-top: 16px; margin-top: 18px; }
 .cost { &__label { font-size: 12px; color: $gray-100; } &__value { font-size: 17px; font-weight: 700; color: $blue-dark-300; } }
-.btn-outline { border: 1px solid $gray; border-radius: 999px; padding: 8px 16px; font-size: 14px; color: $blue-dark-300; background: $white; &:hover { border-color: $blue; } }
-.btn-primary { @include flex(center, center, 6px); background: $blue-dark-300; color: $white; font-weight: 600; padding: 11px 20px; border-radius: 10px; font-size: 14px; box-shadow: $btnBoxShadow; &:disabled { opacity: .5; } }
 .result__head { @include flex(space-between, center); margin-bottom: 16px; }
 .result__title { font-size: 18px; font-weight: 700; color: $blue-dark-300; }
 .result__empty { color: $gray-100; font-size: 14px; padding: 40px 0; text-align: center; }
@@ -210,7 +211,5 @@ async function copyText() {
   &__tags { color: $link-blue; margin-top: 6px; } }
 .copy { @include card; background: $blue-light; border: none; padding: 16px 18px; max-width: 320px; margin: 0 auto;
   &__text { font-size: 14px; color: $blue-dark-300; line-height: 1.7; margin-bottom: 8px; } &__tags { font-size: 14px; color: $link-blue; } &__actions { @include flex(center, center, 8px); margin-top: 12px; } }
-.chip-dark { @include flex(center, center, 6px); background: $blue-dark-300; color: $white; font-weight: 600; padding: 7px 14px; border-radius: 999px; font-size: 13px; }
-.chip-plain { @include flex(center, center, 6px); background: $blue-light; color: $blue-dark-300; padding: 7px 14px; border-radius: 999px; font-size: 13px; }
 .spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
 </style>

@@ -26,13 +26,14 @@ Teleport(to="body")
       footer.picker__foot
         span.picker__count 已選 {{ count }} 項
         .picker__actions
-          button.btn-plain(@click="close") 取消
-          button.btn-primary(:disabled="!count" @click="confirm") {{ multiple ? `加入所選（${count}）` : '選擇這張' }}
+          DialogButton(@click="close") 取消
+          DialogButton(variant="primary" :disabled="!count" @click="confirm") {{ multiple ? `加入所選（${count}）` : '選擇這張' }}
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useAssets } from '@/composables/useAssets'
+import DialogButton from '@/components/DialogButton.vue'
 import type { Asset } from '@/types/asset'
 
 const props = withDefaults(defineProps<{ open: boolean; title?: string; multiple?: boolean }>(), {
@@ -125,6 +126,4 @@ const confirm = () => {
 .picker__foot { @include flex(space-between, center); margin-top: 18px; border-top: 1px solid $lightGray; padding-top: 16px; }
 .picker__count { font-size: 13px; color: $gray-400; }
 .picker__actions { @include flex(flex-start, center, 10px); }
-.btn-plain { border: 1px solid $gray; border-radius: 999px; padding: 8px 18px; font-size: 14px; color: $blue-dark-300; background: $white; }
-.btn-primary { background: $blue-dark-300; color: $white; font-weight: 600; padding: 9px 18px; border-radius: 999px; font-size: 14px; &:disabled { opacity: 0.45; } }
 </style>

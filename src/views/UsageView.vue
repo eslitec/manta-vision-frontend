@@ -37,7 +37,7 @@
             .mod__track
               .mod__fill(:style="{ width: (m.value / maxModule * 100) + '%', background: m.color }")
       .usage__foot
-        button.btn-outline 調整額度上限
+        GhostButton 調整額度上限
 
   template(v-else)
     p.usage__note 採用率、平均重生成、每採用成本只算圖生圖（其他模組無採用概念）；生成成功率為全模組。
@@ -63,6 +63,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { api } from '@/api'
+import GhostButton from '@/components/GhostButton.vue'
 import type { Metrics, UsageSummary } from '@/types/api'
 
 const tabs = ['用量統計', 'AI 表現指標']
@@ -100,7 +101,6 @@ onMounted(async () => {
   &__label { font-size: 14px; color: $blue-dark-300; } &__val { font-size: 14px; font-weight: 700; }
   &__track { height: 8px; background: $lightGray; border-radius: 999px; overflow: hidden; } &__fill { height: 100%; border-radius: 999px; } }
 .usage__foot { @include flex(flex-end, center); margin-top: 16px; }
-.btn-outline { border: 1px solid $gray; border-radius: 999px; padding: 9px 18px; font-size: 14px; color: $blue-dark-300; background: $white; }
 .metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
 .metric { @include card; padding: 20px 22px;
   &__label { font-size: 14px; color: $gray-400; }

@@ -15,8 +15,8 @@ Teleport(to="body")
           span 剩餘飼料
           span {{ balance.toLocaleString() }} 顆飼料
       .confirm__actions
-        button.btn-plain(@click="cancel") 取消
-        button.btn-primary(@click="confirm")
+        DialogButton(@click="cancel") 取消
+        DialogButton(variant="primary" @click="confirm")
           i.ti.ti-player-play
           span {{ confirmText }}
 </template>
@@ -24,6 +24,7 @@ Teleport(to="body")
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
 import { useFeedStore } from '@/stores/feed'
+import DialogButton from '@/components/DialogButton.vue'
 
 withDefaults(
   defineProps<{
@@ -79,13 +80,4 @@ const confirm = () => {
 .confirm__cost { color: $orange; font-weight: 700; }
 
 .confirm__actions { @include flex(flex-end, center, 10px); }
-.btn-plain {
-  border: 1px solid $gray; border-radius: 999px; padding: 9px 20px;
-  font-size: 14px; color: $blue-dark-300; background: $white;
-}
-.btn-primary {
-  @include flex(center, center, 6px);
-  background: $blue-dark-300; color: $white; font-weight: 600;
-  padding: 10px 20px; border-radius: 999px; font-size: 14px;
-}
 </style>
