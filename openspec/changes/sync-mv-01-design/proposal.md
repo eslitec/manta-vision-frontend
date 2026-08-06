@@ -27,4 +27,5 @@ MantaGO 的 Figma 設計稿在 MV-01（圖庫管理中心，`LibraryView.vue`）
 - `src/types/asset.ts`（新增 `CATEGORY_TAGS` 常數）
 - `src/composables/useAssets.ts`（新增 `removeFromFolder`、`deleteAssets`）
 - `src/api/mock.ts`（新增 `removeFromFolder`、`deleteImages` 兩個 mock 端點）
+- `src/assets/scss/main.scss`（補上 `button::-moz-focus-inner` 正規化，修正 Firefox 點擊按鈕時文字位移的問題，全站生效、不只限這一頁）
 - 不涉及路由變動；新增的兩個 mock API 端點目前沒有對應的真實後端，後端就緒後只需替換 `src/api/index.ts` 指向的實作。

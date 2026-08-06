@@ -360,6 +360,7 @@ async function onUpload(e: Event) {
   }
   &__body {
     display: flex;
+    align-items: flex-start;
     gap: 20px;
   }
 }
@@ -368,10 +369,12 @@ async function onUpload(e: Event) {
   margin-bottom: 18px;
 }
 .tabs__item {
-  padding: 7px 16px;
+  @include flex(center, center);
+  height: 22px;
+  padding: 0 16px;
   border-radius: 999px;
   font-size: 14px;
-  color: $gray-400;
+  color: #606692;
   background: $white;
   border: 1px solid $gray;
   &.is-active {
@@ -387,7 +390,7 @@ async function onUpload(e: Event) {
   flex-direction: column;
   gap: 2px;
   background: $white;
-  padding: 16px 0;
+  padding: 16px;
   &__section {
     @include flex(space-between, center);
     font-size: 12px;
@@ -418,12 +421,9 @@ async function onUpload(e: Event) {
       background: $blue-light;
     }
     &.is-active {
-      background: $blue-light;
+      background: #eef1f7;
       color: $blue-dark-300;
       font-weight: 600;
-    }
-    &--folder.is-active {
-      background: #eef1f7;
       border: 1.5px dashed $blue-dark-300;
       padding: 7.5px 10.5px;
     }
@@ -474,11 +474,11 @@ async function onUpload(e: Event) {
   flex: 1;
   min-width: 0;
   background: $white;
-  padding: 16px 0;
+  padding: 24px;
 }
 .assets__toolbar {
   @include flex(flex-start, center, 12px);
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 .assets__actions {
   @include flex(flex-start, center, 12px);
@@ -696,7 +696,7 @@ async function onUpload(e: Event) {
   margin-top: 20px;
   &__total {
     font-size: 13px;
-    color: $gray-100;
+    color: #606692;
   }
   &__pages {
     @include flex(flex-start, center, 4px);
@@ -708,7 +708,7 @@ async function onUpload(e: Event) {
     padding: 0 6px;
     border-radius: 6px;
     font-size: 13px;
-    color: $gray-400;
+    color: #606692;
     &:hover:not(:disabled) {
       background: $blue-light;
     }

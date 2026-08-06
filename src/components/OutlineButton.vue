@@ -28,23 +28,40 @@ withDefaults(defineProps<{ tag?: string; variant?: 'default' | 'danger' }>(), { 
   &:disabled {
     border-color: $blue-dark-500;
     cursor: not-allowed;
+    opacity: 0.3;
+    pointer-events: none;
+    box-shadow: none;
   }
   /* pressed/active style: translate and remove shadow for a pressed effect */
   &:active {
-    background: #14193f;
+    border-color: #14193f;
     transform: translateY(1px);
   }
   &--danger {
     border-color: #ff6148;
     color: #ff6148;
     border-radius: 16px;
-    &:focus,
-    &:hover,
-    &:disabled {
+    position: relative;
+    &:focus {
       border-color: #ff6148;
+      position: absolute;
+      box-shadow:
+        $btnBoxShadow,
+        0 0 0 3px #f2bb00;
+    }
+
+    &:hover {
+      color: #ff8a78;
+      border-color: #ff8a78;
+    }
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.3;
+      pointer-events: none;
+      box-shadow: none;
     }
     &:active {
-      background: $white;
+      background: #d93e28;
     }
   }
 }

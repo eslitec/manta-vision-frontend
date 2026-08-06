@@ -11,3 +11,6 @@ body {
 }
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; cursor: pointer; border: none; background: none; }
+// Firefox 會在 <button> 內部加一層看不見的 focus 框線＋padding（-moz-focus-inner），
+// 沒有清掉的話，點擊按鈕時文字會跟著那層看不見的框線位移 1-2px，其他瀏覽器不會有這個現象。
+button::-moz-focus-inner { border: 0; padding: 0; }
