@@ -1,10 +1,10 @@
 <template lang="pug">
-component.outline-btn(:is="tag")
+component.outline-btn(:is="tag" :class="`outline-btn--${variant}`")
   slot
 </template>
 
 <script setup lang="ts">
-withDefaults(defineProps<{ tag?: string }>(), { tag: 'button' })
+withDefaults(defineProps<{ tag?: string; variant?: 'default' | 'danger' }>(), { tag: 'button', variant: 'default' })
 </script>
 
 <style scoped lang="scss">
@@ -33,6 +33,17 @@ withDefaults(defineProps<{ tag?: string }>(), { tag: 'button' })
   &:active {
     border-color: #14193f;
     transform: translateY(1px);
+  }
+  &--danger {
+    border-color: #ff6148;
+    color: #ff6148;
+    border-radius: 16px;
+    &:focus,
+    &:hover,
+    &:active,
+    &:disabled {
+      border-color: #ff6148;
+    }
   }
 }
 </style>

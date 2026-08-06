@@ -41,7 +41,7 @@
           span.sources__label 來源
           button.chip(v-for="s in sources" :key="s.label" :class="{ 'is-active': activeSource === s.value }" @click="activeSource = s.value") {{ s.label }}
         .assets__actions
-          button.fromlib(v-if="activeView.kind === 'folder'" @click="pickerOpen = true")
+          button.btn-primary(v-if="activeView.kind === 'folder'" @click="pickerOpen = true")
             i.ti.ti-library-photo
             span 從圖庫加入
           label.upload
@@ -59,7 +59,9 @@
           button.batchbar__action(@click="openMoveDialog") 移至資料夾
           button.batchbar__action(v-if="activeView.kind === 'folder'" @click="removeSelectedFromFolder") 移出資料夾
           button.batchbar__action(@click="downloadSelected") 下載
-          button.batchbar__action.batchbar__action--danger(@click="openDeleteDialog") 刪除
+          OutlineButton(variant="danger" @click="openDeleteDialog")
+            i.ti.ti-trash
+            | 刪除
 
       .assets__empty(v-if="!filtered.length") 沒有符合的素材
       .assets__grid(v-else)
@@ -135,6 +137,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useAssets } from '@/composables/useAssets'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
+import OutlineButton from '@/components/OutlineButton.vue'
 import { CATEGORY_TAGS, type Asset, type AssetTag } from '@/types/asset'
 
 const { assets, folders, load, loadFolders, addFolder, addToFolder, removeFromFolder, deleteAssets, upload } =
@@ -191,7 +194,8 @@ const folderCounts = computed(() => {
 const filtered = computed(() =>
   assets.value.filter((a) => {
     const v = activeView.value
-    const byView = v.kind === 'all' ? true : v.kind === 'category' ? a.tag === v.tag : (a.folders?.includes(v.name) ?? false)
+    const byView =
+      v.kind === 'all' ? true : v.kind === 'category' ? a.tag === v.tag : (a.folders?.includes(v.name) ?? false)
     const bySource = activeSource.value === 'all' || a.tag === activeSource.value
     const byKeyword = !keyword.value || a.name.includes(keyword.value)
     return byView && bySource && byKeyword
@@ -296,7 +300,10 @@ function downloadSelected() {
 const pickerOpen = ref(false)
 async function onAddFromLibrary(picked: Asset[]) {
   if (activeView.value.kind !== 'folder') return
-  await addToFolder(picked.map((a) => a.id), activeView.value.name)
+  await addToFolder(
+    picked.map((a) => a.id),
+    activeView.value.name,
+  )
 }
 
 // 新增資料夾（行內輸入）
@@ -411,6 +418,11 @@ async function onUpload(e: Event) {
       background: $blue-light;
       color: $blue-dark-300;
       font-weight: 600;
+    }
+    &--folder.is-active {
+      background: #eef1f7;
+      border: 1.5px dashed $blue-dark-300;
+      padding: 7.5px 10.5px;
     }
     > span:first-child,
     &--folder &-name {
@@ -592,13 +604,6 @@ async function onUpload(e: Event) {
     color: $white;
     &:hover {
       color: rgba($white, 0.8);
-    }
-    &--danger {
-      background: $white;
-      color: $red;
-      border: 1px solid $red;
-      border-radius: 999px;
-      padding: 6px 16px;
     }
   }
 }
