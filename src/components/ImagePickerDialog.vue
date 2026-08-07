@@ -5,7 +5,7 @@ Teleport(to="body")
       header.picker__head
         div
           .picker__title {{ title }}
-          .picker__sub 調閱機器人「日安選物」的素材與生成產物
+          .picker__sub 隸屬機器人「日安選物」的素材與生成產物
         button.picker__close(@click="close" aria-label="關閉")
           i.ti.ti-x
       .picker__toolbar
@@ -22,7 +22,7 @@ Teleport(to="body")
             i.ti(:class="a.type === 'video' ? 'ti-player-play' : 'ti-photo'")
           .pick__meta
             span.pick__name {{ a.name }}
-            span.tag(:class="'tag--' + a.tag") {{ a.source }}
+            span.tag {{ a.source }}
       footer.picker__foot
         span.picker__count 已選 {{ count }} 項
         .picker__actions
@@ -118,11 +118,9 @@ const confirm = () => {
   &.is-selected { border-color: $blue; }
   &__thumb { @include flex(center, center); position: relative; aspect-ratio: 1 / 1; background: $blue-light; border-radius: 8px; color: $babyBlue; font-size: 26px; margin-bottom: 6px; }
   &__check { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; background: $blue; color: $white; font-size: 14px; @include flex(center, center); }
-  &__meta { padding: 0 2px 4px; }
-  &__name { display: block; font-size: 13px; color: $blue-dark-300; margin-bottom: 4px; } }
-.tag { font-size: 11px; padding: 2px 7px; border-radius: 6px; font-weight: 500;
-  &--upload { background: #E6F1FB; color: #185FA5; } &--object { background: #EEEDFE; color: #534AB7; }
-  &--ai { background: #FAEEDA; color: #854F0B; } &--edit { background: #EAF3DE; color: #3B6D11; } &--video { background: #FBEAF0; color: #993556; } }
+  &__meta { @include flex(space-between, center, 6px); padding: 0 2px 4px; }
+  &__name { flex: 1; min-width: 0; font-size: 13px; color: $blue-dark-300; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
+.tag { flex-shrink: 0; font-size: 11px; padding: 2px 7px; border-radius: 6px; font-weight: 500; background: #FAEEDA; color: #854F0B; }
 .picker__foot { @include flex(space-between, center); margin-top: 18px; border-top: 1px solid $lightGray; padding-top: 16px; }
 .picker__count { font-size: 13px; color: $gray-400; }
 .picker__actions { @include flex(flex-start, center, 10px); }
