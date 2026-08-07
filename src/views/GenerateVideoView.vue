@@ -6,29 +6,28 @@
       .dropzone
         i.ti.ti-photo.dropzone__icon
         span.dropzone__name(v-if="sourceImage") {{ sourceImage.name }}
-      .dropzone__actions
-        GhostButton(@click="pickerOpen = true") 從圖庫選擇
-        span.dropzone__hint 或拖曳上傳
+      OutlineButton.dropzone__pick(@click="pickerOpen = true") 從圖庫選擇
     .step
       .step__title 2. 選擇動態模板
       .templates
         button.tpl(v-for="t in templates" :key="t.name" :class="{ 'is-active': template === t.name }" @click="template = t.name")
-          i.ti(:class="t.icon")
-          span {{ t.name }}
+          .tpl__thumb
+            i.ti.ti-player-play
+          span.tpl__label {{ t.name }}
     .step
       .step__title 3. 輸出比例
       .ratios
         button.ratio(v-for="r in ratios" :key="r" :class="{ 'is-active': ratio === r }" @click="ratio = r") {{ r }}
     p.warn
       i.ti.ti-alert-triangle
-      span 影片較慢（約 1–2 分鐘、不可取消），完成後會推播到通知中心。
+      span 影片生成 飼料消耗較高，生成前會再次確認
     p.err(v-if="errorMsg") {{ errorMsg }}
     .video__footer
       .cost
         .cost__label 預估消耗
         .cost__value 45 顆飼料
       PrimaryButton(:disabled="busy" @click="confirmOpen = true")
-        i.ti.ti-player-play
+        i.ti.ti-plus
         span 生成影片
 
   section.panel.video__preview
@@ -53,7 +52,7 @@ import { computed, onUnmounted, ref } from 'vue'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import ConfirmGenerateDialog from '@/components/ConfirmGenerateDialog.vue'
 import PrimaryButton from '@/components/PrimaryButton.vue'
-import GhostButton from '@/components/GhostButton.vue'
+import OutlineButton from '@/components/OutlineButton.vue'
 import { useFeedStore } from '@/stores/feed'
 import { api } from '@/api'
 import { isInsufficientFeed } from '@/utils/error'
@@ -70,10 +69,10 @@ let timer: number | undefined
 let jobCost = 45
 
 const templates = [
-  { name: '鏡頭推移', icon: 'ti-zoom-pan' },
-  { name: '商品旋轉', icon: 'ti-rotate-clockwise' },
-  { name: '文字進場', icon: 'ti-typography' },
-  { name: '縮放呼吸', icon: 'ti-zoom-in-area' },
+  { name: '鏡頭推移' },
+  { name: '商品旋轉' },
+  { name: '文字進場' },
+  { name: '縮放呼吸' },
 ]
 const template = ref('鏡頭推移')
 const ratios = ['9:16', '1:1', '16:9']
@@ -124,13 +123,19 @@ onUnmounted(clear)
 .video__preview { display: flex; flex-direction: column; }
 .step { margin-bottom: 20px; &__title { font-size: 15px; font-weight: 700; color: $blue-dark-300; margin-bottom: 12px; } }
 .dropzone { @include flex(center, center); flex-direction: column; aspect-ratio: 4 / 3; border: 1.5px dashed $gray; border-radius: 10px; background: $blue-light; color: $babyBlue; font-size: 34px; margin-bottom: 12px;
-  &__name { font-size: 13px; color: $gray-400; margin-top: 8px; } &__actions { @include flex(flex-start, center, 12px); } &__hint { font-size: 12px; color: $gray-100; } }
+  &__name { font-size: 13px; color: $gray-400; margin-top: 8px; } }
+.dropzone__pick { width: 100%; }
 .templates { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.tpl { @include flex(center, center, 6px); flex-direction: column; padding: 18px 8px; border: 1px solid $gray; border-radius: 10px; font-size: 13px; color: $gray-400; background: $white; i { font-size: 22px; }
-  &.is-active { border-color: $blue; background: $blue-light; color: $blue-dark-300; font-weight: 600; } }
+.tpl { padding: 8px; border: 1px solid $gray; border-radius: 10px; background: $white; text-align: center;
+  &__thumb { @include flex(center, center); aspect-ratio: 2 / 1; background: $blue-light; border-radius: 8px; color: $babyBlue; font-size: 22px; margin-bottom: 8px; }
+  &__label { display: block; font-size: 13px; color: $gray-400; font-weight: 500; }
+  &.is-active {
+    border-color: $blue-dark-300;
+    .tpl__label { color: $blue-dark-300; font-weight: 700; }
+  } }
 .ratios { @include flex(flex-start, center, 8px); }
 .ratio { padding: 7px 16px; border-radius: 999px; font-size: 14px; border: 1px solid $gray; background: $white; color: $gray-400;
-  &.is-active { background: $blue-dark-300; color: $white; border-color: $blue-dark-300; } }
+  &.is-active { background: $white; color: $blue-dark-300; border-color: $blue-dark-300; font-weight: 600; } }
 .warn { @include flex(flex-start, flex-start, 8px); background: #FAEEDA; color: #854F0B; border-radius: 10px; padding: 10px 12px; font-size: 12.5px; line-height: 1.5; margin: 4px 0 12px; i { flex-shrink: 0; margin-top: 1px; } }
 .err { color: $red; font-size: 13px; margin-bottom: 12px; }
 .video__footer { @include flex(space-between, flex-end); border-top: 1px solid $lightGray; padding-top: 16px; }
