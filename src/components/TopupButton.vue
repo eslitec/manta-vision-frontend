@@ -29,6 +29,9 @@ button.secondary-btn
   &:active {
     background: $orange-dark;
     transform: translateY(1px);
+    box-shadow:
+      $btnBoxShadow,
+      0 0 0 3px #f2bb00;
   }
 }
 </style>

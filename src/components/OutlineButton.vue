@@ -41,10 +41,8 @@ withDefaults(defineProps<{ tag?: string; variant?: 'default' | 'danger' }>(), { 
     border-color: #ff6148;
     color: #ff6148;
     border-radius: 16px;
-    position: relative;
     &:focus {
       border-color: #ff6148;
-      position: absolute;
       box-shadow:
         $btnBoxShadow,
         0 0 0 3px #f2bb00;

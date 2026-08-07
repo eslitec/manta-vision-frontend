@@ -66,3 +66,5 @@
 - [x] 8.19 「1,240 顆」「128 張」的單位字（`<small>`）從跟數字垂直置中，改成貼齊數字底部：`.stats__num small` 加上 `align-self: flex-end`，只調整單位字自己的對齊方式，不影響同一行內飼料瓶圖示（`.stats__num-icon`）原本的置中對齊
 - [x] 8.20 重新核對 `$blue-dark-300`：使用者用 Figma Inspect 再次核對後確認正確色碼是 `#171E52`，取代任務 7.6（commit `ba2869a`）當時認定的 `#2E3567`——那次的比對結果才是錯的，這次修正回來
 - [x] 8.21 MV-00 這輪視覺校對收尾，後續若有新一輪落差再繼續增補本節任務
+- [x] 8.22 使用者回報「儲值飼料」／「儲值」按鈕（`TopupButton`）點擊時會位移。排查發現是使用者自己先前在 `&:active` 加的金色外框效果（`box-shadow: 0 0 0 3px #f2bb00`）實作方式有誤：連同 `position: absolute` 一起加了進去，導致按鈕在按下的瞬間脫離所在的 flex 容器（`.stats`／`.topbar__right`）的正常排版流程，鬆開時再跳回來，造成視覺上的位移；跟同一批「使用者回報 MV-01 儲存／刪除按鈕位移」是兩個不同成因（那個是全站 Firefox 的 `-moz-focus-inner` 問題），這個是單一元件自己的 CSS 寫法問題。修法：拿掉 `&:active` 裡的 `position: absolute;`，維持跟其他狀態一致的 `position: relative;`，金色外框效果本身（`box-shadow`）不需要 `position: absolute` 才能生效，拿掉後效果不變、只是不再脫離排版流程
+- [x] 8.23 `OutlineButton`（`--danger` 變體）的 `:focus` 狀態也曾加上同一種金色外框效果，同樣誤帶了 `position: absolute`；使用者依同一個修法自行拿掉，跟任務 8.22 是同一類問題、同一種修法，不是新的成因
