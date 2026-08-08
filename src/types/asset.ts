@@ -9,6 +9,7 @@ export interface Asset {
   dim: string
   type?: 'image' | 'video'
   folders?: string[] // 使用者歸檔的資料夾（多重歸屬，像相簿／標籤；與「來源」是獨立維度）
+  referencedBy?: number // 被多少筆生成結果引用（作為來源／參考圖）；刪除會斷開這些生成紀錄的來源鏈
 }
 
 // 未歸檔素材所屬的預設資料夾

@@ -63,8 +63,15 @@
             i.ti.ti-trash
             | 刪除
 
-      .assets__empty(v-if="!filtered.length") 沒有符合的素材
+      .assets__empty(v-if="!filtered.length && !pendingTasks.length") 沒有符合的素材
       .assets__grid(v-else)
+        .asset.asset--pending(v-for="t in pendingTasks" :key="t.id")
+          .asset__thumb.asset__thumb--pending
+            i.ti.ti-loader.spin
+          .asset__name {{ t.name }}
+          .asset__progress
+            .asset__progress-fill(:style="{ width: t.progress + '%' }")
+          span.asset__eta {{ t.status === 'queued' ? '排隊中…' : '生成中…約 1–2 分鐘' }}
         .asset(v-for="a in paged" :key="a.id" :class="{ 'is-selected': selectedIds.has(a.id) }")
           label.asset__check
             input(type="checkbox" :checked="selectedIds.has(a.id)" @change="toggleSelect(a.id)")
@@ -125,17 +132,24 @@
             .modal__preview-thumb
               i.ti(:class="a.type === 'video' ? 'ti-player-play' : 'ti-photo'")
             span.modal__preview-name {{ a.name }}
+        .modal__warn(v-if="referencedCount > 0")
+          i.ti.ti-alert-triangle.modal__warn-icon
+          .modal__warn-text
+            strong 其中 {{ referencedCount }} 筆已被生成結果引用
+            span 刪除後，引用它們的生成紀錄將無法回溯原始素材。此操作無法復原。
         label.modal__checkline
           input(type="checkbox" v-model="deleteConfirmed")
           span 我了解此操作無法復原
         footer.modal__foot
-          DialogButton(@click="deleteDialogOpen = false") 取消
-          DialogButton(variant="danger" :disabled="!deleteConfirmed" @click="confirmDelete") 永久刪除 {{ selectedIds.size }} 筆
+          button.modal__textbtn(@click="deleteDialogOpen = false") 取消
+          button.modal__textbtn.modal__textbtn--danger(:disabled="!deleteConfirmed" @click="confirmDelete") 永久刪除 {{ selectedIds.size }} 筆
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useAssets } from '@/composables/useAssets'
+import { useGenerationTasksStore } from '@/stores/generationTasks'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import OutlineButton from '@/components/OutlineButton.vue'
 import DialogButton from '@/components/DialogButton.vue'
@@ -143,6 +157,16 @@ import { CATEGORY_TAGS, type Asset, type AssetTag } from '@/types/asset'
 
 const { assets, folders, load, loadFolders, addFolder, addToFolder, removeFromFolder, deleteAssets, upload } =
   useAssets()
+
+// 非同步生成中的項目（目前只有圖生影會用到；圖片生成是同步完成，不會有機會停在「生成中」狀態）
+// 跟頂部工具列「任務」徽章共用同一份 generationTasks store，只在「全部素材」第一頁顯示，
+// 因為這些任務還沒有真正的資料夾／分類歸屬，不該出現在特定資料夾或系統分類的篩選結果裡
+const { tasks: generationTasks } = storeToRefs(useGenerationTasksStore())
+const pendingTasks = computed(() =>
+  activeView.value.kind === 'all' && page.value === 1
+    ? generationTasks.value.filter((t) => t.kind === 'video' && (t.status === 'queued' || t.status === 'processing'))
+    : [],
+)
 
 const categoryTags = CATEGORY_TAGS
 
@@ -283,6 +307,8 @@ async function removeSelectedFromFolder() {
 const deleteDialogOpen = ref(false)
 const deleteConfirmed = ref(false)
 const selectedAssets = computed(() => assets.value.filter((a) => selectedIds.value.has(a.id)))
+// 被生成結果引用（作為來源／參考圖）的選取素材數；刪除會斷開這些生成紀錄的來源鏈
+const referencedCount = computed(() => selectedAssets.value.filter((a) => (a.referencedBy ?? 0) > 0).length)
 function openDeleteDialog() {
   deleteConfirmed.value = false
   deleteDialogOpen.value = true
@@ -352,8 +378,8 @@ async function onUpload(e: Event) {
     margin-bottom: 16px;
   }
   &__note-dot {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     background: $blue;
     flex-shrink: 0;
@@ -361,7 +387,7 @@ async function onUpload(e: Event) {
   &__body {
     display: flex;
     align-items: flex-start;
-    gap: 20px;
+    gap: 16px;
   }
 }
 .tabs {
@@ -384,7 +410,7 @@ async function onUpload(e: Event) {
   }
 }
 .folders {
-  width: 180px;
+  width: 220px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -486,8 +512,8 @@ async function onUpload(e: Event) {
 }
 .search {
   position: relative;
-  flex: 0 1 320px;
-  max-width: 320px;
+  flex: 0 1 280px;
+  max-width: 280px;
   &__icon {
     position: absolute;
     left: 12px;
@@ -498,7 +524,7 @@ async function onUpload(e: Event) {
   }
   &__input {
     width: 100%;
-    height: 38px;
+    height: 32px;
     border: 1px solid $gray;
     border-radius: 999px;
     padding: 0 14px 0 34px;
@@ -537,11 +563,11 @@ async function onUpload(e: Event) {
 }
 .upload {
   @include flex(center, center, 6px);
-  background: $blue-dark-300;
+  background: $blue-dark-500;
   color: $white;
   font-weight: 600;
   padding: 9px 16px;
-  border-radius: 999px;
+  border-radius: 18px;
   font-size: 14px;
   white-space: nowrap;
   cursor: pointer;
@@ -607,7 +633,7 @@ async function onUpload(e: Event) {
 .assets__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 18px;
+  gap: 16px;
 }
 .asset {
   position: relative;
@@ -662,6 +688,36 @@ async function onUpload(e: Event) {
   &__dim {
     font-size: 12px;
     color: $gray-100;
+  }
+}
+.asset--pending {
+  .asset__thumb--pending {
+    color: $blue;
+  }
+}
+.asset__progress {
+  height: 4px;
+  background: $lightGray;
+  border-radius: 999px;
+  margin-bottom: 5px;
+  overflow: hidden;
+  &-fill {
+    height: 100%;
+    background: $blue;
+    border-radius: 999px;
+    transition: width 0.3s;
+  }
+}
+.asset__eta {
+  font-size: 12px;
+  color: $gray-100;
+}
+.spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 .tag {
@@ -851,5 +907,46 @@ async function onUpload(e: Event) {
   color: $blue-dark-300;
   margin-bottom: 18px;
   cursor: pointer;
+}
+.modal__warn {
+  @include flex(flex-start, flex-start, 10px);
+  background: $blue-light;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.modal__warn-icon {
+  color: $orange;
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.modal__warn-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  strong {
+    font-size: 13px;
+    font-weight: 700;
+    color: $blue-dark-300;
+  }
+  span {
+    font-size: 12px;
+    color: $gray-400;
+    line-height: 1.5;
+  }
+}
+.modal__textbtn {
+  font-size: 14px;
+  font-weight: 600;
+  color: $blue-dark-500;
+  padding: 8px 12px;
+  &--danger {
+    color: $red;
+    &:disabled {
+      color: rgba($red, 0.4);
+      cursor: not-allowed;
+    }
+  }
 }
 </style>

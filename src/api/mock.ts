@@ -11,6 +11,7 @@ import type {
   VideoJob,
   VideoJobReq,
 } from '@/types/api'
+import { VIDEO_MODEL_TIERS } from '@/types/api'
 import { UNFILED_FOLDER } from '@/types/asset'
 
 // ⚠️ 這是「假後端」：所有資料在記憶體中，讓前端功能可端到端運作。
@@ -33,12 +34,12 @@ const db = {
   generatedThisMonth: 128, // 本月已生成張數（首頁統計；產圖的模組才計入）
   folders: ['未分類', '春季企劃', '商品素材', '生成結果'],
   assets: [
-    { id: 'a1', name: '春季主視覺_01', source: '上傳', tag: 'upload', dim: '1024×758', folders: ['春季企劃'] },
-    { id: 'a2', name: '商品_去背_白T', source: '物件素材', tag: 'object', dim: '1024×768', folders: ['商品素材'] },
+    { id: 'a1', name: '春季主視覺_01', source: '上傳', tag: 'upload', dim: '1024×758', folders: ['春季企劃'], referencedBy: 2 },
+    { id: 'a2', name: '商品_去背_白T', source: '物件素材', tag: 'object', dim: '1024×768', folders: ['商品素材'], referencedBy: 1 },
     { id: 'a3', name: '生成_木質桌面情境', source: 'AI 生成', tag: 'ai', dim: '1024×768', folders: ['生成結果'] },
     { id: 'a4', name: '春季主視覺_調色版', source: '編輯產物', tag: 'edit', dim: '1024×768', folders: ['春季企劃'] },
     { id: 'a5', name: '門市外觀', source: '上傳', tag: 'upload', dim: '1024×768', folders: ['未分類'] },
-    { id: 'a6', name: '商品_去背_帆布袋', source: '物件素材', tag: 'object', dim: '1024×768', folders: ['商品素材'] },
+    { id: 'a6', name: '商品_去背_帆布袋', source: '物件素材', tag: 'object', dim: '1024×768', folders: ['商品素材'], referencedBy: 1 },
     { id: 'a7', name: '生成_野餐情境', source: 'AI 生成', tag: 'ai', dim: '1024×768', folders: ['生成結果'] },
     { id: 'a8', name: '夏季宣傳_短影片', source: '影片', tag: 'video', dim: '1080×1920', type: 'video', folders: ['生成結果'] },
   ] as Asset[],
@@ -60,7 +61,7 @@ const db = {
     logoUrl: '',
   } as BrandProfile,
   consent: false,
-  jobs: new Map<string, { req: VideoJobReq; created: number; cost: number }>(),
+  jobs: new Map<string, { req: VideoJobReq; created: number; cost: number; failed?: boolean; failedChecked?: boolean }>(),
 }
 
 function deduct(cost: number) {
@@ -198,9 +199,10 @@ export const mockApi = {
     }
   },
 
-  // POST /generate/video → 建立非同步任務
+  // POST /generate/video → 建立非同步任務；扣款依生成模型倍率（標準×1／進階×2／專業×4）
   async createVideoJob(req: VideoJobReq): Promise<VideoJob> {
-    const cost = 45
+    const tier = VIDEO_MODEL_TIERS.find((t) => t.key === req.modelTier)
+    const cost = 45 * (tier ? tier.multiplier : 1)
     deduct(cost)
     db.totalGen += 1
     const id = uid('job')
@@ -209,15 +211,25 @@ export const mockApi = {
     return { id, status: 'queued', cost }
   },
 
-  // GET /generate/video/:id → 查任務狀態（demo 用短時間模擬 1–2 分鐘）
+  // GET /generate/video/:id → 查任務狀態（demo 用短時間模擬 1–2 分鐘；processing 階段有小機率模擬模型逾時失敗，讓失敗／重試／退款流程可被實際觸發與測試）
   async getVideoJob(id: string): Promise<VideoJob> {
     await delay(200)
     const j = db.jobs.get(id)
     if (!j) return { id, status: 'failed', cost: 0, error: 'NOT_FOUND' }
+    if (j.failed) return { id, status: 'failed', cost: j.cost, error: 'MODEL_TIMEOUT' }
     const elapsed = Date.now() - j.created
     let status: VideoJob['status'] = 'queued'
     if (elapsed > 5000) status = 'done'
-    else if (elapsed > 1500) status = 'processing'
+    else if (elapsed > 1500) {
+      status = 'processing'
+      if (!j.failedChecked) {
+        j.failedChecked = true
+        if (Math.random() < 0.12) {
+          j.failed = true
+          return { id, status: 'failed', cost: j.cost, error: 'MODEL_TIMEOUT' }
+        }
+      }
+    }
     if (status === 'done') { db.successGen += 1; return { id, status, cost: j.cost, resultUrl: 'mock://video' } }
     return { id, status, cost: j.cost }
   },
