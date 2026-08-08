@@ -18,6 +18,15 @@
       .step__title 3. 輸出比例
       .ratios
         button.ratio(v-for="r in ratios" :key="r" :class="{ 'is-active': ratio === r }" @click="ratio = r") {{ r }}
+    .step
+      .step__head
+        span.step__title 4. 生成模型
+        span.step__hint 倍率以標準模型 45 顆/支 為基準
+      .models
+        button.model(v-for="t in modelTiers" :key="t.key" :class="{ 'is-active': modelTier === t.key }" @click="modelTier = t.key")
+          span {{ t.label }}
+          span.model__mult ×{{ t.multiplier }}
+    BrandToggle.video__brand(v-model="applyBrand" @edit="goBrandSettings")
     p.warn
       i.ti.ti-alert-triangle
       span 影片生成 飼料消耗較高，生成前會再次確認
@@ -25,123 +34,445 @@
     .video__footer
       .cost
         .cost__label 預估消耗
-        .cost__value 45 顆飼料
+        .cost__value {{ estCost }} 顆飼料
       PrimaryButton(:disabled="busy" @click="confirmOpen = true")
         i.ti.ti-plus
         span 生成影片
 
   section.panel.video__preview
-    h2.preview__title 預覽
+    h2.preview__title {{ previewTitle }}
     .preview__box
-      template(v-if="status === 'queued' || status === 'processing'")
-        i.ti.ti-loader.preview__spin
-        span.preview__hint {{ status === 'queued' ? '排隊中…' : '生成中…約 1–2 分鐘，完成會通知' }}
-      template(v-else-if="status === 'done'")
-        i.ti.ti-circle-check
-        span.preview__hint 影片已完成
+      template(v-if="myTask?.status === 'failed'")
+        i.ti.ti-alert-triangle
+        span.preview__hint {{ myTask.error === 'MODEL_TIMEOUT' ? '生成失敗・模型逾時，已退還飼料' : '生成失敗' }}
       template(v-else)
         i.ti.ti-player-play
-        span.preview__hint 設定好左側選項後按「生成影片」
+        span.preview__hint(v-if="!myTask") 設定好左側選項後按「生成影片」
+
+    //- 生成中：進度狀態區塊（對齊設計稿 MV-04c）
+    .taskstat(v-if="busy")
+      .taskstat__head
+        span.taskstat__dot
+        span.taskstat__label {{ statusLabel }}
+      .taskstat__bar
+        .taskstat__fill(:style="{ width: (myTask.progress ?? 0) + '%' }")
+      .taskstat__meta
+        span.taskstat__pct {{ myTask.progress ?? 0 }}%
+        span.taskstat__eta(v-if="etaText") {{ etaText }}
+      p.taskstat__note 可離開此頁面。完成後會在右上角「任務」通知你，影片自動存入圖庫 › 影片。
+      OutlineButton.taskstat__cancel(@click="cancelCurrent") 取消任務
+    template(v-if="myTask?.status === 'done'")
+      p.result__meta
+        span.result__dot
+        span 生成完成・已存入圖庫›影片
+      .result__actions
+        OutlineButton(@click="download") 下載
+        OutlineButton(@click="startGenerate") 重新生成
+        PrimaryButton(@click="goLibrary") 前往圖庫
+      p.result__stat 消耗 {{ myTask.cost }} 顆飼料・耗時 {{ elapsedText(myTask) }}
 
   ImagePickerDialog(v-model:open="pickerOpen" title="選擇來源圖片" @select="onPick")
-  ConfirmGenerateDialog(v-model:open="confirmOpen" :cost="45" @confirm="startGenerate")
+  ConfirmGenerateDialog(v-model:open="confirmOpen" :cost="estCost" :model-label="modelLabelText" @confirm="startGenerate")
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import ConfirmGenerateDialog from '@/components/ConfirmGenerateDialog.vue'
 import PrimaryButton from '@/components/PrimaryButton.vue'
 import OutlineButton from '@/components/OutlineButton.vue'
-import { useFeedStore } from '@/stores/feed'
-import { api } from '@/api'
+import BrandToggle from '@/components/BrandToggle.vue'
+import { useGenerationTasksStore } from '@/stores/generationTasks'
 import { isInsufficientFeed } from '@/utils/error'
-import type { Asset, JobStatus } from '@/types/api'
+import { VIDEO_MODEL_TIERS } from '@/types/api'
+import type { Asset, GenerationTask, VideoModelTier } from '@/types/api'
 
-const feed = useFeedStore()
+const router = useRouter()
+const tasksStore = useGenerationTasksStore()
 
 const sourceImage = ref<Asset | null>(null)
 const pickerOpen = ref(false)
 const confirmOpen = ref(false)
-const status = ref<JobStatus | 'idle'>('idle')
 const errorMsg = ref('')
-let timer: number | undefined
-let jobCost = 45
+const myTaskId = ref<string | null>(null)
 
-const templates = [
-  { name: '鏡頭推移' },
-  { name: '商品旋轉' },
-  { name: '文字進場' },
-  { name: '縮放呼吸' },
-]
+const templates = [{ name: '鏡頭推移' }, { name: '商品旋轉' }, { name: '文字進場' }, { name: '縮放呼吸' }]
 const template = ref('鏡頭推移')
 const ratios = ['9:16', '1:1', '16:9']
 const ratio = ref('9:16')
-const busy = computed(() => status.value === 'queued' || status.value === 'processing')
+const modelTiers = VIDEO_MODEL_TIERS
+const modelTier = ref<VideoModelTier>('standard')
+const applyBrand = ref(true)
+const goBrandSettings = () => router.push('/settings')
 
-const onPick = (a: Asset) => { sourceImage.value = a }
+const estCost = computed(() => {
+  const t = modelTiers.find((x) => x.key === modelTier.value)
+  return 45 * (t ? t.multiplier : 1)
+})
+const modelLabelText = computed(() => {
+  const t = modelTiers.find((x) => x.key === modelTier.value)
+  return t ? `${t.label}（×${t.multiplier}）・${estCost.value} 顆/支` : ''
+})
+
+// 這頁只呈現「這次瀏覽時自己送出的任務」；任務本身在背景持續追蹤，離開頁面不受影響，
+// 完整的任務清單（含離開此頁後仍在跑的任務）另外在頂部工具列的任務中心面板查看。
+const myTask = computed(() => tasksStore.tasks.find((t) => t.id === myTaskId.value))
+const busy = computed(() => myTask.value?.status === 'queued' || myTask.value?.status === 'processing')
+
+const previewTitle = computed(() =>
+  myTask.value?.status === 'done' ? '預覽（已完成）' : busy.value ? '預覽（生成中）' : '預覽',
+)
+
+// 生成階段（步驟 1~4）由進度粗估；真實後端就緒後改用後端回傳的實際階段
+const GEN_PHASES = ['準備素材', '算圖', '合成中', '收尾中']
+const genStep = computed(() => {
+  const p = myTask.value?.progress ?? 0
+  return p < 35 ? 1 : p < 65 ? 2 : p < 90 ? 3 : 4
+})
+const statusLabel = computed(() =>
+  myTask.value?.status === 'queued'
+    ? '排隊中…'
+    : `生成中（步驟 ${genStep.value}/4：${GEN_PHASES[genStep.value - 1]}）`,
+)
+// 剩餘時間估算：以總長約 110 秒推估（mock）；後端就緒後改用真實 ETA
+const etaText = computed(() => {
+  if (myTask.value?.status !== 'processing') return ''
+  const remain = Math.max(5, Math.round(((100 - (myTask.value.progress ?? 0)) / 100) * 110))
+  const m = Math.floor(remain / 60)
+  const s = remain % 60
+  return m > 0 ? `約剩 ${m} 分 ${String(s).padStart(2, '0')} 秒` : `約剩 ${s} 秒`
+})
+function cancelCurrent() {
+  if (myTask.value) tasksStore.cancelTask(myTask.value.id)
+}
+
+const onPick = (a: Asset) => {
+  sourceImage.value = a
+}
 
 async function startGenerate() {
   errorMsg.value = ''
-  clear() // 送新任務前先停掉上一個輪詢，避免退錯金額
   try {
-    const job = await api.createVideoJob({ sourceImageId: sourceImage.value?.id, template: template.value, ratio: ratio.value })
-    jobCost = job.cost
-    status.value = job.status
-    await feed.refresh()
-    poll(job.id)
+    const id = await tasksStore.createVideoTask(
+      {
+        sourceImageId: sourceImage.value?.id,
+        template: template.value,
+        ratio: ratio.value,
+        modelTier: modelTier.value,
+      },
+      `圖生影_${template.value}`,
+    )
+    myTaskId.value = id
   } catch (e: unknown) {
     errorMsg.value = isInsufficientFeed(e) ? '飼料不足，請先儲值。' : '送出失敗，請再試一次。'
   }
 }
 
-function poll(id: string) {
-  clear()
-  timer = window.setInterval(async () => {
-    const j = await api.getVideoJob(id)
-    status.value = j.status
-    if (j.status === 'done') {
-      clear()
-      // TODO: 推播完成通知到通知中心
-    } else if (j.status === 'failed') {
-      clear()
-      await api.refundFeed(jobCost) // 失敗退點
-      await feed.refresh()
-      errorMsg.value = '生成失敗，已退還飼料。'
-      status.value = 'idle'
-    }
-  }, 1000)
+function elapsedText(t: GenerationTask) {
+  if (!t.doneAt) return ''
+  const sec = Math.round((t.doneAt - t.createdAt) / 1000)
+  return `${Math.floor(sec / 60)} 分 ${String(sec % 60).padStart(2, '0')} 秒`
 }
-function clear() { if (timer) { clearInterval(timer); timer = undefined } }
-onUnmounted(clear)
+function download() {
+  /* TODO: VideoJob 目前只有 mock:// 假 URL，等後端提供真實檔案來源後再接上真正的下載行為 */
+}
+function goLibrary() {
+  router.push('/library')
+}
 </script>
 
 <style scoped lang="scss">
-.video { display: grid; grid-template-columns: 380px 1fr; gap: 20px; align-items: stretch; }
-.panel { @include card; padding: 22px; }
-.video__input { align-self: start; }
-.video__preview { display: flex; flex-direction: column; }
-.step { margin-bottom: 20px; &__title { font-size: 15px; font-weight: 700; color: $blue-dark-300; margin-bottom: 12px; } }
-.dropzone { @include flex(center, center); flex-direction: column; aspect-ratio: 4 / 3; border: 1.5px dashed $gray; border-radius: 10px; background: $blue-light; color: $babyBlue; font-size: 34px; margin-bottom: 12px;
-  &__name { font-size: 13px; color: $gray-400; margin-top: 8px; } }
-.dropzone__pick { width: 100%; }
-.templates { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.tpl { padding: 8px; border: 1px solid $gray; border-radius: 10px; background: $white; text-align: center;
-  &__thumb { @include flex(center, center); aspect-ratio: 2 / 1; background: $blue-light; border-radius: 8px; color: $babyBlue; font-size: 22px; margin-bottom: 8px; }
-  &__label { display: block; font-size: 13px; color: $gray-400; font-weight: 500; }
+.video {
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+.panel {
+  @include card;
+  padding: 24px;
+}
+.video__input {
+  align-self: start;
+}
+.video__preview {
+  display: flex;
+  flex-direction: column;
+}
+.step {
+  margin-bottom: 20px;
+  &__title {
+    font-size: 15px;
+    font-weight: 700;
+    color: $blue-dark-300;
+    margin-bottom: 12px;
+  }
+}
+.dropzone {
+  @include flex(center, center);
+  flex-direction: column;
+  aspect-ratio: 4 / 3;
+  border: 1.5px dashed $gray;
+  border-radius: 10px;
+  background: $blue-light;
+  color: $babyBlue;
+  font-size: 34px;
+  margin-bottom: 12px;
+  &__name {
+    font-size: 13px;
+    color: $gray-400;
+    margin-top: 8px;
+  }
+}
+.dropzone__pick {
+  width: 100%;
+}
+.templates {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.tpl {
+  padding: 8px;
+  border: 1px solid $gray;
+  border-radius: 10px;
+  background: $white;
+  text-align: center;
+  &__thumb {
+    @include flex(center, center);
+    aspect-ratio: 2 / 1;
+    background: $blue-light;
+    border-radius: 8px;
+    color: $babyBlue;
+    font-size: 22px;
+    margin-bottom: 8px;
+  }
+  &__label {
+    display: block;
+    font-size: 13px;
+    color: $gray-400;
+    font-weight: 500;
+  }
   &.is-active {
     border-color: $blue-dark-300;
-    .tpl__label { color: $blue-dark-300; font-weight: 700; }
-  } }
-.ratios { @include flex(flex-start, center, 8px); }
-.ratio { padding: 7px 16px; border-radius: 999px; font-size: 14px; border: 1px solid $gray; background: $white; color: $gray-400;
-  &.is-active { background: $white; color: $blue-dark-300; border-color: $blue-dark-300; font-weight: 600; } }
-.warn { @include flex(flex-start, flex-start, 8px); background: #FAEEDA; color: #854F0B; border-radius: 10px; padding: 10px 12px; font-size: 12.5px; line-height: 1.5; margin: 4px 0 12px; i { flex-shrink: 0; margin-top: 1px; } }
-.err { color: $red; font-size: 13px; margin-bottom: 12px; }
-.video__footer { @include flex(space-between, flex-end); border-top: 1px solid $lightGray; padding-top: 16px; }
-.cost { &__label { font-size: 12px; color: $gray-100; } &__value { font-size: 17px; font-weight: 700; color: $blue-dark-300; } }
-.preview__title { font-size: 18px; font-weight: 700; color: $blue-dark-300; margin-bottom: 16px; }
-.preview__box { @include flex(center, center); flex-direction: column; gap: 12px; flex: 1; min-height: 320px; background: $blue-light; border-radius: 12px; color: $babyBlue; font-size: 40px; }
-.preview__hint { font-size: 13px; color: $gray-400; }
-.preview__spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
+    .tpl__label {
+      color: $blue-dark-300;
+      font-weight: 700;
+    }
+  }
+}
+.ratios {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.ratio {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: 7px 12px;
+  border-radius: 5px;
+  font-size: 14px;
+  border: 1px solid $gray;
+  background: $white;
+  color: $gray-400;
+  &.is-active {
+    background: $white;
+    color: $blue-dark-300;
+    border-color: $blue-dark-300;
+    font-weight: 600;
+  }
+}
+.step__head {
+  @include flex(space-between, center);
+  margin-bottom: 12px;
+  .step__title {
+    margin-bottom: 0;
+  }
+}
+.step__hint {
+  font-size: 12px;
+  color: $gray-100;
+}
+.models {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.model {
+  @include flex(center, center, 6px);
+  padding: 7px 16px;
+  border-radius: 5px;
+  font-size: 14px;
+  border: 1px solid $gray;
+  background: $white;
+  color: $gray-400;
+  &__mult {
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: $lightGray;
+    color: $gray-100;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  &.is-active {
+    color: $blue-dark-300;
+    border-color: $blue-dark-300;
+    font-weight: 600;
+    .model__mult {
+      background: $blue-dark-300;
+      color: $white;
+    }
+  }
+}
+.video__brand {
+  margin: 4px 0 16px;
+}
+.warn {
+  @include flex(flex-start, flex-start, 8px);
+  background: #faeeda;
+  color: #854f0b;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 4px 0 12px;
+  i {
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+}
+.err {
+  color: $red;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.video__footer {
+  @include flex(space-between, flex-end);
+  border-top: 1px solid $lightGray;
+  padding-top: 16px;
+}
+.cost {
+  &__label {
+    font-size: 12px;
+    color: $gray-100;
+  }
+  &__value {
+    font-size: 17px;
+    font-weight: 700;
+    color: $blue-dark-300;
+  }
+}
+.preview__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: $blue-dark-300;
+  margin-bottom: 16px;
+}
+.preview__box {
+  @include flex(center, center);
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 320px;
+  background: $blue-light;
+  border-radius: 12px;
+  color: $babyBlue;
+  font-size: 40px;
+}
+.preview__hint {
+  font-size: 13px;
+  color: $gray-400;
+}
+.taskstat {
+  max-width: 360px;
+  margin: 16px auto 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  &__head {
+    @include flex(center, center, 8px);
+  }
+  &__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    background: #606692;
+    flex-shrink: 0;
+  }
+  &__label {
+    font-size: 16px;
+    font-weight: 700;
+    color: $blue-dark-500;
+  }
+  &__bar {
+    width: 100%;
+    height: 6px;
+    background: $blue-light;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  &__fill {
+    height: 100%;
+    background: $blue-dark-500;
+    border-radius: 3px;
+    transition: width 0.3s;
+  }
+  &__meta {
+    @include flex(flex-start, center);
+    width: 100%;
+  }
+  &__pct {
+    font-size: 13px;
+    font-weight: 500;
+    color: $blue-dark-500;
+  }
+  &__eta {
+    margin-left: auto;
+    font-size: 13px;
+    color: #606692;
+  }
+  &__note {
+    font-size: 12px;
+    color: #606692;
+    text-align: center;
+    line-height: 1.5;
+  }
+  &__cancel {
+    margin-top: 2px;
+  }
+}
+.preview__spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.result__meta {
+  @include flex(center, center, 8px);
+  font-size: 13px;
+  color: $blue-dark-300;
+  margin-top: 12px;
+}
+.result__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: $green;
+}
+.result__actions {
+  @include flex(center, center, 10px);
+  margin-top: 12px;
+}
+.result__stat {
+  text-align: center;
+  font-size: 12px;
+  color: $gray-100;
+  margin-top: 8px;
+}
 </style>
