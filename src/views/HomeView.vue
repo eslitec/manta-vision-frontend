@@ -139,7 +139,7 @@ const genTools = [
   @include flex(flex-start, stretch, 0);
   @include card;
   margin-top: 22px;
-  padding: 22px 26px;
+  padding: 20px;
   &__item {
     flex: 1;
     display: flex;
@@ -213,7 +213,7 @@ const genTools = [
 
 .card {
   @include card;
-  @include flex(flex-start, flex-start, 14px);
+  @include flex(flex-start, flex-start, 12px);
   padding: 20px;
   text-align: left;
   position: relative;
@@ -232,10 +232,10 @@ const genTools = [
   }
   :deep(.card__feed-badge) {
     position: absolute;
-    top: 14px;
-    right: 14px;
-    width: 22px;
-    height: 22px;
+    top: 20px;
+    right: 20px;
+    width: 28px;
+    height: 28px;
   }
   &__body {
     flex: 1;

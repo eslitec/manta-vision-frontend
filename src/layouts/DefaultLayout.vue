@@ -27,28 +27,39 @@
         span.topbar__sep ›
         span.topbar__cur Manta Vision
       .topbar__right
-        button.topbar__tasks
+        button.topbar__tasks(@click="taskPanelOpen = !taskPanelOpen")
           span.topbar__tasks-icon
             IconTasksBadge
           | 任務
+          span.topbar__tasks-badge(v-if="unreadCount > 0") {{ unreadCount }}
+          span.topbar__tasks-dot(v-else-if="activeCount > 0")
         FeedBadge
         .topbar__user
           span.topbar__user-dot
           span Mavis｜擁有者
     main.content
       router-view
+  TaskCenterPanel(v-model:open="taskPanelOpen")
+  GenerationToast
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import FeedBadge from '@/components/FeedBadge.vue'
+import TaskCenterPanel from '@/components/TaskCenterPanel.vue'
+import GenerationToast from '@/components/GenerationToast.vue'
 import IconTasksBadge from '@/components/icons/IconTasksBadge.vue'
 import IconAiSparkle from '@/components/icons/IconAiSparkle.vue'
 import IconLibraryPhoto from '@/components/icons/IconLibraryPhoto.vue'
 import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
 import IconSettings from '@/components/icons/IconSettings.vue'
+import { useGenerationTasksStore } from '@/stores/generationTasks'
 
 const route = useRoute()
+const taskPanelOpen = ref(false)
+const { activeCount, unreadCount } = storeToRefs(useGenerationTasksStore())
 const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.startsWith(to))
 const navItems = [
   { label: 'AI 生成工作台', icon: IconAiSparkle, to: '/' },
@@ -68,23 +79,23 @@ const navItems = [
 .sidebar {
   width: 200px;
   flex-shrink: 0;
-  background: $blue-dark-200;
+  background: $blue-dark-500;
   color: $white;
   padding: 20px 16px;
   display: flex;
   flex-direction: column;
   gap: 2px;
   &__logo {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 700;
     padding: 4px 0;
   }
   &__brand {
-    @include flex(flex-start, center, 10px);
-    background: $white;
-    border-radius: 10px;
+    @include flex(flex-start, center, 12px);
+    background: $blue-light;
+    border-radius: 0 10px 10px 0;
     margin: 0 -16px;
-    padding: 10px 16px;
+    padding: 8px 8px 8px 16px;
     position: relative;
     &::before {
       content: '';
@@ -98,8 +109,8 @@ const navItems = [
     }
   }
   &__avatar {
-    width: 34px;
-    height: 34px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     background: $babyBlue;
     flex-shrink: 0;
@@ -128,18 +139,18 @@ const navItems = [
     margin-top: 6px;
   }
   &__item {
-    @include flex(flex-start, center, 10px);
-    margin: 0 -14px;
+    @include flex(flex-start, center, 8px);
+    margin: 0 -16px;
     padding: 13px 12px;
-    border-radius: 8px;
-    font-size: 15px;
+    // border-radius: 8px;
+    font-size: 16px;
     color: rgba(255, 255, 255, 0.85);
     &:hover {
       background: rgba(255, 255, 255, 0.08);
     }
     &.is-active {
-      background: $white;
-      color: $blue-dark-300;
+      background: $blue-light;
+      color: $blue-dark-500;
       font-weight: 700;
       position: relative;
       &::before {
@@ -185,7 +196,7 @@ const navItems = [
 
 .topbar {
   @include flex(space-between, center);
-  height: 60px;
+  height: 53px;
   padding: 0 24px;
   background: $white;
   border-bottom: 1px solid $gray;
@@ -195,7 +206,7 @@ const navItems = [
     font-size: 16px;
   }
   &__cur {
-    color: $blue-dark-300;
+    color: $blue-dark-500;
     font-weight: 700;
   }
   &__sep {
@@ -207,21 +218,22 @@ const navItems = [
   &__user {
     @include flex(flex-start, center, 8px);
     font-size: 14px;
-    color: $gray-400;
+    color: #606692;
   }
   &__user-dot {
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     background: $gray;
   }
   &__tasks {
     @include flex(flex-start, center, 6px);
-    padding: 12px;
+    position: relative;
+    padding: 9px 12px;
     border: none;
-    border-radius: 999px;
+    border-radius: 18px;
     background: $blue-light;
-    color: $blue-dark-300;
+    color: $blue-dark-500;
     font-size: 14px;
     font-weight: 500;
   }
@@ -230,6 +242,23 @@ const navItems = [
     svg {
       display: block;
     }
+  }
+  &__tasks-badge {
+    @include flex(center, center);
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: $blue-dark-300;
+    color: $white;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  &__tasks-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: $green;
   }
 }
 
