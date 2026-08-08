@@ -7,12 +7,13 @@ button.ghost-btn
 
 <style scoped lang="scss">
 .ghost-btn {
-  border: 1px solid $gray;
-  border-radius: 999px;
-  padding: 8px 16px;
+  border: 1px solid $blue-dark-500;
+  border-radius: 18px;
+  padding: 9px 16px;
   font-size: 14px;
-  color: $blue-dark-300;
+  color: $blue-dark-500;
   background: $white;
+  box-shadow: $btnBoxShadow;
   &:hover {
     border-color: $blue;
   }

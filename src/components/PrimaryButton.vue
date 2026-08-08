@@ -8,11 +8,11 @@ button.primary-btn
 <style scoped lang="scss">
 .primary-btn {
   @include flex(center, center, 6px);
-  background: $blue-dark-300;
+  background: $blue-dark-500;
   color: $white;
-  font-weight: 600;
-  padding: 11px 20px;
-  border-radius: 10px;
+  font-weight: 500;
+  padding: 9px 16px;
+  border-radius: 18px;
   font-size: 14px;
   box-shadow: $btnBoxShadow;
   &:disabled {

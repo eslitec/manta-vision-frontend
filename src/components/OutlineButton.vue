@@ -11,10 +11,10 @@ withDefaults(defineProps<{ tag?: string; variant?: 'default' | 'danger' }>(), { 
 .outline-btn {
   @include flex(center, center, 6px);
   padding: 9px 16px;
-  border: 1px solid $blue-dark-300;
+  border: 1px solid $blue-dark-500;
   border-radius: 18px;
   background: $white;
-  color: $blue-dark-300;
+  color: $blue-dark-500;
   font-size: 14px;
   white-space: nowrap;
   box-shadow: $btnBoxShadow;

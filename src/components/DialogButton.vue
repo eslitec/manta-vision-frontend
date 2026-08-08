@@ -10,19 +10,20 @@ withDefaults(defineProps<{ variant?: 'plain' | 'primary' | 'danger' }>(), { vari
 <style scoped lang="scss">
 .dialog-btn {
   @include flex(center, center, 6px);
-  border-radius: 999px;
-  padding: 9px 18px;
+  border-radius: 18px;
+  padding: 9px 16px;
   font-size: 14px;
+  box-shadow: $btnBoxShadow;
   &--plain {
-    border: 1px solid $gray;
-    color: $blue-dark-300;
+    border: 1px solid $blue-dark-500;
+    color: $blue-dark-500;
     background: $white;
   }
   &--primary {
     border: none;
-    background: $blue-dark-300;
+    background: $blue-dark-500;
     color: $white;
-    font-weight: 600;
+    font-weight: 500;
     &:disabled {
       opacity: 0.45;
     }

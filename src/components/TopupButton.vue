@@ -8,9 +8,9 @@ button.secondary-btn
 <style scoped lang="scss">
 .secondary-btn {
   @include flex(center, center, 6px);
-  padding: 6px 14px;
+  padding: 9px 14px;
   border: none;
-  border-radius: 18px;
+  border-radius: 16px;
   background: $orange;
   color: $white;
   font-weight: 500;
