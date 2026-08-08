@@ -2,12 +2,7 @@
 .genimg
   section.panel.genimg__input
     .step
-      .step__title 1. 選擇 AI 模型
-      select.modelselect(v-model="modelId")
-        option(v-for="m in models" :key="m.id" :value="m.id") {{ m.name }} · {{ m.provider }}
-
-    .step
-      .step__title 2. 參考圖
+      .step__title 1. 參考圖
       .dropzone
         i.ti.ti-photo.dropzone__icon
         span.dropzone__name(v-if="refImage") {{ refImage.name }}
@@ -16,7 +11,7 @@
         span.dropzone__hint 或拖曳上傳
 
     .step
-      .step__title 3. 描述你想要的圖片
+      .step__title 2. 描述你想要的圖片
       textarea.textarea(v-model="prompt" rows="4" placeholder="例：把商品放在木質桌面上，自然光、日系簡約風格…")
       .assist
         button.assist__btn(:disabled="assisting || !prompt" @click="assist")
@@ -39,9 +34,24 @@
         .adv__row
           label.adv__label 種子
           input.adv__input(type="number" v-model="seedInput" placeholder="留空＝隨機（固定可重現同一張）")
-      .count
-        span.count__label 生成張數
-        button.count__pill(v-for="c in counts" :key="c" :class="{ 'is-active': count === c }" @click="count = c") {{ c }} 張
+
+    .step
+      .step__head
+        span.step__title 3. 生成模型
+        span.step__hint 倍率以標準模型 8 顆／張 為基準
+      .models
+        button.modelcard(v-for="t in imageTiers" :key="t.key" :class="{ 'is-active': imageTier === t.key }" @click="imageTier = t.key")
+          .modelcard__top
+            span.modelcard__name {{ t.label }}
+            span.modelcard__badge ×{{ t.multiplier }}
+          span.modelcard__cost {{ IMAGE_BASE_COST * t.multiplier }} 顆／張
+          span.modelcard__desc {{ t.desc }}
+
+    BrandToggle.genimg__brand(v-model="applyBrand" @edit="goBrandSettings")
+
+    .count
+      span.count__label 生成張數
+      button.count__pill(v-for="c in counts" :key="c" :class="{ 'is-active': count === c }" @click="count = c") {{ c }} 張
 
     p.err(v-if="errorMsg") {{ errorMsg }}
 
@@ -56,7 +66,7 @@
   section.panel.genimg__result
     .result__head
       h2.result__title 生成結果
-      span.result__hint 選用的素材會存回圖庫並記錄來源鏈
+      span.result__hint 選用的素材會自動存回圖庫並記錄來源鏈
     .result__empty(v-if="!results.length") 生成後結果會顯示在這裡
     .result__grid(v-else)
       .result__item(v-for="r in results" :key="r.id")
@@ -64,34 +74,43 @@
           span.result__badge(v-if="r.adopted") 已選用
           i.ti.ti-photo
         .result__actions
-          ChipButton(@click="saveToLib(r)") {{ r.savedAssetId ? '已存入' : '存入圖庫' }}
-          ChipButton(variant="plain" @click="download(r)") 下載
-          ChipButton(variant="plain" @click="regen(r)") 重生成
+          OutlineButton(@click="saveToLib(r)") {{ r.savedAssetId ? '已存入' : '存入圖庫' }}
+          button.linkbtn(@click="download(r)") 下載
+          button.linkbtn(@click="regen(r)") 重生成
 
   ImagePickerDialog(v-model:open="pickerOpen" title="從圖庫選擇參考圖" @select="onPickReference")
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { storeToRefs } from 'pinia'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import PrimaryButton from '@/components/PrimaryButton.vue'
 import GhostButton from '@/components/GhostButton.vue'
-import ChipButton from '@/components/ChipButton.vue'
-import { useModelsStore } from '@/stores/models'
+import OutlineButton from '@/components/OutlineButton.vue'
+import BrandToggle from '@/components/BrandToggle.vue'
+import { useRouter } from 'vue-router'
 import { useFeedStore } from '@/stores/feed'
+import { useGenerationTasksStore } from '@/stores/generationTasks'
 import { useAssets } from '@/composables/useAssets'
 import { api } from '@/api'
 import { isInsufficientFeed } from '@/utils/error'
 import type { Asset, GeneratedImage, GenerateImageReq } from '@/types/api'
 
-const modelsStore = useModelsStore()
-const { models } = storeToRefs(modelsStore)
 const feed = useFeedStore()
+const tasksStore = useGenerationTasksStore()
 const { saveGenerated } = useAssets()
+const router = useRouter()
 
-const modelId = ref('')
+// 生成模型分級（對齊設計稿：標準×1／進階×1.5／專業×3；以標準 8 顆／張為基準）
+const IMAGE_BASE_COST = 8
+const imageTiers = [
+  { key: 'standard', label: '標準', multiplier: 1, desc: '日常用途' },
+  { key: 'advanced', label: '進階', multiplier: 1.5, desc: '細節更佳' },
+  { key: 'pro', label: '專業', multiplier: 3, desc: '商用印刷' },
+]
+const imageTier = ref('standard')
 const prompt = ref('')
+const applyBrand = ref(true)
 const advancedOpen = ref(false)
 const counts = [2, 4]
 const count = ref(2)
@@ -107,16 +126,12 @@ const referenceStrength = ref(0.5)
 const negativePrompt = ref('')
 const seedInput = ref('')
 
-onMounted(async () => {
-  await modelsStore.load()
-  if (!modelId.value && models.value.length) modelId.value = models.value[0].id
+onMounted(() => {
   if (!feed.loaded) feed.refresh()
 })
 
-const estCost = computed(() => {
-  const m = models.value.find((x) => x.id === modelId.value)
-  return count.value * (m ? m.costPerImage : 0)
-})
+const tierMultiplier = computed(() => imageTiers.find((t) => t.key === imageTier.value)?.multiplier ?? 1)
+const estCost = computed(() => count.value * IMAGE_BASE_COST * tierMultiplier.value)
 
 // AI 輔助描述：呼叫增強器把口語擴寫成結構化 prompt
 async function assist() {
@@ -132,7 +147,7 @@ async function assist() {
 // 組請求（含進階設定；參考強度僅在有參考圖時帶）
 function buildReq(n: number): GenerateImageReq {
   return {
-    modelId: modelId.value,
+    modelId: imageTier.value,
     referenceId: refImage.value?.id,
     prompt: prompt.value,
     count: n,
@@ -146,8 +161,12 @@ async function generate() {
   errorMsg.value = ''
   generating.value = true
   try {
-    const m = models.value.find((x) => x.id === modelId.value)
-    results.value = await api.generateImages(buildReq(count.value), m ? m.costPerImage : 0)
+    const perImage = IMAGE_BASE_COST * tierMultiplier.value
+    results.value = await tasksStore.createImageTask(
+      () => api.generateImages(buildReq(count.value), perImage),
+      `圖生圖_${prompt.value.slice(0, 12) || Date.now()}`,
+      estCost.value,
+    )
     await feed.refresh()
   } catch (e: unknown) {
     errorMsg.value = isInsufficientFeed(e) ? '飼料不足，請先儲值。' : '生成失敗，請再試一次。'
@@ -169,20 +188,25 @@ async function saveToLib(r: GeneratedImage) {
   await adopt(r)
 }
 async function regen(r: GeneratedImage) {
-  const m = models.value.find((x) => x.id === modelId.value)
+  const perImage = IMAGE_BASE_COST * tierMultiplier.value
   try {
-    const [next] = await api.generateImages(buildReq(1), m ? m.costPerImage : 0)
+    const [next] = await tasksStore.createImageTask(
+      () => api.generateImages(buildReq(1), perImage),
+      `圖生圖_重生成`,
+      perImage,
+    )
     const i = results.value.findIndex((x) => x.id === r.id)
     if (i >= 0 && next) results.value[i] = next
     await feed.refresh()
   } catch { errorMsg.value = '飼料不足，無法重生成。' }
 }
 const onPickReference = (a: Asset) => { refImage.value = a }
+const goBrandSettings = () => router.push('/settings')
 </script>
 
 <style scoped lang="scss">
-.genimg { display: grid; grid-template-columns: 380px 1fr; gap: 20px; align-items: start; }
-.panel { @include card; padding: 22px; }
+.genimg { display: grid; grid-template-columns: 400px 1fr; gap: 16px; align-items: start; }
+.panel { @include card; padding: 24px; }
 .step { margin-bottom: 22px;
   &__title { font-size: 15px; font-weight: 700; color: $blue-dark-300; margin-bottom: 12px; } }
 .modelselect {
@@ -217,6 +241,17 @@ const onPickReference = (a: Asset) => { refImage.value = a }
   &__label { font-size: 14px; color: $blue-dark-300; }
   &__pill { padding: 5px 14px; border-radius: 999px; font-size: 13px; border: 1px solid $gray; background: $white; color: $gray-400;
     &.is-active { background: $blue-light; color: $blue-dark-300; border-color: $babyBlue; font-weight: 600; } } }
+.step__head { @include flex(space-between, center); margin-bottom: 12px; .step__title { margin-bottom: 0; } }
+.step__hint { font-size: 12px; color: $gray-100; }
+.models { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.modelcard { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; padding: 10px; border: 1px solid $gray; border-radius: 8px; background: $white; text-align: left;
+  &__top { @include flex(space-between, center, 6px); width: 100%; }
+  &__name { font-size: 14px; font-weight: 500; color: $blue-dark-500; }
+  &__badge { flex-shrink: 0; font-size: 11px; font-weight: 700; color: $white; background: $blue-dark-500; padding: 1px 6px; border-radius: 10px; }
+  &__cost { font-size: 12px; color: $dark-blue-gray; }
+  &__desc { font-size: 11px; color: $gray-100; }
+  &.is-active { background: $blue-light; border: 1.5px solid $blue-dark-500; } }
+.genimg__brand { margin-bottom: 16px; }
 .err { color: $red; font-size: 13px; margin-bottom: 12px; }
 .genimg__footer { @include flex(space-between, flex-end); border-top: 1px solid $lightGray; padding-top: 16px; }
 .cost { &__label { font-size: 12px; color: $gray-100; } &__value { font-size: 17px; font-weight: 700; color: $blue-dark-300; } }
@@ -224,8 +259,9 @@ const onPickReference = (a: Asset) => { refImage.value = a }
   .result__title { font-size: 18px; font-weight: 700; color: $blue-dark-300; }
   .result__hint { font-size: 12px; color: $gray-100; } }
 .result__empty { color: $gray-100; font-size: 14px; padding: 40px 0; text-align: center; }
-.result__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-.result__thumb { @include flex(center, center); position: relative; aspect-ratio: 4 / 3; background: $blue-light; border-radius: 10px; color: $babyBlue; font-size: 30px; margin-bottom: 10px; }
+.result__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.result__thumb { @include flex(center, center); position: relative; aspect-ratio: 311 / 187; background: $blue-light; border-radius: 10px; color: $babyBlue; font-size: 30px; margin-bottom: 10px; }
+.linkbtn { font-size: 14px; color: $blue-dark-500; padding: 8px 4px; &:hover { color: $blue; } }
 .result__badge { position: absolute; top: 10px; left: 10px; background: $green; color: $white; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
 .result__actions { @include flex(flex-start, center, 8px); }
 .spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
