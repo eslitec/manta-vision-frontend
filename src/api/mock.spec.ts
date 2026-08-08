@@ -43,10 +43,19 @@ describe('計費與扣點', () => {
 
   it('createVideoJob 扣 45 顆並回傳 queued', async () => {
     const before = (await api.getFeed()).balance
-    const job = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16' })
+    const job = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'standard' })
     expect(job.status).toBe('queued')
     expect(job.cost).toBe(45)
     expect((await api.getFeed()).balance).toBe(before - 45)
+  })
+
+  it('createVideoJob 依生成模型倍率扣款（進階×2／專業×4）', async () => {
+    const before = (await api.getFeed()).balance
+    const advanced = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'advanced' })
+    expect(advanced.cost).toBe(90)
+    const pro = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'pro' })
+    expect(pro.cost).toBe(180)
+    expect((await api.getFeed()).balance).toBe(before - 90 - 180)
   })
 
   it('refundFeed 退還飼料（失敗退點）', async () => {
@@ -90,7 +99,7 @@ describe('圖生影非同步任務', () => {
   })
 
   it('依經過時間由 queued → done（覆寫 Date.now 模擬時間流逝）', async () => {
-    const job = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16' })
+    const job = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'standard' })
     // 剛建立：queued
     expect((await api.getVideoJob(job.id)).status).toBe('queued')
     // 模擬經過 6 秒：done（delay 用 setTimeout，不受 Date.now 影響）

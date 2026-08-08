@@ -39,10 +39,17 @@ export interface GeneratedPost {
 
 // ── 非同步任務（圖生影）──
 export type JobStatus = 'queued' | 'processing' | 'done' | 'failed'
+export type VideoModelTier = 'standard' | 'advanced' | 'pro'
+export const VIDEO_MODEL_TIERS: { key: VideoModelTier; label: string; multiplier: number }[] = [
+  { key: 'standard', label: '標準', multiplier: 1 },
+  { key: 'advanced', label: '進階', multiplier: 2 },
+  { key: 'pro', label: '專業', multiplier: 4 },
+]
 export interface VideoJobReq {
   sourceImageId?: string
   template: string
   ratio: string
+  modelTier: VideoModelTier
 }
 export interface VideoJob {
   id: string
@@ -50,6 +57,24 @@ export interface VideoJob {
   cost: number
   resultUrl?: string
   error?: string
+}
+
+// ── 背景生成任務（跨頁面，圖生圖／圖生影共用；驅動頂部工具列「任務」按鈕與任務中心面板）──
+export type GenerationTaskKind = 'image' | 'video'
+export type GenerationTaskStatus = 'queued' | 'processing' | 'done' | 'failed'
+export interface GenerationTask {
+  id: string
+  kind: GenerationTaskKind
+  name: string
+  status: GenerationTaskStatus
+  progress: number // 0..100
+  cost: number
+  error?: string
+  read: boolean // 完成／失敗後使用者是否已在任務中心看過
+  createdAt: number
+  doneAt?: number
+  resultImages?: GeneratedImage[] // kind === 'image' 才有
+  videoReq?: VideoJobReq // kind === 'video' 才有；保留原始請求供「重試」使用
 }
 
 // ── 試穿 ──
