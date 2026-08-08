@@ -68,3 +68,18 @@
 - [x] 8.21 MV-00 這輪視覺校對收尾，後續若有新一輪落差再繼續增補本節任務
 - [x] 8.22 使用者回報「儲值飼料」／「儲值」按鈕（`TopupButton`）點擊時會位移。排查發現是使用者自己先前在 `&:active` 加的金色外框效果（`box-shadow: 0 0 0 3px #f2bb00`）實作方式有誤：連同 `position: absolute` 一起加了進去，導致按鈕在按下的瞬間脫離所在的 flex 容器（`.stats`／`.topbar__right`）的正常排版流程，鬆開時再跳回來，造成視覺上的位移；跟同一批「使用者回報 MV-01 儲存／刪除按鈕位移」是兩個不同成因（那個是全站 Firefox 的 `-moz-focus-inner` 問題），這個是單一元件自己的 CSS 寫法問題。修法：拿掉 `&:active` 裡的 `position: absolute;`，維持跟其他狀態一致的 `position: relative;`，金色外框效果本身（`box-shadow`）不需要 `position: absolute` 才能生效，拿掉後效果不變、只是不再脫離排版流程
 - [x] 8.23 `OutlineButton`（`--danger` 變體）的 `:focus` 狀態也曾加上同一種金色外框效果，同樣誤帶了 `position: absolute`；使用者依同一個修法自行拿掉，跟任務 8.22 是同一類問題、同一種修法，不是新的成因
+
+## 9. MCP 恢復後（Dev seat）的精確校正——共用外殼 DefaultLayout + HomeView
+
+以 Figma MCP 直接抓 `sidebar_l`／`nav_top` 元件實際規格逐一比對，修正無 MCP 時肉眼猜錯的值。
+
+- [x] 9.1 側邊欄底色 `$blue-dark-200`（#242A5C）→ `$blue-dark-500`（#2E3567）——對齊 `sidebar_l` shell 底色（整條側邊欄顏色原本都偏）
+- [x] 9.2 Logo 字級 20 → 18px；導覽項目字級 15 → 16px、使用中文字色 `$blue-dark-300` → `$blue-dark-500`
+- [x] 9.3 品牌區塊：頭像 34 → 40px、只圓右側角（`0 10px 10px 0`）、gap 10 → 12px；左內距保留 16px 讓頭像避開 `::before` 金色強調條（否則被蓋住／裁切——使用者回報後修正）
+- [x] 9.4 頂欄高 60 → 53px（對齊 `nav_top`）；麵包屑色 `$blue-dark-300` → `$blue-dark-500`
+- [x] 9.5「任務」鈕圓角 999 → 18px、padding 12 → `9px 12px`、色 → `$blue-dark-500`
+- [x] 9.6 使用者頭像 26 → 28px、文字色 `$gray-400`（#606472）→ `#606692`
+- [x] 9.7 HomeView：卡片消耗飼料徽章 22 → 28px、位置對齊；卡片圖示-標題 gap 14 → 12px；狀態列內距 `22px 26px` → `20px`
+- 決策：`$blue-dark-300`（#171E52）維持不動（task 8.20 已確認為 body 文字色正確值）；按鈕與外殼主色統一改用 `$blue-dark-500`（#2E3567）
+- [x] 9.8 刻意保留（tasks 記載為刻意決定，不覆蓋）：強調色條 20px 高（8.5）、footer 連結弱化未啟用樣式（3.1）
+- [x] 9.9 `npm run build`（vue-tsc）通過
