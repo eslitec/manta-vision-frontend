@@ -1,16 +1,16 @@
 <template lang="pug">
-button.ghost-btn
+button.ghostBtn
   slot
 </template>
 
 <script setup lang="ts"></script>
 
 <style scoped lang="scss">
-.ghost-btn {
+.ghostBtn {
   border: 1px solid $blue-dark-500;
   border-radius: 18px;
-  padding: 9px 16px;
-  font-size: 14px;
+  padding: 0.5625rem 1rem;
+  font-size: 0.875rem;
   color: $blue-dark-500;
   background: $white;
   box-shadow: $btnBoxShadow;

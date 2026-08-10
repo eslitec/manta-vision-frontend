@@ -1,28 +1,28 @@
 <template lang="pug">
 .home
   header.home__head
-    h1.home__title AI 視覺內容工作台
-    p.home__subtitle 選一個任務開始生成，素材與結果都會自動存回圖庫。
+    h1.home__title {{ t('home.title') }}
+    p.home__subtitle {{ t('home.subtitle') }}
 
   section.stats
     .stats__item
       .stats__num
-        IconFeedBottleSmall.stats__num-icon
-        | {{ balance.toLocaleString() }} #[small 顆]
-      .stats__label AI 飼料餘額
-      .stats__hint ≈ 可生成 {{ imgEst }} 張圖 / {{ vidEst }} 支短影片
+        IconFeedBottleSmall.stats__numIcon
+        | {{ balance.toLocaleString() }} #[small {{ t('units.feedShort') }}]
+      .stats__label {{ t('home.feedBalance') }}
+      .stats__hint {{ t('home.feedEstimate', { images: imgEst, videos: vidEst }) }}
     .stats__item
-      .stats__num {{ generatedThisMonth.toLocaleString() }} #[small 張]
-      .stats__label 本月已生成
+      .stats__num {{ generatedThisMonth.toLocaleString() }} #[small {{ t('units.images') }}]
+      .stats__label {{ t('home.generatedThisMonth') }}
     .stats__item
-      .stats__num.is-ok(v-if="brandReady")
-        IconCheckCircle.icon-check
-        | 品牌設定已完成
-      .stats__num.is-muted(v-else) ○ 品牌設定待完成
-      .stats__hint {{ brandReady ? '色票・語氣・浮水印皆已設定' : '前往設定補齊品牌資料' }}
-    TopupButton ＋ 儲值飼料
+      .stats__num.isOk(v-if="brandReady")
+        IconCheckCircle.iconCheck
+        | {{ t('home.brandComplete') }}
+      .stats__num.isMuted(v-else) ○ {{ t('home.brandIncomplete') }}
+      .stats__hint {{ brandReady ? t('home.brandCompleteHint') : t('home.brandIncompleteHint') }}
+    TopupButton {{ t('home.topup') }}
 
-  h2.home__section 要生成什麼？
+  h2.home__sectionTitle {{ t('home.sectionTitle') }}
   .cards
     router-link.card(v-for="t in genTools" :key="t.key" :to="t.to")
       .card__icon
@@ -30,20 +30,21 @@
       .card__body
         .card__title {{ t.title }}
         .card__desc {{ t.desc }}
-      IconFeedBottleBadge.card__feed-badge
+      IconFeedBottleBadge.card__feedBadge
 
   router-link.card.card--wide(to="/library")
     .card__icon
       IconLibraryPhotoLarge
     .card__body
-      .card__title 圖庫管理中心
-      .card__desc 所有素材與生成結果的單一來源，模組輸入從這裡取、結果自動存回並記錄來源鏈。
-    OutlineButton(tag="span") 前往圖庫
+      .card__title {{ t('home.libraryTitle') }}
+      .card__desc {{ t('home.libraryDescription') }}
+    OutlineButton(tag="span") {{ t('home.openLibrary') }}
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { useFeedStore } from '@/stores/feed'
 import { useBrandStore } from '@/stores/brand'
 import { api } from '@/api'
@@ -63,6 +64,7 @@ const feed = useFeedStore()
 const { balance } = storeToRefs(feed)
 const brandStore = useBrandStore()
 const { profile } = storeToRefs(brandStore)
+const { t } = useI18n()
 
 const usage = ref<UsageSummary | null>(null)
 
@@ -83,55 +85,55 @@ const brandReady = computed(() => {
   return !!(p && p.name && p.positioning && p.colors.length)
 })
 
-const genTools = [
+const genTools = computed(() => [
   {
     key: 'image',
     icon: IconGenImage,
     to: '/generate/image',
-    title: '圖生圖',
-    desc: '以參考圖＋文字描述生成新圖，AI 輔助擴寫 prompt。',
+    title: t('home.tools.image.title'),
+    desc: t('home.tools.image.description'),
   },
   {
     key: 'post',
     icon: IconMarketingPost,
     to: '/generate/post',
-    title: 'AI 產生行銷 PO 文',
-    desc: '商品圖一鍵生成貼文文案與配圖，支援多種比例。',
+    title: t('home.tools.post.title'),
+    desc: t('home.tools.post.description'),
   },
   {
     key: 'video',
     icon: IconGenVideo,
     to: '/generate/video',
-    title: '圖生影片',
-    desc: '單張圖套用動態模板，生成 5–10 秒短影片。',
+    title: t('home.tools.video.title'),
+    desc: t('home.tools.video.description'),
   },
   {
     key: 'tryon',
     icon: IconTryOn,
     to: '/generate/tryon',
-    title: 'AI 試穿衣服',
-    desc: '模特照＋服飾素材合成試穿圖，與圖庫直接打通。',
+    title: t('home.tools.tryOn.title'),
+    desc: t('home.tools.tryOn.description'),
   },
-]
+])
 </script>
 
 <style scoped lang="scss">
 .home {
   width: 100%; // 填滿側欄以外的整個內容區（對齊設計稿的滿版工作台）
   &__title {
-    font-size: 24px;
+    font-size: 1.5rem;
     font-weight: 700;
     color: $blue-dark-500;
   }
   &__subtitle {
     color: #606692;
-    margin-top: 4px;
-    font-size: 14px;
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
   }
-  &__section {
-    font-size: 18px;
+  &__sectionTitle {
+    font-size: 1.125rem;
     font-weight: 700;
-    margin: 26px 0 14px;
+    margin: 1.625rem 0 0.875rem;
     color: $blue-dark-500;
   }
 }
@@ -141,8 +143,8 @@ const genTools = [
   background: $white;
   border-radius: 10px;
   box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2);
-  margin-top: 16px;
-  padding: 20px;
+  margin-top: 1rem;
+  padding: 1.25rem;
   @include below($bp-md) {
     flex-direction: column;
     align-items: stretch;
@@ -155,10 +157,10 @@ const genTools = [
     flex-direction: column;
     position: relative;
     &:not(:first-child) {
-      margin-left: 48px;
+      margin-left: 3rem;
       @include below($bp-md) {
         margin-left: 0;
-        margin-top: 16px;
+        margin-top: 1rem;
         &::before {
           display: none;
         }
@@ -166,56 +168,56 @@ const genTools = [
       &::before {
         content: '';
         position: absolute;
-        left: -24px;
+        left: -1.5rem;
         top: 50%;
         transform: translateY(-50%);
-        height: 40px;
-        width: 1px;
+        height: 2.5rem;
+        width: 0.0625rem;
         background: $blue-light;
       }
-      &:has(.is-ok, .is-muted)::before {
-        height: 40px;
+      &:has(.isOk, .isMuted)::before {
+        height: 2.5rem;
       }
     }
   }
   &__num {
-    font-size: 24px;
+    font-size: 1.5rem;
     font-weight: 700;
     color: $blue-dark-500;
-    @include flex(flex-start, center, 6px);
+    @include flex(flex-start, center, 0.375rem);
     small {
       align-self: flex-end;
-      font-size: 14px;
+      font-size: 0.875rem;
       font-weight: 500;
       color: $gray-100;
-      margin-left: 4px;
+      margin-left: 0.25rem;
     }
-    &.is-ok {
-      font-size: 16px;
+    &.isOk {
+      font-size: 1rem;
       color: $green;
     }
-    &.is-muted {
-      font-size: 16px;
+    &.isMuted {
+      font-size: 1rem;
       color: $gray-400;
     }
   }
-  :deep(.stats__num-icon) {
+  :deep(.stats__numIcon) {
     flex-shrink: 0;
   }
-  :deep(.icon-check) {
-    width: 20px;
-    height: 20px;
+  :deep(.iconCheck) {
+    width: 1.25rem;
+    height: 1.25rem;
     flex-shrink: 0;
   }
   &__label {
     color: #606692;
-    font-size: 12px;
+    font-size: 0.75rem;
   }
   &__hint {
     color: $gray-100;
-    font-size: 12px;
+    font-size: 0.75rem;
   }
-  :deep(.secondary-btn) {
+  :deep(.secondaryBtn) {
     align-self: center;
   }
 }
@@ -223,60 +225,60 @@ const genTools = [
 .cards {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 1rem;
   @include below($bp-sm) {
     grid-template-columns: 1fr;
   }
 }
 
 .card {
-  @include flex(flex-start, flex-start, 12px);
+  @include flex(flex-start, flex-start, 0.75rem);
   background: $white;
   border-radius: 10px;
   box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2);
-  min-height: 124px;
-  padding: 20px;
+  min-height: 7.75rem;
+  padding: 1.25rem;
   text-align: left;
   position: relative;
   transition:
     box-shadow 0.15s,
     transform 0.15s;
   &:hover {
-    transform: translateY(-1px);
+    transform: translateY(-0.0625rem);
   }
   &__icon {
-    width: 40px;
-    height: 40px;
+    width: 2.5rem;
+    height: 2.5rem;
     flex-shrink: 0;
     @include flex(center, center);
   }
-  :deep(.card__feed-badge) {
+  :deep(.card__feedBadge) {
     position: absolute;
-    top: 20px;
-    right: 20px;
-    width: 28px;
-    height: 28px;
+    top: 1.25rem;
+    right: 1.25rem;
+    width: 1.75rem;
+    height: 1.75rem;
   }
   &__body {
     flex: 1;
   }
   &__title {
-    font-size: 16px;
+    font-size: 1rem;
     font-weight: 700;
     color: $blue-dark-500;
-    margin-bottom: 6px;
+    margin-bottom: 0.375rem;
   }
   &__desc {
     color: #606692;
-    font-size: 14px;
+    font-size: 0.875rem;
     line-height: 1.5;
   }
   &--wide {
     grid-column: 1 / -1;
     align-items: center;
     min-height: 0;
-    margin-top: 16px;
-    padding: 20px 12px;
+    margin-top: 1rem;
+    padding: 1.25rem 0.75rem;
     border: 1px solid $gray;
     box-shadow: none;
   }

@@ -1,5 +1,5 @@
 <template lang="pug">
-button.dialog-btn(:class="`dialog-btn--${variant}`")
+button.dialogBtn(:class="`dialogBtn--${variant}`")
   slot
 </template>
 
@@ -8,11 +8,11 @@ withDefaults(defineProps<{ variant?: 'plain' | 'primary' | 'danger' }>(), { vari
 </script>
 
 <style scoped lang="scss">
-.dialog-btn {
-  @include flex(center, center, 6px);
+.dialogBtn {
+  @include flex(center, center, 0.375rem);
   border-radius: 18px;
-  padding: 9px 16px;
-  font-size: 14px;
+  padding: 0.5625rem 1rem;
+  font-size: 0.875rem;
   box-shadow: $btnBoxShadow;
   &--plain {
     border: 1px solid $blue-dark-500;

@@ -1,5 +1,5 @@
 <template lang="pug">
-component.outline-btn(:is="tag" :class="`outline-btn--${variant}`")
+component.outlineBtn(:is="tag" :class="`outlineBtn--${variant}`")
   slot
 </template>
 
@@ -8,14 +8,14 @@ withDefaults(defineProps<{ tag?: string; variant?: 'default' | 'danger' }>(), { 
 </script>
 
 <style scoped lang="scss">
-.outline-btn {
-  @include flex(center, center, 6px);
-  padding: 9px 16px;
+.outlineBtn {
+  @include flex(center, center, 0.375rem);
+  padding: 0.5625rem 1rem;
   border: 1px solid $blue-dark-500;
   border-radius: 18px;
   background: $white;
   color: $blue-dark-500;
-  font-size: 14px;
+  font-size: 0.875rem;
   white-space: nowrap;
   box-shadow: $btnBoxShadow;
   cursor: pointer;
@@ -35,7 +35,7 @@ withDefaults(defineProps<{ tag?: string; variant?: 'default' | 'danger' }>(), { 
   /* pressed/active style: translate and remove shadow for a pressed effect */
   &:active {
     border-color: #14193f;
-    transform: translateY(1px);
+    transform: translateY(0.0625rem);
   }
   &--danger {
     border-color: #ff6148;

@@ -1,120 +1,118 @@
 <template lang="pug">
 .tryon
-  .consent-bar(v-if="!consented")
-    i.ti.ti-alert-triangle.consent-bar__icon
-    .consent-bar__text
-      strong 上傳真人照片前，請確認已取得當事人肖像使用同意
-      span 真人顧客照涉及個資與肖像權，使用前需完成同意流程；建議優先使用內建模特庫。
-    OutlineButton(@click="showConsent = true") 查看同意條款
+  .consentBar(v-if="!consented")
+    i.ti.ti-alert-triangle.consentBar__icon
+    .consentBar__text
+      strong {{ t('tryOn.consentBanner.title') }}
+      span {{ t('tryOn.consentBanner.description') }}
+    OutlineButton(@click="showConsent = true") {{ t('tryOn.consentBanner.action') }}
 
   .tryon__body
     section.panel.tryon__input
       .step
-        .step__title 1. 選擇模特
+        .step__title {{ t('tryOn.steps.model') }}
         .subtabs
-          button.subtab(v-for="s in modelTabs" :key="s" :class="{ 'is-active': modelTab === s }" @click="modelTab = s") {{ s }}
-        template(v-if="modelTab === '內建模特庫'")
+          button.subtab(v-for="s in modelTabs" :key="s.value" :class="{ 'isActive': modelTab === s.value }" @click="modelTab = s.value") {{ s.label }}
+        template(v-if="modelTab === 'builtIn'")
           .models
-            button.model(v-for="m in models" :key="m" :class="{ 'is-active': model === m }" @click="model = m")
+            button.model(v-for="m in models" :key="m.value" :class="{ 'isActive': model === m.value }" @click="model = m.value")
               span.model__thumb
                 i.ti.ti-photo
-              span.model__label {{ m }}
-          button.link 檢視完整模特庫（內建 12 位）
+              span.model__label {{ m.label }}
+          button.link {{ t('tryOn.viewFullLibrary') }}
         template(v-else)
           label.mdrop
             input.mdrop__input(type="file" accept="image/*" @change="onModelUpload")
             i.ti.ti-upload.mdrop__icon
-            span.mdrop__title 拖曳模特照到這裡，或點擊上傳
-            span.mdrop__hint JPG／PNG・單張 ≤ 10MB・建議 1024px 以上
-          .mtip 建議全身正面、單一人物、背景單純；避免他人入鏡或大面積 logo，會影響合成品質。
+            span.mdrop__title {{ t('tryOn.upload.title') }}
+            span.mdrop__hint {{ t('tryOn.upload.hint') }}
+          .mtip {{ t('tryOn.upload.recommendation') }}
           template(v-if="uploadedModels.length")
             .uphead
-              span.uphead__title 已上傳模特
+              span.uphead__title {{ t('tryOn.uploadedModels') }}
               span.uphead__grow
               span.uphead__count {{ uploadedModels.length }} / 20
             .uplist
-              .uprow(v-for="u in uploadedModels" :key="u.id" :class="{ 'is-ok': u.status === 'available' }")
+              .uprow(v-for="u in uploadedModels" :key="u.id" :class="{ 'isOk': u.status === 'available' }")
                 span.uprow__thumb
                   i.ti.ti-photo
                 .uprow__col
                   span.uprow__name {{ u.name }}
-                  span.uprow__note(:class="{ 'is-warn': u.status !== 'available' }") {{ u.note }}
-                span.statuspill(:class="u.status === 'available' ? 'is-ok' : 'is-reupload'") {{ u.status === 'available' ? '可用' : '需重傳' }}
-                button.uprow__del(@click="removeModel(u.id)" aria-label="刪除")
+                  span.uprow__note(:class="{ 'isWarn': u.status !== 'available' }") {{ t(`tryOn.upload.notes.${u.noteKey}`) }}
+                span.statuspill(:class="u.status === 'available' ? 'isOk' : 'isReupload'") {{ u.status === 'available' ? t('tryOn.upload.available') : t('tryOn.upload.reupload') }}
+                button.uprow__del(@click="removeModel(u.id)" :aria-label="t('common.delete')")
                   i.ti.ti-trash
             label.pconsent
-              span.pconsent__box(:class="{ 'is-on': personConsent }")
+              span.pconsent__box(:class="{ 'isOn': personConsent }")
                 i.ti.ti-check(v-if="personConsent")
               input.pconsent__input(type="checkbox" v-model="personConsent")
-              span.pconsent__text 我已取得此人肖像使用同意
-              button.pconsent__link(type="button" @click.prevent="showConsent = true") 查看條款
+              span.pconsent__text {{ t('tryOn.personConsent') }}
+              button.pconsent__link(type="button" @click.prevent="showConsent = true") {{ t('tryOn.viewTerms') }}
       .step
-        .step__title 2. 選擇服飾素材
+        .step__title {{ t('tryOn.steps.apparel') }}
         .dropzone
           i.ti.ti-photo.dropzone__icon
           span.dropzone__name(v-if="apparel") {{ apparel.name }}
         .dropzone__actions
-          OutlineButton(@click="pickerOpen = true") 從圖庫選擇
-          span.dropzone__hint 建議先去背
+          OutlineButton(@click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
+          span.dropzone__hint {{ t('tryOn.removeBackgroundHint') }}
       BrandToggle.tryon__brand(v-model="applyBrand" @edit="goBrandSettings")
       p.err(v-if="errorMsg") {{ errorMsg }}
       .tryon__footer
         .cost
-          .cost__label 預估消耗
+          .cost__label {{ t('common.estimatedCost') }}
           .cost__value
             IconFeedBottleSmall.cost__icon
-            span 12 顆飼料
+            span {{ t('units.feed', { count: 12 }) }}
         PrimaryButton(:disabled="generating" @click="onGenerate")
           i.ti.ti-loader.spin(v-if="generating")
-          span {{ generating ? '生成中…' : '生成試穿圖' }}
+          span {{ generating ? t('common.generating') : t('tryOn.generate') }}
 
     section.panel.tryon__result
       .result__head
-        h2.result__title 試穿結果
-        span.result__hint 多角度為進階選項
+        h2.result__title {{ t('tryOn.resultTitle') }}
+        span.result__hint {{ t('tryOn.resultHint') }}
       .result__wrap
         .result__box
           IconPlayCircle.result__play
-          span.result__placeholder(v-if="done") 試穿圖已生成
+          span.result__placeholder(v-if="done") {{ t('tryOn.generated') }}
       .result__actions(v-if="done")
-        OutlineButton(@click="saveResult") {{ savedId ? '已存入' : '存入圖庫' }}
-        button.linkbtn(@click="download") 下載
-        button.linkbtn(@click="onGenerate") 重新生成
+        OutlineButton(@click="saveResult") {{ savedId ? t('common.saved') : t('common.saveToLibrary') }}
+        button.linkbtn(@click="download") {{ t('common.download') }}
+        button.linkbtn(@click="onGenerate") {{ t('common.regenerate') }}
 
-  ImagePickerDialog(v-model:open="pickerOpen" title="選擇服飾素材" @select="onPick")
+  ImagePickerDialog(v-model:open="pickerOpen" :title="t('tryOn.pickerTitle')" @select="onPick")
 
   Teleport(to="body")
     .cmodal(v-if="showConsent" @click.self="closeConsent")
       .cdialog
         .cdialog__head
           i.ti.ti-alert-triangle.cdialog__alert
-          h3.cdialog__title 肖像權同意條款
+          h3.cdialog__title {{ t('tryOn.terms.title') }}
           span.cdialog__grow
-          button.cdialog__close(type="button" @click="closeConsent" aria-label="關閉")
+          button.cdialog__close(type="button" @click="closeConsent" :aria-label="t('common.close')")
             i.ti.ti-x
-        p.cdialog__intro 以真人照片進行 AI 試穿前，必須先取得當事人的書面同意。以下為預設條款，可在「品牌資訊維護 › 合規與授權」修改後套用到所有試穿任務。
+        p.cdialog__intro {{ t('tryOn.terms.intro') }}
         .terms
-          p.terms__item 一、本人同意品牌方將本人照片用於 AI 試穿圖像之生成、編輯與行銷素材製作。
-          p.terms__item 二、生成結果僅限品牌方自有通路使用，不得轉授權第三方，亦不得用於暗示代言之情境。
-          p.terms__item 三、本人得隨時以書面撤回同意；撤回後品牌方應於 30 日內停止使用並刪除相關素材。
-          p.terms__item 四、品牌方應保存本同意書及生成紀錄至少 2 年，以備查核。
-          p.terms__more （完整條款共 8 條，可捲動閱覽）
+          p.terms__item(v-for="(term, index) in tm('tryOn.terms.items')" :key="index") {{ term }}
+          p.terms__more {{ t('tryOn.terms.more') }}
         label.ack
-          span.ack__box(:class="{ 'is-on': ackChecked }")
+          span.ack__box(:class="{ 'isOn': ackChecked }")
             i.ti.ti-check(v-if="ackChecked")
           input.ack__input(type="checkbox" v-model="ackChecked")
-          span.ack__text 我已取得當事人同意，並保留書面紀錄可供查核。
+          span.ack__text {{ t('tryOn.terms.acknowledgement') }}
         .cdialog__act
-          button.cdialog__pdf(type="button" @click="downloadTerms") 下載條款範本（PDF）
+          button.cdialog__pdf(type="button" @click="downloadTerms") {{ t('tryOn.terms.download') }}
           span.cdialog__grow
-          OutlineButton(@click="goCompliance") 前往合規設定
-          PrimaryButton(:disabled="!ackChecked" @click="acknowledge") 我知道了
-        p.cdialog__foot 未勾選確認前無法關閉並繼續；此紀錄會寫入該次試穿任務。
+          OutlineButton(@click="goCompliance") {{ t('tryOn.terms.openCompliance') }}
+          PrimaryButton(:disabled="!ackChecked" @click="acknowledge") {{ t('tryOn.terms.understand') }}
+        p.cdialog__foot {{ t('tryOn.terms.footer') }}
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import PrimaryButton from '@/components/PrimaryButton.vue'
@@ -134,17 +132,26 @@ const consentStore = useConsentStore()
 const { consented } = storeToRefs(consentStore)
 const feed = useFeedStore()
 const { saveGenerated } = useAssets()
+const { t, tm } = useI18n()
 
-const modelTabs = ['內建模特庫', '上傳模特照']
-const modelTab = ref('內建模特庫')
-const models = ['女·休閒', '男·正裝', '女·運動', '女·優雅']
-const model = ref('女·休閒')
+const modelTabs = computed(() => [
+  { value: 'builtIn', label: t('tryOn.tabs.builtIn') },
+  { value: 'upload', label: t('tryOn.tabs.upload') },
+])
+const modelTab = ref('builtIn')
+const models = computed(() =>
+  ['femaleCasual', 'maleFormal', 'femaleSport', 'femaleElegant'].map((value) => ({
+    value,
+    label: t(`tryOn.models.${value}`),
+  })),
+)
+const model = ref('femaleCasual')
 
-type UploadedModel = { id: string; name: string; status: 'available' | 'reupload'; note: string }
+type UploadedModel = { id: string; name: string; status: 'available' | 'reupload'; noteKey: string }
 // 前端示範資料：對應設計稿「已上傳模特」兩種審核狀態；實際上傳會 push 新項目
 const uploadedModels = ref<UploadedModel[]>([
-  { id: 'demo-a', name: '模特_A_全身正面', status: 'available', note: '可用・已同意' },
-  { id: 'demo-b', name: '模特_B_側身', status: 'reupload', note: '審核未過・背景有他人' },
+  { id: 'demo-a', name: t('tryOn.demoModels.a'), status: 'available', noteKey: 'consented' },
+  { id: 'demo-b', name: t('tryOn.demoModels.b'), status: 'reupload', noteKey: 'backgroundPeople' },
 ])
 const personConsent = ref(true) // 面板「我已取得此人肖像使用同意」勾選
 const ackChecked = ref(false) // 對話框「我已取得當事人同意…」勾選
@@ -169,7 +176,7 @@ function onModelUpload(e: Event) {
   const input = e.target as HTMLInputElement
   const f = input.files?.[0]
   if (!f) return
-  uploadedModels.value.push({ id: crypto.randomUUID(), name: f.name, status: 'available', note: '可用・已同意' })
+  uploadedModels.value.push({ id: crypto.randomUUID(), name: f.name, status: 'available', noteKey: 'consented' })
   input.value = '' // 允許重複選同一檔
   // 上傳真人照片涉及肖像權，未同意先擋下要求完成肖像同意
   if (!consented.value) showConsent.value = true
@@ -193,7 +200,7 @@ function downloadTerms() {
 const goBrandSettings = () => router.push('/settings')
 async function saveResult() {
   if (savedId.value) return
-  const a = await saveGenerated('試穿圖_' + Date.now())
+  const a = await saveGenerated(t('tryOn.savedName', { timestamp: Date.now() }))
   savedId.value = a.id
 }
 function download() {
@@ -214,7 +221,7 @@ async function onGenerate() {
     await feed.refresh()
     done.value = true
   } catch (e: unknown) {
-    errorMsg.value = isInsufficientFeed(e) ? '飼料不足，請先儲值。' : '生成失敗，請再試一次。'
+    errorMsg.value = isInsufficientFeed(e) ? t('errors.insufficientFeed') : t('errors.generationFailed')
   } finally {
     generating.value = false
   }
@@ -222,15 +229,15 @@ async function onGenerate() {
 </script>
 
 <style scoped lang="scss">
-.consent-bar {
-  @include flex(flex-start, center, 10px);
+.consentBar {
+  @include flex(flex-start, center, 0.625rem);
   background: $blue-light;
   border-left: 3px solid $yellow;
   border-radius: 8px;
-  padding: 12px 14px;
-  margin-bottom: 18px;
+  padding: 0.75rem 0.875rem;
+  margin-bottom: 1.125rem;
   &__icon {
-    font-size: 20px;
+    font-size: 1.25rem;
     color: $orange;
     flex-shrink: 0;
   }
@@ -238,14 +245,14 @@ async function onGenerate() {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0.125rem;
     strong {
-      font-size: 14px;
+      font-size: 0.875rem;
       font-weight: 500;
       color: $dark-blue-gray;
     }
     span {
-      font-size: 13px;
+      font-size: 0.8125rem;
       color: #606692;
     }
   }
@@ -257,8 +264,8 @@ async function onGenerate() {
 }
 .tryon__body {
   display: grid;
-  grid-template-columns: 400px 1fr;
-  gap: 16px;
+  grid-template-columns: 25rem 1fr;
+  gap: 1rem;
   align-items: stretch;
   flex: 1; // 撐滿 .tryon 扣掉同意條款列後的剩餘高度，讓左右面板等高並接近底部
   @include below($bp-lg) {
@@ -273,29 +280,29 @@ async function onGenerate() {
   background: $white;
   border-radius: 10px;
   box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2);
-  padding: 24px;
+  padding: 1.5rem;
 }
 .step {
-  margin-bottom: 16px;
+  margin-bottom: 1rem;
   &__title {
-    font-size: 16px;
+    font-size: 1rem;
     font-weight: 700;
     color: $dark-blue-gray;
-    margin-bottom: 12px;
+    margin-bottom: 0.75rem;
   }
 }
 .subtabs {
-  @include flex(flex-start, center, 8px);
-  margin-bottom: 14px;
+  @include flex(flex-start, center, 0.5rem);
+  margin-bottom: 0.875rem;
 }
 .subtab {
-  padding: 3px 12px;
+  padding: 0.1875rem 0.75rem;
   border-radius: 16px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: #606692;
   border: 1px solid $gray;
   background: $white;
-  &.is-active {
+  &.isActive {
     background: $blue-dark-500;
     border-color: $blue-dark-500;
     color: $white;
@@ -304,11 +311,11 @@ async function onGenerate() {
 .models {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px 10px;
-  margin-bottom: 10px;
+  gap: 0.75rem 0.625rem;
+  margin-bottom: 0.625rem;
 }
 .model {
-  @include flex(center, center, 8px);
+  @include flex(center, center, 0.5rem);
   flex-direction: column;
   padding: 0;
   border: none;
@@ -319,16 +326,16 @@ async function onGenerate() {
     border-radius: 8px;
     background: #eef1f7;
     color: $babyBlue;
-    font-size: 28px;
+    font-size: 1.75rem;
     border: 2px solid transparent;
     @include flex(center, center);
   }
   &__label {
-    font-size: 12px;
+    font-size: 0.75rem;
     line-height: 1.333;
     color: #606692;
   }
-  &.is-active {
+  &.isActive {
     .model__thumb {
       border-color: $blue;
     }
@@ -339,16 +346,16 @@ async function onGenerate() {
   }
 }
 .link {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   color: $blue-dark-500;
 }
 // ── 上傳模特照：拖曳區 ──
 .mdrop {
-  @include flex(center, center, 6px);
+  @include flex(center, center, 0.375rem);
   flex-direction: column;
   width: 100%;
-  padding: 22px 16px;
+  padding: 1.375rem 1rem;
   border: 1px dashed $gray;
   border-radius: 10px;
   background: $white;
@@ -360,99 +367,99 @@ async function onGenerate() {
     display: none;
   }
   &__icon {
-    font-size: 26px;
+    font-size: 1.625rem;
     color: $blue-dark-500;
   }
   &__title {
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 500;
     color: $blue-dark-500;
   }
   &__hint {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: $gray-100;
   }
 }
 .mtip {
   width: 100%;
-  margin-top: 12px;
-  padding: 10px 12px;
+  margin-top: 0.75rem;
+  padding: 0.625rem 0.75rem;
   border-radius: 8px;
   background: $blue-light;
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 1.5;
   color: #606692;
 }
 .uphead {
-  @include flex(flex-start, center, 8px);
+  @include flex(flex-start, center, 0.5rem);
   width: 100%;
-  margin-top: 12px;
+  margin-top: 0.75rem;
   &__title {
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 700;
     color: $blue-dark-500;
   }
   &__grow {
     flex: 1;
-    height: 1px;
+    height: 0.0625rem;
   }
   &__count {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: $gray-100;
   }
 }
 .uplist {
-  @include flex(flex-start, stretch, 6px);
+  @include flex(flex-start, stretch, 0.375rem);
   flex-direction: column;
   width: 100%;
-  margin-top: 6px;
+  margin-top: 0.375rem;
 }
 .uprow {
-  @include flex(flex-start, center, 10px);
-  padding: 8px 10px;
+  @include flex(flex-start, center, 0.625rem);
+  padding: 0.5rem 0.625rem;
   border: 1px solid $gray;
   border-radius: 8px;
   background: $white;
-  &.is-ok {
+  &.isOk {
     background: $blue-light;
     border-color: transparent;
   }
   &__thumb {
     @include flex(center, center);
-    width: 36px;
-    height: 36px;
+    width: 2.25rem;
+    height: 2.25rem;
     flex-shrink: 0;
     border-radius: 8px;
     background: #eef1f7;
     color: $babyBlue;
-    font-size: 18px;
+    font-size: 1.125rem;
   }
   &__col {
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0.125rem;
   }
   &__name {
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 500;
     color: $blue-dark-500;
   }
   &__note {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: $gray-100;
-    &.is-warn {
+    &.isWarn {
       color: $orange;
     }
   }
   &__del {
     @include flex(center, center);
     flex-shrink: 0;
-    width: 16px;
-    height: 16px;
+    width: 1rem;
+    height: 1rem;
     color: $gray-100;
-    font-size: 16px;
+    font-size: 1rem;
     &:hover {
       color: $red;
     }
@@ -460,25 +467,25 @@ async function onGenerate() {
 }
 .statuspill {
   flex-shrink: 0;
-  padding: 3px 12px;
+  padding: 0.1875rem 0.75rem;
   border-radius: 16px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   background: $white;
   border: 1px solid $gray;
-  &.is-ok {
+  &.isOk {
     color: $green;
     border-color: $green;
   }
-  &.is-reupload {
+  &.isReupload {
     color: #ff6148;
     border-color: #ff6148;
   }
 }
 .pconsent {
-  @include flex(flex-start, center, 10px);
+  @include flex(flex-start, center, 0.625rem);
   width: 100%;
-  margin-top: 12px;
-  padding: 10px 12px;
+  margin-top: 0.75rem;
+  padding: 0.625rem 0.75rem;
   border: 1px solid $gray;
   border-radius: 8px;
   background: $white;
@@ -488,27 +495,27 @@ async function onGenerate() {
   }
   &__box {
     @include flex(center, center);
-    width: 18px;
-    height: 18px;
+    width: 1.125rem;
+    height: 1.125rem;
     flex-shrink: 0;
     border-radius: 4px;
     border: 1px solid $gray;
     background: $white;
     color: $white;
-    font-size: 11px;
-    &.is-on {
+    font-size: 0.6875rem;
+    &.isOn {
       background: $blue-dark-500;
       border-color: $blue-dark-500;
     }
   }
   &__text {
     flex: 1;
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 500;
     color: $blue-dark-500;
   }
   &__link {
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 500;
     color: $blue-dark-500;
   }
@@ -520,108 +527,108 @@ async function onGenerate() {
   border-radius: 8px;
   background: #eef1f7;
   color: $babyBlue;
-  font-size: 34px;
-  margin-bottom: 12px;
+  font-size: 2.125rem;
+  margin-bottom: 0.75rem;
   &__name {
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: $gray-400;
-    margin-top: 8px;
+    margin-top: 0.5rem;
   }
   &__actions {
-    @include flex(flex-start, center, 12px);
+    @include flex(flex-start, center, 0.75rem);
   }
   &__hint {
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: #606692;
     border: 1px solid $gray;
     border-radius: 16px;
-    padding: 3px 12px;
+    padding: 0.1875rem 0.75rem;
   }
 }
 .err {
   color: $red;
-  font-size: 13px;
-  margin-bottom: 12px;
+  font-size: 0.8125rem;
+  margin-bottom: 0.75rem;
 }
 .tryon__footer {
   @include flex(space-between, flex-end);
   border-top: 1px solid $gray;
-  margin: auto -24px 0;
-  padding: 14px 24px 0;
+  margin: auto -1.5rem 0;
+  padding: 0.875rem 1.5rem 0;
 }
 .cost {
   &__label {
-    font-size: 12px;
+    font-size: 0.75rem;
     color: $gray-100;
   }
   &__value {
-    @include flex(flex-start, center, 4px);
-    font-size: 16px;
+    @include flex(flex-start, center, 0.25rem);
+    font-size: 1rem;
     font-weight: 700;
     color: $dark-blue-gray;
   }
   &__icon {
-    width: 16px;
-    height: 16px;
+    width: 1rem;
+    height: 1rem;
     flex-shrink: 0;
   }
 }
 .result__head {
   @include flex(space-between, center);
   .result__title {
-    font-size: 18px;
+    font-size: 1.125rem;
     font-weight: 700;
     color: $dark-blue-gray;
   }
   .result__hint {
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: #606692;
     border: 1px solid $gray;
     border-radius: 16px;
-    padding: 3px 12px;
+    padding: 0.1875rem 0.75rem;
   }
 }
 .result__wrap {
   @include flex(center, center);
   flex: 1;
-  min-height: 540px;
+  min-height: 33.75rem;
   background: $blue-light;
   border-radius: 8px;
 }
 .result__box {
   @include flex(center, center);
   flex-direction: column;
-  gap: 10px;
+  gap: 0.625rem;
   width: 100%;
-  max-width: 360px;
+  max-width: 22.5rem;
   aspect-ratio: 360 / 480;
   background: #e4e9f2;
   border-radius: 10px;
   color: $babyBlue;
 }
 .result__play {
-  width: 64px;
-  height: 64px;
+  width: 4rem;
+  height: 4rem;
 }
 .result__placeholder {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: $gray-100;
 }
 .tryon__result {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 1rem;
 }
 .tryon__brand {
-  margin: 16px 0;
+  margin: 1rem 0;
 }
 .result__actions {
-  @include flex(center, center, 12px);
+  @include flex(center, center, 0.75rem);
 }
 .linkbtn {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: #606692;
-  padding: 9px 8px;
+  padding: 0.5625rem 0.5rem;
   &:hover {
     color: $blue;
   }
@@ -632,61 +639,61 @@ async function onGenerate() {
   z-index: 1000;
   background: rgba(23, 30, 82, 0.45);
   @include flex(center, center);
-  padding: 24px;
+  padding: 1.5rem;
 }
 .cdialog {
-  width: 560px;
+  width: 35rem;
   max-width: 100%;
   background: $white;
   border-radius: 14px;
-  padding: 20px 24px;
+  padding: 1.25rem 1.5rem;
   box-shadow: 0px 12px 16px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 0.875rem;
   &__head {
-    @include flex(flex-start, center, 10px);
+    @include flex(flex-start, center, 0.625rem);
   }
   &__alert {
-    font-size: 22px;
+    font-size: 1.375rem;
     color: $orange;
     flex-shrink: 0;
   }
   &__title {
-    font-size: 17px;
+    font-size: 1.0625rem;
     font-weight: 700;
     color: $blue-dark-500;
   }
   &__grow {
     flex: 1;
-    height: 1px;
+    height: 0.0625rem;
   }
   &__close {
     @include flex(center, center);
     flex-shrink: 0;
-    width: 18px;
-    height: 18px;
-    font-size: 18px;
+    width: 1.125rem;
+    height: 1.125rem;
+    font-size: 1.125rem;
     color: $gray-400;
     &:hover {
       color: $blue-dark-500;
     }
   }
   &__intro {
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: #606692;
     line-height: 1.6;
   }
   &__act {
-    @include flex(flex-start, center, 10px);
+    @include flex(flex-start, center, 0.625rem);
   }
   &__pdf {
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 500;
     color: $blue-dark-500;
   }
   &__foot {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: $gray-100;
     line-height: 1.5;
   }
@@ -694,23 +701,23 @@ async function onGenerate() {
 .terms {
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: 14px 16px;
+  gap: 0.5625rem;
+  padding: 0.875rem 1rem;
   border-radius: 10px;
   background: $blue-light;
   &__item {
-    font-size: 12px;
+    font-size: 0.75rem;
     line-height: 1.6;
     color: $blue-dark-500;
   }
   &__more {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: $gray-100;
   }
 }
 .ack {
-  @include flex(flex-start, center, 10px);
-  padding: 10px 12px;
+  @include flex(flex-start, center, 0.625rem);
+  padding: 0.625rem 0.75rem;
   border-radius: 8px;
   background: $blue-light;
   cursor: pointer;
@@ -719,22 +726,22 @@ async function onGenerate() {
   }
   &__box {
     @include flex(center, center);
-    width: 18px;
-    height: 18px;
+    width: 1.125rem;
+    height: 1.125rem;
     flex-shrink: 0;
     border-radius: 4px;
     border: 1px solid $gray;
     background: $white;
     color: $white;
-    font-size: 11px;
-    &.is-on {
+    font-size: 0.6875rem;
+    &.isOn {
       background: $blue-dark-500;
       border-color: $blue-dark-500;
     }
   }
   &__text {
     flex: 1;
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 500;
     color: $blue-dark-500;
   }

@@ -4,60 +4,65 @@ Teleport(to="body")
     .picker__modal
       header.picker__head
         div
-          .picker__title {{ title }}
-          .picker__sub 隸屬機器人「日安選物」的素材與生成產物
-        button.picker__close(@click="close" aria-label="關閉")
+          .picker__title {{ resolvedTitle }}
+          .picker__sub {{ t('imagePicker.subtitle') }}
+        button.picker__close(@click="close" :aria-label="t('common.close')")
           i.ti.ti-x
       .picker__toolbar
         .search
           i.ti.ti-search.search__icon
-          input.search__input(v-model="keyword" type="text" placeholder="搜尋素材名稱或標籤")
+          input.search__input(v-model="keyword" type="text" :placeholder="t('imagePicker.searchPlaceholder')")
         .sources
-          button.chip(v-for="s in sources" :key="s.label" :class="{ 'is-active': activeSource === s.value }" @click="activeSource = s.value") {{ s.label }}
+          button.chip(v-for="s in sources" :key="s.label" :class="{ 'isActive': activeSource === s.value }" @click="activeSource = s.value") {{ s.label }}
       .picker__grid
-        button.pick(v-for="a in filtered" :key="a.id" :class="{ 'is-selected': selectedIds.includes(a.id) }" @click="toggle(a.id)")
+        button.pick(v-for="a in filtered" :key="a.id" :class="{ 'isSelected': selectedIds.includes(a.id) }" @click="toggle(a.id)")
           .pick__thumb
             span.pick__check(v-if="selectedIds.includes(a.id)")
               i.ti.ti-check
             i.ti(:class="a.type === 'video' ? 'ti-player-play' : 'ti-photo'")
           .pick__meta
             span.pick__name {{ a.name }}
-            span.tag {{ a.source }}
+            span.tag {{ sourceLabel(a.tag) }}
       footer.picker__foot
-        span.picker__count 已選 {{ count }} 項
+        span.picker__count {{ t('imagePicker.selectedCount', { count }) }}
         .picker__actions
-          DialogButton(@click="close") 取消
-          DialogButton(variant="primary" :disabled="!count" @click="confirm") {{ multiple ? `加入所選（${count}）` : '選擇這張' }}
+          DialogButton(@click="close") {{ t('common.cancel') }}
+          DialogButton(variant="primary" :disabled="!count" @click="confirm") {{ multiple ? t('imagePicker.addSelected', { count }) : t('imagePicker.selectOne') }}
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAssets } from '@/composables/useAssets'
 import DialogButton from '@/components/DialogButton.vue'
 import type { Asset } from '@/types/asset'
 
-const props = withDefaults(defineProps<{ open: boolean; title?: string; multiple?: boolean }>(), {
-  title: '從圖庫選擇',
+const props = withDefaults(defineProps<{ title?: string; multiple?: boolean }>(), {
+  title: undefined,
   multiple: false,
 })
 const emit = defineEmits<{
-  (e: 'update:open', v: boolean): void
   (e: 'select', asset: Asset): void
   (e: 'select-many', assets: Asset[]): void
 }>()
+const open = defineModel<boolean>('open', { required: true })
 
 const { assets, load } = useAssets()
+const { t } = useI18n()
 
 const keyword = ref('')
-const sources = [
-  { label: '全部', value: 'all' },
-  { label: '上傳', value: 'upload' },
-  { label: 'AI 生成', value: 'ai' },
-]
+const resolvedTitle = computed(() => props.title ?? t('imagePicker.defaultTitle'))
+const sources = computed(() => [
+  { label: t('sources.all'), value: 'all' },
+  { label: t('sources.upload'), value: 'upload' },
+  { label: t('sources.ai'), value: 'ai' },
+  { label: t('sources.edit'), value: 'edit' },
+])
 const activeSource = ref('all')
 const selectedIds = ref<string[]>([])
 
 const count = computed(() => selectedIds.value.length)
+const sourceLabel = (source: string) => t(`sources.${source}`)
 
 const filtered = computed(() =>
   assets.value.filter((a) => {
@@ -77,19 +82,16 @@ function toggle(id: string) {
   }
 }
 
-watch(
-  () => props.open,
-  (v) => {
-    if (v) {
-      selectedIds.value = []
-      keyword.value = ''
-      activeSource.value = 'all'
-      load()
-    }
-  },
-)
+watch(open, (v) => {
+  if (v) {
+    selectedIds.value = []
+    keyword.value = ''
+    activeSource.value = 'all'
+    load()
+  }
+})
 
-const close = () => emit('update:open', false)
+const close = () => (open.value = false)
 const confirm = () => {
   const chosen = assets.value.filter((a) => selectedIds.value.includes(a.id))
   if (!chosen.length) return
@@ -100,28 +102,160 @@ const confirm = () => {
 </script>
 
 <style scoped lang="scss">
-.picker { position: fixed; inset: 0; z-index: 1000; background: rgba(23, 30, 82, 0.45); @include flex(center, center); padding: 24px; }
-.picker__modal { width: 720px; max-width: 100%; max-height: 88vh; background: $white; border-radius: 16px; padding: 22px 24px; display: flex; flex-direction: column; }
-.picker__head { @include flex(space-between, flex-start); margin-bottom: 16px; }
-.picker__title { font-size: 18px; font-weight: 700; color: $blue-dark-300; }
-.picker__sub { font-size: 12px; color: $gray-100; margin-top: 2px; }
-.picker__close { color: $gray-400; font-size: 20px; }
-.picker__toolbar { @include flex(space-between, center, 12px); margin-bottom: 16px; }
-.search { position: relative; flex: 1;
-  &__icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: $gray-100; font-size: 16px; }
-  &__input { width: 100%; height: 38px; border: 1px solid $gray; border-radius: 999px; padding: 0 14px 0 34px; font-size: 14px; color: $blue-dark-300; outline: none; &:focus { border-color: $blue; } } }
-.sources { @include flex(flex-start, center, 6px); }
-.chip { padding: 5px 12px; border-radius: 999px; font-size: 13px; color: $gray-400; border: 1px solid $gray; background: $white; white-space: nowrap;
-  &.is-active { background: $blue-dark-300; color: $white; border-color: $blue-dark-300; } }
-.picker__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; overflow-y: auto; padding: 2px; }
-.pick { text-align: left; background: $white; border-radius: 10px; padding: 4px; border: 2px solid transparent;
-  &.is-selected { border-color: $blue; }
-  &__thumb { @include flex(center, center); position: relative; aspect-ratio: 1 / 1; background: $blue-light; border-radius: 8px; color: $babyBlue; font-size: 26px; margin-bottom: 6px; }
-  &__check { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; background: $blue; color: $white; font-size: 14px; @include flex(center, center); }
-  &__meta { @include flex(space-between, center, 6px); padding: 0 2px 4px; }
-  &__name { flex: 1; min-width: 0; font-size: 13px; color: $blue-dark-300; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
-.tag { flex-shrink: 0; font-size: 11px; padding: 2px 7px; border-radius: 6px; font-weight: 500; background: #FAEEDA; color: #854F0B; }
-.picker__foot { @include flex(space-between, center); margin-top: 18px; border-top: 1px solid $lightGray; padding-top: 16px; }
-.picker__count { font-size: 13px; color: $gray-400; }
-.picker__actions { @include flex(flex-start, center, 10px); }
+.picker {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(23, 30, 82, 0.45);
+  @include flex(center, center);
+  padding: 1.5rem;
+}
+.picker__modal {
+  width: 45rem;
+  max-width: 100%;
+  max-height: 88vh;
+  background: $white;
+  border-radius: 16px;
+  padding: 1.375rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+}
+.picker__head {
+  @include flex(space-between, flex-start);
+  margin-bottom: 1rem;
+}
+.picker__title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: $blue-dark-300;
+}
+.picker__sub {
+  font-size: 0.75rem;
+  color: $gray-100;
+  margin-top: 0.125rem;
+}
+.picker__close {
+  color: $gray-400;
+  font-size: 1.25rem;
+}
+.picker__toolbar {
+  @include flex(space-between, center, 0.75rem);
+  margin-bottom: 1rem;
+}
+.search {
+  position: relative;
+  flex: 1;
+  &__icon {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: $gray-100;
+    font-size: 1rem;
+  }
+  &__input {
+    width: 100%;
+    height: 2.375rem;
+    border: 1px solid $gray;
+    border-radius: 999px;
+    padding: 0 0.875rem 0 2.125rem;
+    font-size: 0.875rem;
+    color: $blue-dark-300;
+    outline: none;
+    &:focus {
+      border-color: $blue;
+    }
+  }
+}
+.sources {
+  @include flex(flex-start, center, 0.375rem);
+}
+.chip {
+  padding: 0.3125rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  color: $gray-400;
+  border: 1px solid $gray;
+  background: $white;
+  white-space: nowrap;
+  &.isActive {
+    background: $blue-dark-300;
+    color: $white;
+    border-color: $blue-dark-300;
+  }
+}
+.picker__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.875rem;
+  overflow-y: auto;
+  padding: 0.125rem;
+}
+.pick {
+  text-align: left;
+  background: $white;
+  border-radius: 10px;
+  padding: 0.25rem;
+  border: 2px solid transparent;
+  &.isSelected {
+    border-color: $blue;
+  }
+  &__thumb {
+    @include flex(center, center);
+    position: relative;
+    aspect-ratio: 1 / 1;
+    background: $blue-light;
+    border-radius: 8px;
+    color: $babyBlue;
+    font-size: 1.625rem;
+    margin-bottom: 0.375rem;
+  }
+  &__check {
+    position: absolute;
+    top: 0.375rem;
+    right: 0.375rem;
+    width: 1.375rem;
+    height: 1.375rem;
+    border-radius: 50%;
+    background: $blue;
+    color: $white;
+    font-size: 0.875rem;
+    @include flex(center, center);
+  }
+  &__meta {
+    @include flex(space-between, center, 0.375rem);
+    padding: 0 0.125rem 0.25rem;
+  }
+  &__name {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.8125rem;
+    color: $blue-dark-300;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+.tag {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  padding: 0.125rem 0.4375rem;
+  border-radius: 6px;
+  font-weight: 500;
+  background: #faeeda;
+  color: #854f0b;
+}
+.picker__foot {
+  @include flex(space-between, center);
+  margin-top: 1.125rem;
+  border-top: 1px solid $lightGray;
+  padding-top: 1rem;
+}
+.picker__count {
+  font-size: 0.8125rem;
+  color: $gray-400;
+}
+.picker__actions {
+  @include flex(flex-start, center, 0.625rem);
+}
 </style>

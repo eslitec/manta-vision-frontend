@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/api'
 import { useFeedStore } from '@/stores/feed'
+import { i18n } from '@/lang'
 import type { GenerationTask, GeneratedImage, VideoJobReq } from '@/types/api'
 
 let seq = 0
@@ -22,15 +23,16 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
   )
 
   function showToast(task: GenerationTask, kind: 'done' | 'failed') {
+    const t = i18n.global.t
     toast.value = {
       taskId: task.id,
-      title: kind === 'done' ? '影片生成完成' : '影片生成失敗',
+      title: kind === 'done' ? t('generationToast.videoDone') : t('generationToast.videoFailed'),
       message:
         kind === 'done'
-          ? `${task.name}・已存入圖庫›影片`
+          ? t('generationToast.saved', { name: task.name })
           : task.error === 'MODEL_TIMEOUT'
-            ? `${task.name}・模型逾時，已退還 ${task.cost} 顆飼料`
-            : `${task.name}・生成失敗`,
+            ? t('generationToast.timeoutRefund', { name: task.name, cost: task.cost })
+            : t('generationToast.failed', { name: task.name }),
       kind,
     }
   }

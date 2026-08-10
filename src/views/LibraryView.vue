@@ -1,106 +1,108 @@
 <template lang="pug">
 .library
-  p.library__note
-    span.library__note-dot
+  p.library__note(v-if="activeTab === 'library'")
+    span.library__noteDot
     span {{ noteText }}
   .tabs
-    button.tabs__item(v-for="t in tabs" :key="t" :class="{ 'is-active': activeTab === t }" @click="activeTab = t") {{ t }}
-  .library__body
+    button.tabs__item(v-for="item in tabs" :key="item.value" :class="{ 'isActive': activeTab === item.value }" @click="activeTab = item.value") {{ item.label }}
+  .library__body(v-if="activeTab === 'library'")
     aside.folders
-      button.folders__item(:class="{ 'is-active': activeView.kind === 'all' }" @click="setView({ kind: 'all' })")
-        span 全部素材
+      button.folders__item(:class="{ 'isActive': activeView.kind === 'all' }" @click="setView({ kind: 'all' })")
+        span {{ t('library.allAssets') }}
         span.folders__count {{ assets.length }}
-      .folders__section 系統分類
-      button.folders__item(v-for="c in categoryTags" :key="c.tag" :class="{ 'is-active': activeView.kind === 'category' && activeView.tag === c.tag }" @click="setView({ kind: 'category', tag: c.tag })")
-        span {{ c.label }}
+      .folders__section {{ t('library.systemCategories') }}
+      button.folders__item(v-for="c in categoryTags" :key="c.tag" :class="{ 'isActive': activeView.kind === 'category' && activeView.tag === c.tag }" @click="setView({ kind: 'category', tag: c.tag })")
+        span {{ t(`sources.${c.tag}`) }}
         span.folders__count {{ categoryCounts.get(c.tag) ?? 0 }}
       .folders__section.folders__section--folders
-        span 我的資料夾
-        button.folders__add-icon(@click="startAddFolder" aria-label="新增資料夾") +
-      button.folders__item.folders__item--folder(v-for="f in folders" :key="f" :class="{ 'is-active': activeView.kind === 'folder' && activeView.name === f }" @click="setView({ kind: 'folder', name: f })")
-        i.ti.ti-folder.folders__item-icon
-        span.folders__item-name {{ f }}
+        span {{ t('library.myFolders') }}
+        button.folders__addIcon(@click="startAddFolder" :aria-label="t('library.addFolder')") +
+      button.folders__item.folders__item--folder(v-for="f in folders" :key="f" :class="{ 'isActive': activeView.kind === 'folder' && activeView.name === f }" @click="setView({ kind: 'folder', name: f })")
+        i.ti.ti-folder.folders__itemIcon
+        span.folders__itemName {{ f }}
         span.folders__count {{ folderCounts.get(f) ?? 0 }}
       .folders__new(v-if="addingFolder")
         input.folders__input(
           ref="folderInput"
           v-model="newFolderName"
           type="text"
-          placeholder="資料夾名稱"
+          :placeholder="t('library.folderName')"
           @keyup.enter="confirmAddFolder"
           @keyup.esc="cancelAddFolder"
           @blur="confirmAddFolder"
         )
-      p.folders__hint 可將素材拖曳至資料夾，或用批次選擇移動
+      p.folders__hint {{ t('library.folderHint') }}
     section.assets
       .assets__toolbar
         .search
           i.ti.ti-search.search__icon
-          input.search__input(v-model="keyword" type="text" placeholder="搜尋素材名稱或標籤")
+          input.search__input(v-model="keyword" type="text" :placeholder="t('imagePicker.searchPlaceholder')")
         .sources
-          span.sources__label 來源
-          button.chip(v-for="s in sources" :key="s.label" :class="{ 'is-active': activeSource === s.value }" @click="activeSource = s.value") {{ s.label }}
+          span.sources__label {{ t('library.source') }}
+          button.chip(v-for="s in sources" :key="s.label" :class="{ 'isActive': activeSource === s.value }" @click="activeSource = s.value") {{ s.label }}
         .assets__actions
           DialogButton(variant="primary" v-if="activeView.kind === 'folder'" @click="pickerOpen = true")
             i.ti.ti-library-photo
-            span 從圖庫加入
+            span {{ t('library.addFromLibrary') }}
           label.upload
             i.ti.ti-upload
-            span 上傳圖片
+            span {{ t('library.uploadImages') }}
             input.upload__input(type="file" accept="image/*" multiple @change="onUpload")
 
       .batchbar(v-if="selectedIds.size")
-        .batchbar__left
+        .batchbar__selection
           span.batchbar__minus
-          span 已選 {{ selectedIds.size }} 筆
-          button.batchbar__link(@click="selectAllOnPage") 全選本頁 {{ paged.length }} 筆
-          button.batchbar__link(@click="clearSelection") 清除
-        .batchbar__right
-          button.batchbar__action(@click="openMoveDialog") 移至資料夾
-          button.batchbar__action(v-if="activeView.kind === 'folder'" @click="removeSelectedFromFolder") 移出資料夾
-          button.batchbar__action(@click="downloadSelected") 下載
+          span {{ t('library.selectedCount', { count: selectedIds.size }) }}
+          button.batchbar__link(@click="selectAllOnPage") {{ t('library.selectPage', { count: paged.length }) }}
+          button.batchbar__link(@click="clearSelection") {{ t('common.clear') }}
+        .batchbar__actions
+          button.batchbar__action(@click="openMoveDialog") {{ t('library.moveToFolder') }}
+          button.batchbar__action(v-if="activeView.kind === 'folder'" @click="removeSelectedFromFolder") {{ t('library.removeFromFolder') }}
+          button.batchbar__action(@click="downloadSelected") {{ t('common.download') }}
           OutlineButton(variant="danger" @click="openDeleteDialog")
             i.ti.ti-trash
-            | 刪除
+            | {{ t('common.delete') }}
 
-      .assets__empty(v-if="!filtered.length && !pendingTasks.length") 沒有符合的素材
+      .assets__empty(v-if="!filtered.length && !pendingTasks.length") {{ t('library.empty') }}
       .assets__grid(v-else)
         .asset.asset--pending(v-for="t in pendingTasks" :key="t.id")
           .pending
             span.pending__play
               svg(viewBox="0 0 24 24" width="13" height="13")
                 path(d="M8 5v14l11-7z" fill="white")
-            span.pending__pct {{ t.status === 'queued' ? '排隊中…' : '生成中 ' + t.progress + '%' }}
+            span.pending__pct {{ t.status === 'queued' ? $t('taskCenter.queued') : $t('library.generatingProgress', { progress: t.progress }) }}
             .pending__bar
-              .pending__bar-fill(:style="{ width: t.progress + '%' }")
+              .pending__barFill(:style="{ width: t.progress + '%' }")
             span.pending__eta(v-if="t.status !== 'queued'") {{ etaText(t.progress) }}
           .asset__name {{ t.name }}
-          .asset__pmeta 影片 · {{ t.videoReq?.ratio || '9:16' }} · 完成後自動入庫
-        .asset(v-for="a in paged" :key="a.id" :class="{ 'is-selected': selectedIds.has(a.id) }")
+          .asset__pmeta {{ $t('library.pendingVideoMeta', { ratio: t.videoReq?.ratio || '9:16' }) }}
+        .asset(v-for="a in paged" :key="a.id" :class="{ 'isSelected': selectedIds.has(a.id) }")
           label.asset__check
             input(type="checkbox" :checked="selectedIds.has(a.id)" @change="toggleSelect(a.id)")
-            span.asset__check-box
+            span.asset__checkBox
               i.ti.ti-check(v-if="selectedIds.has(a.id)")
           .asset__thumb
             i.ti(:class="a.type === 'video' ? 'ti-player-play' : 'ti-photo'")
           .asset__name {{ a.name }}
           .asset__meta
-            span.tag(:class="'tag--' + a.tag") {{ a.source }}
+            span.tag(:class="'tag--' + a.tag") {{ $t(`sources.${a.tag}`) }}
             span.asset__dim {{ a.dim }}
 
       .pagination(v-if="filtered.length")
-        span.pagination__total 共 {{ filtered.length }} 筆素材
+        span.pagination__total {{ t('library.totalAssets', { count: filtered.length }) }}
         .pagination__pages
           button.pagination__nav(:disabled="page === 1" @click="page = page - 1") ‹
           template(v-for="(p, i) in pageItems" :key="i")
             span.pagination__ellipsis(v-if="p === '…'") …
-            button.pagination__page(v-else :class="{ 'is-active': p === page }" :disabled="p === page" @click="page = p") {{ p }}
+            button.pagination__page(v-else :class="{ 'isActive': p === page }" :disabled="p === page" @click="page = p") {{ p }}
           button.pagination__nav(:disabled="page === totalPages" @click="page = page + 1") ›
+
+  ImageEditorWorkspace(v-else :mode="activeTab")
 
   ImagePickerDialog(
     v-model:open="pickerOpen"
     :multiple="true"
-    :title="`從圖庫加入到「${activeFolderName}」`"
+    :title="t('library.pickerTitle', { folder: activeFolderName })"
     @select-many="onAddFromLibrary"
   )
 
@@ -108,60 +110,63 @@
     .modal(v-if="moveDialogOpen" @click.self="moveDialogOpen = false")
       .modal__box
         header.modal__head
-          h3.modal__title 移至資料夾
-          button.modal__close(@click="moveDialogOpen = false" aria-label="關閉")
+          h3.modal__title {{ t('library.moveToFolder') }}
+          button.modal__close(@click="moveDialogOpen = false" :aria-label="t('common.close')")
             i.ti.ti-x
-        p.modal__desc 將選取的 {{ selectedIds.size }} 筆素材加入資料夾。素材可同時屬於多個資料夾。
+        p.modal__desc {{ t('library.moveDescription', { count: selectedIds.size }) }}
         ul.modal__list
-          li.modal__list-item(v-for="f in folders" :key="f" :class="{ 'is-active': moveTargetFolder === f }" @click="moveTargetFolder = f")
+          li.modal__listItem(v-for="f in folders" :key="f" :class="{ 'isActive': moveTargetFolder === f }" @click="moveTargetFolder = f")
             i.ti.ti-folder
-            span.modal__list-name {{ f }}
-            span.modal__list-count {{ folderCounts.get(f) ?? 0 }}
+            span.modal__listName {{ f }}
+            span.modal__listCount {{ folderCounts.get(f) ?? 0 }}
         .modal__create
-          input.modal__create-input(v-model="moveNewFolderName" type="text" placeholder="或建立新資料夾…" @keyup.enter="createFolderForMove")
-          button.modal__create-btn(@click="createFolderForMove") 建立
+          input.modal__createInput(v-model="moveNewFolderName" type="text" :placeholder="t('library.createFolderPlaceholder')" @keyup.enter="createFolderForMove")
+          button.modal__createBtn(@click="createFolderForMove") {{ t('common.create') }}
         footer.modal__foot
-          DialogButton(@click="moveDialogOpen = false") 取消
-          DialogButton(variant="primary" :disabled="!moveTargetFolder" @click="confirmMoveToFolder") 移入{{ moveTargetFolder }}
+          DialogButton(@click="moveDialogOpen = false") {{ t('common.cancel') }}
+          DialogButton(variant="primary" :disabled="!moveTargetFolder" @click="confirmMoveToFolder") {{ t('library.moveInto', { folder: moveTargetFolder }) }}
 
   Teleport(to="body")
     .modal(v-if="deleteDialogOpen" @click.self="deleteDialogOpen = false")
       .modal__box
         header.modal__head
-          h3.modal__title 刪除 {{ selectedIds.size }} 筆素材？
-          button.modal__close(@click="deleteDialogOpen = false" aria-label="關閉")
+          h3.modal__title {{ t('library.deleteTitle', { count: selectedIds.size }) }}
+          button.modal__close(@click="deleteDialogOpen = false" :aria-label="t('common.close')")
             i.ti.ti-x
         .modal__preview
-          .modal__preview-item(v-for="a in selectedAssets" :key="a.id")
-            .modal__preview-thumb
+          .modal__previewItem(v-for="a in selectedAssets" :key="a.id")
+            .modal__previewThumb
               i.ti(:class="a.type === 'video' ? 'ti-player-play' : 'ti-photo'")
-            span.modal__preview-name {{ a.name }}
+            span.modal__previewName {{ a.name }}
         .modal__warn(v-if="referencedCount > 0")
-          IconAlertTriangleFilled.modal__warn-icon
-          .modal__warn-text
-            strong 其中 {{ referencedCount }} 筆已被生成結果引用
-            span 刪除後，引用它們的生成紀錄將無法回溯原始素材。此操作無法復原。
+          IconAlertTriangleFilled.modal__warnIcon
+          .modal__warnText
+            strong {{ t('library.referencedWarning', { count: referencedCount }) }}
+            span {{ t('library.deleteWarning') }}
         label.modal__checkline
           input(type="checkbox" v-model="deleteConfirmed")
-          span 我了解此操作無法復原
+          span {{ t('library.deleteConfirm') }}
         footer.modal__foot
-          button.modal__textbtn(@click="deleteDialogOpen = false") 取消
-          button.modal__textbtn.modal__textbtn--danger(:disabled="!deleteConfirmed" @click="confirmDelete") 永久刪除 {{ selectedIds.size }} 筆
+          button.modal__textbtn(@click="deleteDialogOpen = false") {{ t('common.cancel') }}
+          button.modal__textbtn.modal__textbtn--danger(:disabled="!deleteConfirmed" @click="confirmDelete") {{ t('library.deletePermanently', { count: selectedIds.size }) }}
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { useAssets } from '@/composables/useAssets'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import OutlineButton from '@/components/OutlineButton.vue'
 import DialogButton from '@/components/DialogButton.vue'
 import IconAlertTriangleFilled from '@/components/icons/IconAlertTriangleFilled.vue'
+import ImageEditorWorkspace from '@/components/ImageEditorWorkspace.vue'
 import { CATEGORY_TAGS, type Asset, type AssetTag } from '@/types/asset'
 
 const { assets, folders, load, loadFolders, addFolder, addToFolder, removeFromFolder, deleteAssets, upload } =
   useAssets()
+const { t } = useI18n()
 
 // 非同步生成中的項目（目前只有圖生影會用到；圖片生成是同步完成，不會有機會停在「生成中」狀態）
 // 跟頂部工具列「任務」徽章共用同一份 generationTasks store，只在「全部素材」第一頁顯示，
@@ -180,7 +185,9 @@ function etaText(progress: number) {
   const remain = Math.max(5, Math.round(((100 - progress) / 100) * 120))
   const m = Math.floor(remain / 60)
   const s = remain % 60
-  return m > 0 ? `約剩 ${m} 分 ${s} 秒` : `約剩 ${s} 秒`
+  return m > 0
+    ? t('common.remainingMinutesSeconds', { minutes: m, seconds: s })
+    : t('common.remainingSeconds', { seconds: s })
 }
 
 // 左側主要篩選：全部素材／系統分類（依 tag）／我的資料夾（使用者自訂），三者互斥、單選
@@ -191,14 +198,13 @@ function setView(v: ActiveView) {
 }
 const activeFolderName = computed(() => (activeView.value.kind === 'folder' ? activeView.value.name : ''))
 
-const tabs = ['素材庫', '編輯圖片', 'AI 修圖']
-const activeTab = ref('素材庫')
-const sources = [
-  { label: '全部', value: 'all' },
-  { label: '上傳', value: 'upload' },
-  { label: 'AI 生成', value: 'ai' },
-  { label: '編輯產物', value: 'edit' },
-]
+const tabs = computed(() =>
+  ['library', 'edit', 'retouch'].map((value) => ({ value, label: t(`library.tabs.${value}`) })),
+)
+const activeTab = ref('library')
+const sources = computed(() =>
+  ['all', 'upload', 'ai', 'edit'].map((value) => ({ label: t(`sources.${value}`), value })),
+)
 const activeSource = ref('all')
 const keyword = ref('')
 
@@ -211,9 +217,9 @@ onMounted(() => {
 const noteText = computed(() => {
   if (activeView.value.kind === 'folder') {
     const count = folderCounts.value.get(activeView.value.name) ?? 0
-    return `資料夾「${activeView.value.name}」・${count} 筆素材。移出後素材仍保留在圖庫，只是不再屬於此資料夾。`
+    return t('library.folderNote', { folder: activeView.value.name, count })
   }
-  return '此圖庫隸屬於機器人「日安選物」。切換機器人會顯示該機器人專屬的素材與生成產物。'
+  return t('library.note')
 })
 
 // 系統分類／我的資料夾的數量，都是從目前已載入的 assets 即時算出，不是後端另外提供的欄位
@@ -389,14 +395,14 @@ async function onUpload(e: Event) {
   display: flex;
   flex-direction: column;
   &__note {
-    @include flex(flex-start, center, 8px);
+    @include flex(flex-start, center, 0.5rem);
     color: $gray-400;
-    font-size: 14px;
-    margin-bottom: 8px;
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
   }
-  &__note-dot {
-    width: 8px;
-    height: 8px;
+  &__noteDot {
+    width: 0.5rem;
+    height: 0.5rem;
     border-radius: 50%;
     background: $blue;
     flex-shrink: 0;
@@ -404,7 +410,7 @@ async function onUpload(e: Event) {
   &__body {
     display: flex;
     align-items: stretch; // 左右面板等高
-    gap: 16px;
+    gap: 1rem;
     flex: 1; // 撐滿剩餘高度，白色面板接近底部
     min-height: 0;
     @include below($bp-lg) {
@@ -413,50 +419,50 @@ async function onUpload(e: Event) {
   }
 }
 .tabs {
-  @include flex(flex-start, center, 8px);
-  margin-bottom: 10px;
+  @include flex(flex-start, center, 0.5rem);
+  margin-bottom: 0.625rem;
 }
 .tabs__item {
   @include flex(center, center);
-  height: 22px;
-  padding: 0 16px;
+  height: 1.375rem;
+  padding: 0 1rem;
   border-radius: 999px;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: #606692;
   background: $white;
   border: 1px solid $gray;
-  &.is-active {
+  &.isActive {
     background: $blue-dark-500;
     color: $white;
     border-color: $blue-dark-500;
   }
 }
 .folders {
-  width: 220px;
+  width: 13.75rem;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
   @include below($bp-lg) {
     width: 100%;
   }
   background: $white;
   border-radius: 10px;
   box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2);
-  padding: 16px;
+  padding: 1rem;
   &__section {
     @include flex(space-between, center);
-    font-size: 12px;
+    font-size: 0.75rem;
     color: $gray-100;
-    margin: 14px 0 6px;
-    padding: 0 12px;
+    margin: 0.875rem 0 0.375rem;
+    padding: 0 0.75rem;
   }
-  &__add-icon {
-    width: 18px;
-    height: 18px;
+  &__addIcon {
+    width: 1.125rem;
+    height: 1.125rem;
     border-radius: 4px;
     color: $blue-dark-500;
-    font-size: 14px;
+    font-size: 0.875rem;
     line-height: 1;
     &:hover {
       background: $blue-light;
@@ -464,64 +470,64 @@ async function onUpload(e: Event) {
     }
   }
   &__item {
-    @include flex(flex-start, center, 8px);
+    @include flex(flex-start, center, 0.5rem);
     text-align: left;
-    height: 36px;
-    padding: 0 10px;
+    height: 2.25rem;
+    padding: 0 0.625rem;
     border-radius: 8px;
-    font-size: 14px;
+    font-size: 0.875rem;
     color: $dark-blue-gray;
     &:hover {
       background: $blue-light;
     }
-    &.is-active {
+    &.isActive {
       background: #eef1f7;
       color: $blue-dark-500;
       font-weight: 500;
       border: 1.5px dashed $blue-dark-500;
-      padding: 0 8.5px;
+      padding: 0 0.53125rem;
     }
     > span:first-child,
     &--folder &-name {
       flex: 1;
     }
   }
-  &__item-icon {
+  &__itemIcon {
     color: $gray-100;
-    font-size: 14px;
+    font-size: 0.875rem;
     flex-shrink: 0;
   }
-  &__item-name {
+  &__itemName {
     flex: 1;
   }
   &__count {
     color: $gray-100;
-    font-size: 12px;
+    font-size: 0.75rem;
   }
-  &.is-active &__count,
-  &__item.is-active &__count {
+  &.isActive &__count,
+  &__item.isActive &__count {
     color: $blue-dark-500;
   }
   &__new {
-    margin-top: 4px;
-    padding: 0 12px;
+    margin-top: 0.25rem;
+    padding: 0 0.75rem;
   }
   &__input {
     width: 100%;
-    height: 36px;
+    height: 2.25rem;
     border: 1px solid $blue;
     border-radius: 8px;
-    padding: 0 10px;
-    font-size: 14px;
+    padding: 0 0.625rem;
+    font-size: 0.875rem;
     color: $blue-dark-500;
     outline: none;
   }
   &__hint {
     color: $gray-100;
-    font-size: 11px;
+    font-size: 0.6875rem;
     line-height: 1.5;
-    margin-top: 12px;
-    padding: 0 12px;
+    margin-top: 0.75rem;
+    padding: 0 0.75rem;
   }
 }
 .assets {
@@ -531,13 +537,13 @@ async function onUpload(e: Event) {
   background: $white;
   border-radius: 10px;
   box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2);
-  padding: 16px 24px;
+  padding: 1rem 1.5rem;
   display: flex;
   flex-direction: column;
 }
 .assets__toolbar {
-  @include flex(flex-start, center, 12px);
-  margin-bottom: 16px;
+  @include flex(flex-start, center, 0.75rem);
+  margin-bottom: 1rem;
   @include below($bp-md) {
     flex-wrap: wrap;
     .search {
@@ -556,28 +562,28 @@ async function onUpload(e: Event) {
   }
 }
 .assets__actions {
-  @include flex(flex-start, center, 12px);
+  @include flex(flex-start, center, 0.75rem);
   margin-left: auto;
 }
 .search {
   position: relative;
-  flex: 0 1 280px;
-  max-width: 280px;
+  flex: 0 1 17.5rem;
+  max-width: 17.5rem;
   &__icon {
     position: absolute;
-    left: 12px;
+    left: 0.75rem;
     top: 50%;
     transform: translateY(-50%);
     color: $gray-100;
-    font-size: 16px;
+    font-size: 1rem;
   }
   &__input {
     width: 100%;
-    height: 32px;
+    height: 2rem;
     border: 1px solid $gray;
     border-radius: 18px;
-    padding: 0 14px 0 34px;
-    font-size: 14px;
+    padding: 0 0.875rem 0 2.125rem;
+    font-size: 0.875rem;
     color: $blue-dark-500;
     outline: none;
     &:focus {
@@ -586,38 +592,38 @@ async function onUpload(e: Event) {
   }
 }
 .sources {
-  @include flex(flex-start, center, 8px);
+  @include flex(flex-start, center, 0.5rem);
   flex-shrink: 0;
   &__label {
-    font-size: 14px;
+    font-size: 0.875rem;
     color: #606692;
-    margin-right: 2px;
+    margin-right: 0.125rem;
     white-space: nowrap;
   }
 }
 .chip {
-  padding: 3px 12px;
+  padding: 0.1875rem 0.75rem;
   border-radius: 16px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: #606692;
   border: 1px solid $gray;
   background: $white;
   white-space: nowrap;
   flex-shrink: 0;
-  &.is-active {
+  &.isActive {
     background: $blue-dark-500;
     color: $white;
     border-color: $blue-dark-500;
   }
 }
 .upload {
-  @include flex(center, center, 6px);
+  @include flex(center, center, 0.375rem);
   background: $blue-dark-500;
   color: $white;
   font-weight: 500;
-  padding: 9px 14px;
+  padding: 0.5625rem 0.875rem;
   border-radius: 16px;
-  font-size: 14px;
+  font-size: 0.875rem;
   white-space: nowrap;
   cursor: pointer;
   &__input {
@@ -630,14 +636,14 @@ async function onUpload(e: Event) {
   background: $blue-dark-500;
   color: $white;
   border-radius: 10px;
-  padding: 12px 16px;
-  margin-bottom: 14px;
-  &__left {
-    @include flex(flex-start, center, 14px);
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.875rem;
+  &__selection {
+    @include flex(flex-start, center, 0.875rem);
   }
   &__minus {
-    width: 16px;
-    height: 16px;
+    width: 1rem;
+    height: 1rem;
     border-radius: 50%;
     background: rgba($white, 0.2);
     flex-shrink: 0;
@@ -647,25 +653,25 @@ async function onUpload(e: Event) {
       position: absolute;
       top: 50%;
       left: 50%;
-      width: 8px;
-      height: 1.5px;
+      width: 0.5rem;
+      height: 0.09375rem;
       background: $white;
       transform: translate(-50%, -50%);
     }
   }
   &__link {
     color: rgba($white, 0.85);
-    font-size: 14px;
+    font-size: 0.875rem;
     text-decoration: underline;
     &:hover {
       color: $white;
     }
   }
-  &__right {
-    @include flex(flex-start, center, 20px);
+  &__actions {
+    @include flex(flex-start, center, 1.25rem);
   }
   &__action {
-    font-size: 14px;
+    font-size: 0.875rem;
     color: $white;
     &:hover {
       color: rgba($white, 0.8);
@@ -676,28 +682,28 @@ async function onUpload(e: Event) {
 .assets__empty {
   flex: 1;
   color: $gray-100;
-  font-size: 14px;
-  padding: 40px 0;
+  font-size: 0.875rem;
+  padding: 2.5rem 0;
   text-align: center;
 }
 .assets__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 244px));
-  gap: 8px 16px;
+  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 15.25rem));
+  gap: 0.5rem 1rem;
   flex: 1; // 佔滿面板剩餘高度，讓分頁列貼齊底部
   align-content: flex-start; // 素材列靠上排列，不因多餘空間被拉開
   overflow-y: auto;
 }
 .asset {
   position: relative;
-  &.is-selected .asset__thumb {
+  &.isSelected .asset__thumb {
     outline: 2px solid $blue-dark-500;
     outline-offset: 2px;
   }
   &__check {
     position: absolute;
-    top: 10px;
-    left: 10px;
+    top: 0.625rem;
+    left: 0.625rem;
     z-index: 1;
     cursor: pointer;
     input {
@@ -707,17 +713,17 @@ async function onUpload(e: Event) {
       height: 0;
     }
   }
-  &__check-box {
+  &__checkBox {
     @include flex(center, center);
-    width: 18px;
-    height: 18px;
+    width: 1.125rem;
+    height: 1.125rem;
     border-radius: 4px;
     background: $white;
     border: 1px solid $gray;
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: $white;
   }
-  &.is-selected &__check-box {
+  &.isSelected &__checkBox {
     background: $blue-dark-500;
     border-color: $blue-dark-500;
   }
@@ -727,36 +733,36 @@ async function onUpload(e: Event) {
     background: #eef1f7;
     border-radius: 8px;
     color: $babyBlue;
-    font-size: 40px;
-    margin-bottom: 8px;
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
   }
   &__name {
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 500;
     color: $dark-blue-gray;
-    margin-bottom: 2px;
+    margin-bottom: 0.125rem;
   }
   &__meta {
-    @include flex(flex-start, center, 8px);
+    @include flex(flex-start, center, 0.5rem);
   }
   &__dim {
-    font-size: 12px;
+    font-size: 0.75rem;
     color: $gray-100;
   }
 }
 // ── 生成中（背景任務）卡片：對齊設計稿 ──
 .pending {
-  @include flex(center, center, 12px);
+  @include flex(center, center, 0.75rem);
   flex-direction: column;
   aspect-ratio: 244 / 152;
-  padding: 0 40px;
+  padding: 0 2.5rem;
   background: $blue-light; // 灰底 #eff2fa
   border-radius: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 0.5rem;
   &__play {
     @include flex(center, center);
-    width: 30px;
-    height: 22px;
+    width: 1.875rem;
+    height: 1.375rem;
     border-radius: 4px;
     background: $babyBlue; // #a5c8e6
     svg {
@@ -764,30 +770,30 @@ async function onUpload(e: Event) {
     }
   }
   &__pct {
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 500;
     color: $blue-dark-500; // #2e3567
   }
   &__bar {
     width: 100%;
-    height: 6px;
+    height: 0.375rem;
     border-radius: 3px;
     background: #dfe4f0; // 進度條軌道（灰底上的淺色）
     overflow: hidden;
   }
-  &__bar-fill {
+  &__barFill {
     height: 100%;
     border-radius: 3px;
     background: $blue-dark-500; // 深藍填色
     transition: width 0.3s;
   }
   &__eta {
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: #606692;
   }
 }
 .asset__pmeta {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: $gray-100; // #b4b9c4
 }
 .spin {
@@ -799,8 +805,8 @@ async function onUpload(e: Event) {
   }
 }
 .tag {
-  font-size: 13px;
-  padding: 2px 12px;
+  font-size: 0.8125rem;
+  padding: 0.125rem 0.75rem;
   border-radius: 16px;
   background: $white;
   border: 1px solid $gray;
@@ -816,21 +822,21 @@ async function onUpload(e: Event) {
 
 .pagination {
   @include flex(space-between, center);
-  margin-top: 12px;
+  margin-top: 0.75rem;
   &__total {
-    font-size: 14px;
+    font-size: 0.875rem;
     color: #606692;
   }
   &__pages {
-    @include flex(flex-start, center, 4px);
+    @include flex(flex-start, center, 0.25rem);
   }
   &__nav,
   &__page {
-    min-width: 28px;
-    height: 28px;
-    padding: 0 6px;
+    min-width: 1.75rem;
+    height: 1.75rem;
+    padding: 0 0.375rem;
     border-radius: 6px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: #606692;
     &:hover:not(:disabled) {
       background: $blue-light;
@@ -840,7 +846,7 @@ async function onUpload(e: Event) {
       cursor: not-allowed;
     }
     // 當前頁：無藍底、同色加粗、不可點（對齊設計稿）
-    &.is-active {
+    &.isActive {
       color: #606692;
       font-weight: 700;
       cursor: default;
@@ -849,8 +855,8 @@ async function onUpload(e: Event) {
   }
   &__ellipsis {
     color: $gray-100;
-    font-size: 13px;
-    padding: 0 4px;
+    font-size: 0.8125rem;
+    padding: 0 0.25rem;
   }
 }
 
@@ -860,158 +866,158 @@ async function onUpload(e: Event) {
   z-index: 1000;
   background: rgba(23, 30, 82, 0.45);
   @include flex(center, center);
-  padding: 24px;
+  padding: 1.5rem;
 }
 .modal__box {
-  width: 440px;
+  width: 27.5rem;
   max-width: 100%;
   max-height: 88vh;
   background: $white;
   border-radius: 16px;
-  padding: 22px 24px;
+  padding: 1.375rem 1.5rem;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
 }
 .modal__head {
   @include flex(space-between, center);
-  margin-bottom: 8px;
+  margin-bottom: 0.5rem;
 }
 .modal__title {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   color: $blue-dark-300;
 }
 .modal__close {
   color: $gray-400;
-  font-size: 20px;
+  font-size: 1.25rem;
 }
 .modal__desc {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: $gray-400;
-  margin-bottom: 14px;
+  margin-bottom: 0.875rem;
 }
 .modal__list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-height: 220px;
+  gap: 0.25rem;
+  max-height: 13.75rem;
   overflow-y: auto;
-  margin-bottom: 10px;
+  margin-bottom: 0.625rem;
 }
-.modal__list-item {
-  @include flex(flex-start, center, 8px);
-  padding: 10px 12px;
+.modal__listItem {
+  @include flex(flex-start, center, 0.5rem);
+  padding: 0.625rem 0.75rem;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: $blue-dark-300;
   cursor: pointer;
   &:hover {
     background: $blue-light;
   }
-  &.is-active {
+  &.isActive {
     background: $blue-light;
     font-weight: 700;
   }
 }
-.modal__list-name {
+.modal__listName {
   flex: 1;
   text-align: left;
 }
-.modal__list-count {
+.modal__listCount {
   color: $gray-100;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .modal__create {
-  @include flex(flex-start, center, 8px);
-  margin-bottom: 18px;
+  @include flex(flex-start, center, 0.5rem);
+  margin-bottom: 1.125rem;
 }
-.modal__create-input {
+.modal__createInput {
   flex: 1;
-  height: 40px;
+  height: 2.5rem;
   border: 1px solid $gray;
   border-radius: 999px;
-  padding: 0 16px;
-  font-size: 14px;
+  padding: 0 1rem;
+  font-size: 0.875rem;
   color: $blue-dark-300;
   outline: none;
   &:focus {
     border-color: $blue;
   }
 }
-.modal__create-btn {
-  height: 40px;
-  padding: 0 18px;
+.modal__createBtn {
+  height: 2.5rem;
+  padding: 0 1.125rem;
   border: 1px solid $gray;
   border-radius: 999px;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: $blue-dark-300;
   white-space: nowrap;
 }
 .modal__foot {
-  @include flex(flex-end, center, 10px);
+  @include flex(flex-end, center, 0.625rem);
 }
 .modal__preview {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 0.625rem;
+  margin-bottom: 0.875rem;
 }
-.modal__preview-thumb {
+.modal__previewThumb {
   @include flex(center, center);
   aspect-ratio: 4 / 3;
   background: $blue-light;
   border-radius: 8px;
   color: $babyBlue;
-  font-size: 22px;
-  margin-bottom: 6px;
+  font-size: 1.375rem;
+  margin-bottom: 0.375rem;
 }
-.modal__preview-name {
+.modal__previewName {
   display: block;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: $blue-dark-300;
 }
 .modal__checkline {
-  @include flex(flex-start, center, 8px);
-  font-size: 14px;
+  @include flex(flex-start, center, 0.5rem);
+  font-size: 0.875rem;
   color: $blue-dark-300;
-  margin-bottom: 18px;
+  margin-bottom: 1.125rem;
   cursor: pointer;
 }
 .modal__warn {
-  @include flex(flex-start, center, 10px); // 圖示上下置中（對齊設計稿）
+  @include flex(flex-start, center, 0.625rem); // 圖示上下置中（對齊設計稿）
   background: $blue-light;
   border-left: 3px solid #ff6148; // 左側橘紅長條
   border-radius: 8px;
-  padding: 12px 14px;
-  margin-bottom: 16px;
+  padding: 0.75rem 0.875rem;
+  margin-bottom: 1rem;
 }
-.modal__warn-icon {
-  width: 20px;
-  height: 20px;
+.modal__warnIcon {
+  width: 1.25rem;
+  height: 1.25rem;
   color: #ff6148; // 實心三角填色
   flex-shrink: 0;
 }
-.modal__warn-text {
+.modal__warnText {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
   strong {
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 500;
     color: $dark-blue-gray;
   }
   span {
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: #606692;
     line-height: 1.5;
   }
 }
 .modal__textbtn {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: $blue-dark-500;
-  padding: 8px 12px;
+  padding: 0.5rem 0.75rem;
   &--danger {
     color: $red;
     &:disabled {

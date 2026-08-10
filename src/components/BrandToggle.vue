@@ -1,76 +1,82 @@
 <template lang="pug">
-.brandtoggle(:class="{ 'is-on': modelValue }" @click="$emit('update:modelValue', !modelValue)")
-  span.brandtoggle__switch(:class="{ 'is-on': modelValue }")
+.brandtoggle(:class="{ 'isOn': enabled }" @click="toggle")
+  span.brandtoggle__switch(:class="{ 'isOn': enabled }")
     span.brandtoggle__knob
   .brandtoggle__col
-    span.brandtoggle__title 套用品牌設定
-    span.brandtoggle__sub {{ description }}
-  span.brandtoggle__edit(@click.stop="$emit('edit')") 編輯
+    span.brandtoggle__title {{ t('brandToggle.title') }}
+    span.brandtoggle__sub {{ resolvedDescription }}
+  span.brandtoggle__edit(@click.stop="emit('edit')") {{ t('common.edit') }}
 </template>
 
 <script setup lang="ts">
-withDefaults(defineProps<{ modelValue: boolean; description?: string }>(), {
-  description: '品牌色票・浮水印',
-})
-defineEmits<{ 'update:modelValue': [boolean]; edit: [] }>()
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const props = defineProps<{ description?: string }>()
+const emit = defineEmits<{ edit: [] }>()
+const enabled = defineModel<boolean>({ required: true })
+
+const { t } = useI18n()
+const resolvedDescription = computed(() => props.description ?? t('brandToggle.defaultDescription'))
+const toggle = () => (enabled.value = !enabled.value)
 </script>
 
 <style scoped lang="scss">
 .brandtoggle {
-  @include flex(flex-start, center, 10px);
+  @include flex(flex-start, center, 0.625rem);
   background: $white;
   border: 1px solid $gray;
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 0.625rem 0.75rem;
   width: 100%;
   cursor: pointer;
-  &.is-on {
+  &.isOn {
     background: $blue-light;
     border-color: transparent;
   }
   &__switch {
-    width: 32px;
-    height: 18px;
+    width: 2rem;
+    height: 1.125rem;
     border-radius: 9px;
     background: $gray;
     position: relative;
     flex-shrink: 0;
     transition: background 0.15s;
-    &.is-on {
+    &.isOn {
       background: $blue-dark-500;
     }
   }
   &__knob {
     position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 14px;
-    height: 14px;
+    top: 0.125rem;
+    left: 0.125rem;
+    width: 0.875rem;
+    height: 0.875rem;
     border-radius: 50%;
     background: $white;
     transition: transform 0.15s;
   }
-  &__switch.is-on &__knob {
-    transform: translateX(14px);
+  &__switch.isOn &__knob {
+    transform: translateX(0.875rem);
   }
   &__col {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0.125rem;
     min-width: 0;
   }
   &__title {
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 500;
     color: #606692;
   }
   &__sub {
-    font-size: 12px;
+    font-size: 0.75rem;
     color: $gray-100;
   }
   &__edit {
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 500;
     color: $blue-dark-500;
     flex-shrink: 0;

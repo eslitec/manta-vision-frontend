@@ -1,5 +1,5 @@
 <template lang="pug">
-button.chip-btn(:class="`chip-btn--${variant}`")
+button.chipBtn(:class="`chipBtn--${variant}`")
   slot
 </template>
 
@@ -8,11 +8,11 @@ withDefaults(defineProps<{ variant?: 'dark' | 'plain' }>(), { variant: 'dark' })
 </script>
 
 <style scoped lang="scss">
-.chip-btn {
-  @include flex(center, center, 6px);
-  padding: 9px 16px;
+.chipBtn {
+  @include flex(center, center, 0.375rem);
+  padding: 0.5625rem 1rem;
   border-radius: 18px;
-  font-size: 14px;
+  font-size: 0.875rem;
   box-shadow: $btnBoxShadow;
   &--dark {
     background: $blue-dark-500;

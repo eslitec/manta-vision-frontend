@@ -1,7 +1,7 @@
 <template lang="pug">
 .brand(v-if="profile")
   header.brand__head
-    h1.brand__h1 品牌資訊維護
+    h1.brand__title 品牌資訊維護
     p.brand__sub 維護此機器人的品牌描述與詞文素材。
     p.brand__note
       i.ti.ti-info-circle
@@ -199,7 +199,7 @@ async function onSave() {
 <style scoped lang="scss">
 .brand { max-width: 680px; }
 .brand__head { margin-bottom: 20px; }
-.brand__h1 { font-size: 24px; font-weight: 800; color: $blue-dark-300; }
+.brand__title { font-size: 24px; font-weight: 800; color: $blue-dark-300; }
 .brand__sub { font-size: 14px; color: $gray-400; margin-top: 4px; }
 .brand__note { @include flex(flex-start, center, 8px); margin-top: 12px; padding: 10px 14px; background: $blue-light; border-radius: 10px; font-size: 13px; color: $blue-dark-300;
   i { font-size: 16px; color: $blue; flex-shrink: 0; } }

@@ -11,7 +11,13 @@ interface RGB {
 }
 
 function toHex({ r, g, b }: RGB): string {
-  return '#' + [r, g, b].map((x) => Math.round(x).toString(16).padStart(2, '0')).join('').toUpperCase()
+  return (
+    '#' +
+    [r, g, b]
+      .map((x) => Math.round(x).toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase()
+  )
 }
 
 function dist(a: RGB, b: RGB): number {
