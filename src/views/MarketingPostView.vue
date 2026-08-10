@@ -16,7 +16,11 @@
       .insp
         button.insp__pill(@click="inspOpen = !inspOpen") 探索靈感素材
         span.insp__hint 依商品類別給文案風格參考
-    BrandToggle.post__brand(v-model="applyBrand" @edit="goBrandSettings")
+    BrandToggle.post__brand(
+      v-model="applyBrand"
+      description="品牌色票・浮水印・文案語氣"
+      @edit="goBrandSettings"
+    )
     .step
       .step__title 3. 輸出比例
       .ratios

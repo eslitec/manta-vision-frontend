@@ -35,4 +35,6 @@
 
 ## Open Questions
 
+- **2026-08-10 首屏校正：** 共用 `.content__inner` 與素材面板改為可收縮的固定高度 flex 子項，格線只在內容真的超出時負責內部捲動；面板垂直 padding、列距、提示／頁籤下方間距與分頁上方間距略為縮減，素材欄寬上限固定為 Figma 的 244px，目標是在 1366×940 首屏完整保留 8 張素材與分頁列，而不改動 128／8 筆或資料夾名稱等 mock data。
+
 - 非同步生成進度卡（圖庫格線內的進度條＋頂部「任務」徽章數字）要怎麼安排：獨立開一個新的 change（可能要同時涵蓋 `home-workbench-ui` 與 `library-management-ui` 兩個 capability），還是等 `sync-mv-01-design` 其他部分收尾後再併進來？這會影響「任務」的狀態資料要放在哪一層（例如新增一個共用的 `useTasks` composable）。

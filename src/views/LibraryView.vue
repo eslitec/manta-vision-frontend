@@ -384,6 +384,7 @@ async function onUpload(e: Event) {
 
 <style scoped lang="scss">
 .library {
+  height: 100%;
   min-height: 100%;
   display: flex;
   flex-direction: column;
@@ -391,7 +392,7 @@ async function onUpload(e: Event) {
     @include flex(flex-start, center, 8px);
     color: $gray-400;
     font-size: 14px;
-    margin-bottom: 16px;
+    margin-bottom: 8px;
   }
   &__note-dot {
     width: 8px;
@@ -413,7 +414,7 @@ async function onUpload(e: Event) {
 }
 .tabs {
   @include flex(flex-start, center, 8px);
-  margin-bottom: 18px;
+  margin-bottom: 10px;
 }
 .tabs__item {
   @include flex(center, center);
@@ -526,10 +527,11 @@ async function onUpload(e: Event) {
 .assets {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   background: $white;
   border-radius: 10px;
   box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2);
-  padding: 24px;
+  padding: 16px 24px;
   display: flex;
   flex-direction: column;
 }
@@ -680,8 +682,8 @@ async function onUpload(e: Event) {
 }
 .assets__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 244px));
+  gap: 8px 16px;
   flex: 1; // 佔滿面板剩餘高度，讓分頁列貼齊底部
   align-content: flex-start; // 素材列靠上排列，不因多餘空間被拉開
   overflow-y: auto;
@@ -732,7 +734,7 @@ async function onUpload(e: Event) {
     font-size: 14px;
     font-weight: 500;
     color: $dark-blue-gray;
-    margin-bottom: 5px;
+    margin-bottom: 2px;
   }
   &__meta {
     @include flex(flex-start, center, 8px);
@@ -798,7 +800,7 @@ async function onUpload(e: Event) {
 }
 .tag {
   font-size: 13px;
-  padding: 3px 12px;
+  padding: 2px 12px;
   border-radius: 16px;
   background: $white;
   border: 1px solid $gray;
@@ -814,7 +816,7 @@ async function onUpload(e: Event) {
 
 .pagination {
   @include flex(space-between, center);
-  margin-top: 20px;
+  margin-top: 12px;
   &__total {
     font-size: 14px;
     color: #606692;

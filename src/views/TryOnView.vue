@@ -155,7 +155,7 @@ const showConsent = ref(false)
 const generating = ref(false)
 const done = ref(false)
 const errorMsg = ref('')
-const applyBrand = ref(true)
+const applyBrand = ref(false)
 const savedId = ref('')
 
 onMounted(() => {

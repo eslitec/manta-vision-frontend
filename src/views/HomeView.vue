@@ -141,7 +141,7 @@ const genTools = [
   background: $white;
   border-radius: 10px;
   box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2);
-  margin-top: 22px;
+  margin-top: 16px;
   padding: 20px;
   @include below($bp-md) {
     flex-direction: column;
@@ -166,6 +166,7 @@ const genTools = [
       &::before {
         content: '';
         position: absolute;
+        left: -24px;
         top: 50%;
         transform: translateY(-50%);
         height: 40px;

@@ -4,12 +4,14 @@
     span.brandtoggle__knob
   .brandtoggle__col
     span.brandtoggle__title 套用品牌設定
-    span.brandtoggle__sub 品牌色票・浮水印
+    span.brandtoggle__sub {{ description }}
   span.brandtoggle__edit(@click.stop="$emit('edit')") 編輯
 </template>
 
 <script setup lang="ts">
-defineProps<{ modelValue: boolean }>()
+withDefaults(defineProps<{ modelValue: boolean; description?: string }>(), {
+  description: '品牌色票・浮水印',
+})
 defineEmits<{ 'update:modelValue': [boolean]; edit: [] }>()
 </script>
 

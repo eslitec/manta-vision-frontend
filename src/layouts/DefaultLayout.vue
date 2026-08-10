@@ -121,7 +121,7 @@ const navItems = [
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: $babyBlue;
+    background: #606692;
     flex-shrink: 0;
   }
   &__brand-text {
@@ -233,7 +233,7 @@ const navItems = [
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: $gray;
+    background: #606692;
   }
   &__tasks {
     @include flex(flex-start, center, 6px);
@@ -281,6 +281,7 @@ const navItems = [
 .content__inner {
   width: 100%;
   flex: 1;
+  min-height: 0;
 }
 
 // ── RWD：手機側邊欄抽屜（<768px）──

@@ -29,7 +29,6 @@
             span.modelcard__badge ×{{ t.multiplier }}
           span.modelcard__cost {{ 45 * t.multiplier }} 顆／支
           span.modelcard__desc {{ VIDEO_DESC[t.key] }}
-    BrandToggle.video__brand(v-model="applyBrand" @edit="goBrandSettings")
     .video__sticky
       p.warn
         i.ti.ti-alert-triangle
@@ -88,7 +87,6 @@ import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import ConfirmGenerateDialog from '@/components/ConfirmGenerateDialog.vue'
 import PrimaryButton from '@/components/PrimaryButton.vue'
 import OutlineButton from '@/components/OutlineButton.vue'
-import BrandToggle from '@/components/BrandToggle.vue'
 import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
 import { isInsufficientFeed } from '@/utils/error'
@@ -115,9 +113,6 @@ const VIDEO_DESC: Record<VideoModelTier, string> = {
   pro: '10 秒・最高',
 }
 const modelTier = ref<VideoModelTier>('standard')
-const applyBrand = ref(true)
-const goBrandSettings = () => router.push('/settings')
-
 const estCost = computed(() => {
   const t = modelTiers.find((x) => x.key === modelTier.value)
   return 45 * (t ? t.multiplier : 1)
@@ -371,9 +366,6 @@ function goLibrary() {
       color: $white;
     }
   }
-}
-.video__brand {
-  margin: 4px 0 16px;
 }
 .warn {
   @include flex(flex-start, center, 10px);
