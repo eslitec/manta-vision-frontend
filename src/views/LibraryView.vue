@@ -66,12 +66,16 @@
       .assets__empty(v-if="!filtered.length && !pendingTasks.length") 沒有符合的素材
       .assets__grid(v-else)
         .asset.asset--pending(v-for="t in pendingTasks" :key="t.id")
-          .asset__thumb.asset__thumb--pending
-            i.ti.ti-loader.spin
+          .pending
+            span.pending__play
+              svg(viewBox="0 0 24 24" width="13" height="13")
+                path(d="M8 5v14l11-7z" fill="white")
+            span.pending__pct {{ t.status === 'queued' ? '排隊中…' : '生成中 ' + t.progress + '%' }}
+            .pending__bar
+              .pending__bar-fill(:style="{ width: t.progress + '%' }")
+            span.pending__eta(v-if="t.status !== 'queued'") {{ etaText(t.progress) }}
           .asset__name {{ t.name }}
-          .asset__progress
-            .asset__progress-fill(:style="{ width: t.progress + '%' }")
-          span.asset__eta {{ t.status === 'queued' ? '排隊中…' : '生成中…約 1–2 分鐘' }}
+          .asset__pmeta 影片 · {{ t.videoReq?.ratio || '9:16' }} · 完成後自動入庫
         .asset(v-for="a in paged" :key="a.id" :class="{ 'is-selected': selectedIds.has(a.id) }")
           label.asset__check
             input(type="checkbox" :checked="selectedIds.has(a.id)" @change="toggleSelect(a.id)")
@@ -86,11 +90,11 @@
 
       .pagination(v-if="filtered.length")
         span.pagination__total 共 {{ filtered.length }} 筆素材
-        .pagination__pages(v-if="totalPages > 1")
+        .pagination__pages
           button.pagination__nav(:disabled="page === 1" @click="page = page - 1") ‹
           template(v-for="(p, i) in pageItems" :key="i")
             span.pagination__ellipsis(v-if="p === '…'") …
-            button.pagination__page(v-else :class="{ 'is-active': p === page }" @click="page = p") {{ p }}
+            button.pagination__page(v-else :class="{ 'is-active': p === page }" :disabled="p === page" @click="page = p") {{ p }}
           button.pagination__nav(:disabled="page === totalPages" @click="page = page + 1") ›
 
   ImagePickerDialog(
@@ -133,7 +137,7 @@
               i.ti(:class="a.type === 'video' ? 'ti-player-play' : 'ti-photo'")
             span.modal__preview-name {{ a.name }}
         .modal__warn(v-if="referencedCount > 0")
-          i.ti.ti-alert-triangle.modal__warn-icon
+          IconAlertTriangleFilled.modal__warn-icon
           .modal__warn-text
             strong 其中 {{ referencedCount }} 筆已被生成結果引用
             span 刪除後，引用它們的生成紀錄將無法回溯原始素材。此操作無法復原。
@@ -153,6 +157,7 @@ import { useGenerationTasksStore } from '@/stores/generationTasks'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import OutlineButton from '@/components/OutlineButton.vue'
 import DialogButton from '@/components/DialogButton.vue'
+import IconAlertTriangleFilled from '@/components/icons/IconAlertTriangleFilled.vue'
 import { CATEGORY_TAGS, type Asset, type AssetTag } from '@/types/asset'
 
 const { assets, folders, load, loadFolders, addFolder, addToFolder, removeFromFolder, deleteAssets, upload } =
@@ -169,6 +174,14 @@ const pendingTasks = computed(() =>
 )
 
 const categoryTags = CATEGORY_TAGS
+
+// 生成中卡片的剩餘時間：後端未提供 eta，依進度以約 2 分鐘估算（僅顯示用）
+function etaText(progress: number) {
+  const remain = Math.max(5, Math.round(((100 - progress) / 100) * 120))
+  const m = Math.floor(remain / 60)
+  const s = remain % 60
+  return m > 0 ? `約剩 ${m} 分 ${s} 秒` : `約剩 ${s} 秒`
+}
 
 // 左側主要篩選：全部素材／系統分類（依 tag）／我的資料夾（使用者自訂），三者互斥、單選
 type ActiveView = { kind: 'all' } | { kind: 'category'; tag: AssetTag } | { kind: 'folder'; name: string }
@@ -371,6 +384,9 @@ async function onUpload(e: Event) {
 
 <style scoped lang="scss">
 .library {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
   &__note {
     @include flex(flex-start, center, 8px);
     color: $gray-400;
@@ -386,8 +402,13 @@ async function onUpload(e: Event) {
   }
   &__body {
     display: flex;
-    align-items: flex-start;
+    align-items: stretch; // 左右面板等高
     gap: 16px;
+    flex: 1; // 撐滿剩餘高度，白色面板接近底部
+    min-height: 0;
+    @include below($bp-lg) {
+      flex-direction: column;
+    }
   }
 }
 .tabs {
@@ -404,9 +425,9 @@ async function onUpload(e: Event) {
   background: $white;
   border: 1px solid $gray;
   &.is-active {
-    background: $blue-dark-300;
+    background: $blue-dark-500;
     color: $white;
-    border-color: $blue-dark-300;
+    border-color: $blue-dark-500;
   }
 }
 .folders {
@@ -415,7 +436,12 @@ async function onUpload(e: Event) {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  @include below($bp-lg) {
+    width: 100%;
+  }
   background: $white;
+  border-radius: 10px;
+  box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2);
   padding: 16px;
   &__section {
     @include flex(space-between, center);
@@ -428,30 +454,31 @@ async function onUpload(e: Event) {
     width: 18px;
     height: 18px;
     border-radius: 4px;
-    color: $gray-400;
+    color: $blue-dark-500;
     font-size: 14px;
     line-height: 1;
     &:hover {
       background: $blue-light;
-      color: $blue-dark-300;
+      color: $blue-dark-500;
     }
   }
   &__item {
     @include flex(flex-start, center, 8px);
     text-align: left;
-    padding: 9px 12px;
+    height: 36px;
+    padding: 0 10px;
     border-radius: 8px;
     font-size: 14px;
-    color: $gray-400;
+    color: $dark-blue-gray;
     &:hover {
       background: $blue-light;
     }
     &.is-active {
       background: #eef1f7;
-      color: $blue-dark-300;
-      font-weight: 600;
-      border: 1.5px dashed $blue-dark-300;
-      padding: 7.5px 10.5px;
+      color: $blue-dark-500;
+      font-weight: 500;
+      border: 1.5px dashed $blue-dark-500;
+      padding: 0 8.5px;
     }
     > span:first-child,
     &--folder &-name {
@@ -472,7 +499,7 @@ async function onUpload(e: Event) {
   }
   &.is-active &__count,
   &__item.is-active &__count {
-    color: $blue-dark-300;
+    color: $blue-dark-500;
   }
   &__new {
     margin-top: 4px;
@@ -485,12 +512,12 @@ async function onUpload(e: Event) {
     border-radius: 8px;
     padding: 0 10px;
     font-size: 14px;
-    color: $blue-dark-300;
+    color: $blue-dark-500;
     outline: none;
   }
   &__hint {
     color: $gray-100;
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.5;
     margin-top: 12px;
     padding: 0 12px;
@@ -500,11 +527,31 @@ async function onUpload(e: Event) {
   flex: 1;
   min-width: 0;
   background: $white;
+  border-radius: 10px;
+  box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2);
   padding: 24px;
+  display: flex;
+  flex-direction: column;
 }
 .assets__toolbar {
   @include flex(flex-start, center, 12px);
   margin-bottom: 16px;
+  @include below($bp-md) {
+    flex-wrap: wrap;
+    .search {
+      flex: 1 0 100%;
+      max-width: none;
+    }
+    .assets__actions {
+      flex: 1 0 100%;
+    }
+    .assets__actions > * {
+      flex: 1;
+    }
+    .upload {
+      width: 100%;
+    }
+  }
 }
 .assets__actions {
   @include flex(flex-start, center, 12px);
@@ -526,10 +573,10 @@ async function onUpload(e: Event) {
     width: 100%;
     height: 32px;
     border: 1px solid $gray;
-    border-radius: 999px;
+    border-radius: 18px;
     padding: 0 14px 0 34px;
     font-size: 14px;
-    color: $blue-dark-300;
+    color: $blue-dark-500;
     outline: none;
     &:focus {
       border-color: $blue;
@@ -540,34 +587,34 @@ async function onUpload(e: Event) {
   @include flex(flex-start, center, 8px);
   flex-shrink: 0;
   &__label {
-    font-size: 13px;
-    color: $gray-400;
+    font-size: 14px;
+    color: #606692;
     margin-right: 2px;
     white-space: nowrap;
   }
 }
 .chip {
-  padding: 5px 12px;
-  border-radius: 999px;
+  padding: 3px 12px;
+  border-radius: 16px;
   font-size: 13px;
-  color: $gray-400;
+  color: #606692;
   border: 1px solid $gray;
   background: $white;
   white-space: nowrap;
   flex-shrink: 0;
   &.is-active {
-    background: $blue-dark-300;
+    background: $blue-dark-500;
     color: $white;
-    border-color: $blue-dark-300;
+    border-color: $blue-dark-500;
   }
 }
 .upload {
   @include flex(center, center, 6px);
   background: $blue-dark-500;
   color: $white;
-  font-weight: 600;
-  padding: 9px 16px;
-  border-radius: 18px;
+  font-weight: 500;
+  padding: 9px 14px;
+  border-radius: 16px;
   font-size: 14px;
   white-space: nowrap;
   cursor: pointer;
@@ -578,7 +625,7 @@ async function onUpload(e: Event) {
 
 .batchbar {
   @include flex(space-between, center);
-  background: $blue-dark-300;
+  background: $blue-dark-500;
   color: $white;
   border-radius: 10px;
   padding: 12px 16px;
@@ -625,6 +672,7 @@ async function onUpload(e: Event) {
 }
 
 .assets__empty {
+  flex: 1;
   color: $gray-100;
   font-size: 14px;
   padding: 40px 0;
@@ -634,11 +682,14 @@ async function onUpload(e: Event) {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 16px;
+  flex: 1; // 佔滿面板剩餘高度，讓分頁列貼齊底部
+  align-content: flex-start; // 素材列靠上排列，不因多餘空間被拉開
+  overflow-y: auto;
 }
 .asset {
   position: relative;
   &.is-selected .asset__thumb {
-    outline: 2px solid $blue-dark-300;
+    outline: 2px solid $blue-dark-500;
     outline-offset: 2px;
   }
   &__check {
@@ -656,30 +707,31 @@ async function onUpload(e: Event) {
   }
   &__check-box {
     @include flex(center, center);
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     border-radius: 4px;
     background: $white;
     border: 1px solid $gray;
-    font-size: 12px;
+    font-size: 11px;
     color: $white;
   }
   &.is-selected &__check-box {
-    background: $blue-dark-300;
-    border-color: $blue-dark-300;
+    background: $blue-dark-500;
+    border-color: $blue-dark-500;
   }
   &__thumb {
     @include flex(center, center);
-    aspect-ratio: 4 / 3;
-    background: $blue-light;
-    border-radius: 10px;
+    aspect-ratio: 244 / 152;
+    background: #eef1f7;
+    border-radius: 8px;
     color: $babyBlue;
-    font-size: 30px;
+    font-size: 40px;
     margin-bottom: 8px;
   }
   &__name {
     font-size: 14px;
-    color: $blue-dark-300;
+    font-weight: 500;
+    color: $dark-blue-gray;
     margin-bottom: 5px;
   }
   &__meta {
@@ -690,27 +742,51 @@ async function onUpload(e: Event) {
     color: $gray-100;
   }
 }
-.asset--pending {
-  .asset__thumb--pending {
-    color: $blue;
+// ── 生成中（背景任務）卡片：對齊設計稿 ──
+.pending {
+  @include flex(center, center, 12px);
+  flex-direction: column;
+  aspect-ratio: 244 / 152;
+  padding: 0 40px;
+  background: $blue-light; // 灰底 #eff2fa
+  border-radius: 8px;
+  margin-bottom: 8px;
+  &__play {
+    @include flex(center, center);
+    width: 30px;
+    height: 22px;
+    border-radius: 4px;
+    background: $babyBlue; // #a5c8e6
+    svg {
+      display: block;
+    }
   }
-}
-.asset__progress {
-  height: 4px;
-  background: $lightGray;
-  border-radius: 999px;
-  margin-bottom: 5px;
-  overflow: hidden;
-  &-fill {
+  &__pct {
+    font-size: 14px;
+    font-weight: 500;
+    color: $blue-dark-500; // #2e3567
+  }
+  &__bar {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: #dfe4f0; // 進度條軌道（灰底上的淺色）
+    overflow: hidden;
+  }
+  &__bar-fill {
     height: 100%;
-    background: $blue;
-    border-radius: 999px;
+    border-radius: 3px;
+    background: $blue-dark-500; // 深藍填色
     transition: width 0.3s;
   }
+  &__eta {
+    font-size: 13px;
+    color: #606692;
+  }
 }
-.asset__eta {
-  font-size: 12px;
-  color: $gray-100;
+.asset__pmeta {
+  font-size: 13px;
+  color: $gray-100; // #b4b9c4
 }
 .spin {
   animation: spin 1s linear infinite;
@@ -721,29 +797,18 @@ async function onUpload(e: Event) {
   }
 }
 .tag {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-weight: 500;
-  &--upload {
-    background: #e6f1fb;
-    color: #185fa5;
-  }
-  &--object {
-    background: #eeedfe;
-    color: #534ab7;
-  }
+  font-size: 13px;
+  padding: 3px 12px;
+  border-radius: 16px;
+  background: $white;
+  border: 1px solid $gray;
+  color: #606692;
+  white-space: nowrap;
+  // AI 生成來源標籤：暖黃底、無邊框（對齊設計稿）
   &--ai {
-    background: #faeeda;
-    color: #854f0b;
-  }
-  &--edit {
-    background: #eaf3de;
-    color: #3b6d11;
-  }
-  &--video {
-    background: #fbeaf0;
-    color: #993556;
+    background: #f6eac1;
+    border-color: transparent;
+    color: $dark-blue-gray;
   }
 }
 
@@ -751,7 +816,7 @@ async function onUpload(e: Event) {
   @include flex(space-between, center);
   margin-top: 20px;
   &__total {
-    font-size: 13px;
+    font-size: 14px;
     color: #606692;
   }
   &__pages {
@@ -772,9 +837,12 @@ async function onUpload(e: Event) {
       color: $gray;
       cursor: not-allowed;
     }
+    // 當前頁：無藍底、同色加粗、不可點（對齊設計稿）
     &.is-active {
-      background: $blue-dark-300;
-      color: $white;
+      color: #606692;
+      font-weight: 700;
+      cursor: default;
+      background: none;
     }
   }
   &__ellipsis {
@@ -909,30 +977,31 @@ async function onUpload(e: Event) {
   cursor: pointer;
 }
 .modal__warn {
-  @include flex(flex-start, flex-start, 10px);
+  @include flex(flex-start, center, 10px); // 圖示上下置中（對齊設計稿）
   background: $blue-light;
-  border-radius: 10px;
+  border-left: 3px solid #ff6148; // 左側橘紅長條
+  border-radius: 8px;
   padding: 12px 14px;
   margin-bottom: 16px;
 }
 .modal__warn-icon {
-  color: $orange;
-  font-size: 18px;
+  width: 20px;
+  height: 20px;
+  color: #ff6148; // 實心三角填色
   flex-shrink: 0;
-  margin-top: 1px;
 }
 .modal__warn-text {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   strong {
-    font-size: 13px;
-    font-weight: 700;
-    color: $blue-dark-300;
+    font-size: 14px;
+    font-weight: 500;
+    color: $dark-blue-gray;
   }
   span {
-    font-size: 12px;
-    color: $gray-400;
+    font-size: 13px;
+    color: #606692;
     line-height: 1.5;
   }
 }

@@ -41,3 +41,8 @@ $dark-slate-blue: #171e52;
 $golden: #f2bb00;
 $slate-grey: #606472;
 $bodyPadding: 1.25rem 1.5rem;
+
+// ── RWD 斷點 ──
+$bp-lg: 1024px; // 以下：雙欄頁收成單欄
+$bp-md: 768px; // 以下：側邊欄收成抽屜、統計卡遞減
+$bp-sm: 560px; // 以下：手機單欄

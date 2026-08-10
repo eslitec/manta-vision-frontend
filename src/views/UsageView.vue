@@ -84,13 +84,16 @@ onMounted(async () => {
 .tabs__item { padding: 7px 16px; border-radius: 999px; font-size: 14px; color: $gray-400; background: $white; border: 1px solid $gray;
   &.is-active { background: $blue-dark-300; color: $white; border-color: $blue-dark-300; } }
 .usage__note { font-size: 13px; color: $gray-400; margin-bottom: 16px; }
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px;
+  @include below($bp-lg) { grid-template-columns: repeat(2, 1fr); }
+  @include below($bp-sm) { grid-template-columns: 1fr; } }
 .stat { @include card; padding: 18px 20px;
   &__num { font-size: 24px; font-weight: 800; color: $blue-dark-300; small { font-size: 13px; font-weight: 500; color: $gray-400; margin-left: 4px; }
     &.is-ok { color: $green; } &.is-warn { color: $orange; } }
   &__label { font-size: 13px; color: $gray-400; margin-top: 4px; } }
 .warn { @include flex(flex-start, center, 8px); background: #FAEEDA; color: #854F0B; border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px; }
-.panels { display: grid; grid-template-columns: 1fr 320px; gap: 16px; }
+.panels { display: grid; grid-template-columns: 1fr 320px; gap: 16px;
+  @include below($bp-lg) { grid-template-columns: 1fr; } }
 .panel { @include card; padding: 20px; }
 .panel__title { font-size: 15px; font-weight: 700; color: $blue-dark-300; margin-bottom: 16px; }
 .bars { @include flex(space-between, flex-end, 6px); height: 200px; }
@@ -101,7 +104,8 @@ onMounted(async () => {
   &__label { font-size: 14px; color: $blue-dark-300; } &__val { font-size: 14px; font-weight: 700; }
   &__track { height: 8px; background: $lightGray; border-radius: 999px; overflow: hidden; } &__fill { height: 100%; border-radius: 999px; } }
 .usage__foot { @include flex(flex-end, center); margin-top: 16px; }
-.metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
+  @include below($bp-sm) { grid-template-columns: 1fr; } }
 .metric { @include card; padding: 20px 22px;
   &__label { font-size: 14px; color: $gray-400; }
   &__value { font-size: 30px; font-weight: 800; color: $blue-dark-300; margin: 6px 0; &.is-ok { color: $green; } }

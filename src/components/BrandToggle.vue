@@ -1,5 +1,5 @@
 <template lang="pug">
-.brandtoggle(@click="$emit('update:modelValue', !modelValue)")
+.brandtoggle(:class="{ 'is-on': modelValue }" @click="$emit('update:modelValue', !modelValue)")
   span.brandtoggle__switch(:class="{ 'is-on': modelValue }")
     span.brandtoggle__knob
   .brandtoggle__col
@@ -16,11 +16,16 @@ defineEmits<{ 'update:modelValue': [boolean]; edit: [] }>()
 <style scoped lang="scss">
 .brandtoggle {
   @include flex(flex-start, center, 10px);
-  background: $blue-light;
+  background: $white;
+  border: 1px solid $gray;
   border-radius: 8px;
   padding: 10px 12px;
   width: 100%;
   cursor: pointer;
+  &.is-on {
+    background: $blue-light;
+    border-color: transparent;
+  }
   &__switch {
     width: 32px;
     height: 18px;
@@ -56,7 +61,7 @@ defineEmits<{ 'update:modelValue': [boolean]; edit: [] }>()
   &__title {
     font-size: 14px;
     font-weight: 500;
-    color: $dark-blue-gray;
+    color: #606692;
   }
   &__sub {
     font-size: 12px;

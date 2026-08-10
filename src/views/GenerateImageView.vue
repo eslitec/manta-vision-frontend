@@ -58,7 +58,9 @@
     .genimg__footer
       .cost
         .cost__label 預估消耗
-        .cost__value {{ estCost }} 顆飼料
+        .cost__value
+          IconFeedBottleSmall.cost__icon
+          span {{ estCost }} 顆飼料
       PrimaryButton(:disabled="generating || !prompt" @click="generate")
         i.ti(:class="generating ? 'ti-loader spin' : 'ti-plus'")
         span {{ generating ? '生成中…' : '生成圖片' }}
@@ -74,9 +76,9 @@
           span.result__badge(v-if="r.adopted") 已選用
           i.ti.ti-photo
         .result__actions
-          OutlineButton(@click="saveToLib(r)") {{ r.savedAssetId ? '已存入' : '存入圖庫' }}
-          button.linkbtn(@click="download(r)") 下載
-          button.linkbtn(@click="regen(r)") 重生成
+          PrimaryButton(@click="saveToLib(r)") {{ r.savedAssetId ? '已存入' : '存入圖庫' }}
+          ChipButton(variant="plain" @click="download(r)") 下載
+          ChipButton(variant="plain" @click="regen(r)") 重生成
 
   ImagePickerDialog(v-model:open="pickerOpen" title="從圖庫選擇參考圖" @select="onPickReference")
 </template>
@@ -86,8 +88,9 @@ import { computed, onMounted, ref } from 'vue'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import PrimaryButton from '@/components/PrimaryButton.vue'
 import GhostButton from '@/components/GhostButton.vue'
-import OutlineButton from '@/components/OutlineButton.vue'
+import ChipButton from '@/components/ChipButton.vue'
 import BrandToggle from '@/components/BrandToggle.vue'
+import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
 import { useRouter } from 'vue-router'
 import { useFeedStore } from '@/stores/feed'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
@@ -205,30 +208,32 @@ const goBrandSettings = () => router.push('/settings')
 </script>
 
 <style scoped lang="scss">
-.genimg { display: grid; grid-template-columns: 400px 1fr; gap: 16px; align-items: start; }
-.panel { @include card; padding: 24px; }
-.step { margin-bottom: 22px;
-  &__title { font-size: 15px; font-weight: 700; color: $blue-dark-300; margin-bottom: 12px; } }
+.genimg { display: grid; grid-template-columns: 400px 1fr; gap: 16px; align-items: stretch; min-height: 100%;
+  @include below($bp-lg) { grid-template-columns: 1fr; } }
+.panel { background: $white; border-radius: 10px; box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2); padding: 24px; }
+.genimg__input { display: flex; flex-direction: column; }
+.step { margin-bottom: 16px;
+  &__title { font-size: 16px; font-weight: 700; color: $dark-blue-gray; margin-bottom: 12px; } }
 .modelselect {
   width: 100%; height: 40px; border: 1px solid $gray; border-radius: 10px; padding: 0 12px;
   font-size: 14px; font-family: inherit; color: $blue-dark-300; background: $white; cursor: pointer; outline: none;
   &:focus { border-color: $blue; } }
 .dropzone {
   @include flex(center, center); flex-direction: column;
-  aspect-ratio: 4 / 3; border: 1.5px dashed $gray; border-radius: 10px;
-  background: $blue-light; color: $babyBlue; font-size: 34px; margin-bottom: 12px;
+  aspect-ratio: 352 / 100; border-radius: 8px;
+  background: #eef1f7; color: $babyBlue; font-size: 34px; margin-bottom: 12px;
   &__name { font-size: 13px; color: $gray-400; margin-top: 8px; }
   &__actions { @include flex(flex-start, center, 12px); }
-  &__hint { font-size: 12px; color: $gray-100; } }
+  &__hint { font-size: 12px; color: #b4b9c4; } }
 .textarea {
-  width: 100%; border: 1px solid $gray; border-radius: 10px; padding: 12px 14px;
-  font-size: 14px; font-family: inherit; color: $blue-dark-300; resize: vertical; outline: none;
-  &::placeholder { color: $gray-100; } &:focus { border-color: $blue; } }
+  width: 100%; border: none; border-radius: 8px; padding: 12px 14px;
+  font-size: 14px; font-family: inherit; color: $blue-dark-300; resize: vertical; outline: none; background: $blue-light;
+  &::placeholder { color: #b4b9c4; } }
 .assist { @include flex(flex-start, center, 10px); margin: 12px 0 16px;
-  &__btn { @include flex(center, center, 6px); background: $tagYellow; color: #854F0B; font-weight: 600; padding: 5px 12px; border-radius: 999px; font-size: 13px;
+  &__btn { @include flex(center, center, 6px); background: #f6eac1; color: $dark-blue-gray; padding: 3px 12px; border-radius: 16px; font-size: 13px;
     &:disabled { opacity: .45; cursor: not-allowed; } }
-  &__hint { font-size: 12px; color: $gray-100; } }
-.advanced { @include flex(space-between, center); width: 100%; border: 1px solid $gray; border-radius: 10px; padding: 11px 14px; font-size: 14px; color: $gray-400; margin-bottom: 12px; }
+  &__hint { font-size: 12px; color: #b4b9c4; } }
+.advanced { @include flex(space-between, center); width: 100%; border: none; border-radius: 8px; padding: 0 12px; height: 24px; font-size: 14px; color: $dark-blue-gray; margin-bottom: 12px; background: $blue-light; }
 .adv { border: 1px solid $gray; border-radius: 10px; padding: 14px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 14px;
   &__row { display: flex; flex-direction: column; gap: 6px; }
   &__label { @include flex(space-between, center); font-size: 13px; color: $blue-dark-300; }
@@ -237,30 +242,35 @@ const goBrandSettings = () => router.push('/settings')
   &__hint { font-size: 12px; color: $gray-100; }
   &__input { width: 100%; border: 1px solid $gray; border-radius: 8px; padding: 8px 12px; font-size: 13px; font-family: inherit; color: $blue-dark-300; outline: none;
     &:focus { border-color: $blue; } &::placeholder { color: $gray-100; } } }
-.count { @include flex(flex-start, center, 10px);
-  &__label { font-size: 14px; color: $blue-dark-300; }
-  &__pill { padding: 5px 14px; border-radius: 999px; font-size: 13px; border: 1px solid $gray; background: $white; color: $gray-400;
-    &.is-active { background: $blue-light; color: $blue-dark-300; border-color: $babyBlue; font-weight: 600; } } }
-.step__head { @include flex(space-between, center); margin-bottom: 12px; .step__title { margin-bottom: 0; } }
-.step__hint { font-size: 12px; color: $gray-100; }
+.count { @include flex(flex-start, center, 8px);
+  &__label { font-size: 14px; color: $dark-blue-gray; }
+  &__pill { padding: 3px 12px; border-radius: 16px; font-size: 13px; border: 1px solid $gray; background: $white; color: #606692;
+    &.is-active { color: $blue-dark-500; border-color: $blue-dark-500; font-weight: 600; } } }
+.step__head { @include flex(space-between, center); margin-bottom: 12px; .step__title { margin-bottom: 0; font-size: 14px; font-weight: 500; } }
+.step__hint { font-size: 11px; color: #b4b9c4; }
 .models { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .modelcard { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; padding: 10px; border: 1px solid $gray; border-radius: 8px; background: $white; text-align: left;
   &__top { @include flex(space-between, center, 6px); width: 100%; }
-  &__name { font-size: 14px; font-weight: 500; color: $blue-dark-500; }
-  &__badge { flex-shrink: 0; font-size: 11px; font-weight: 700; color: $white; background: $blue-dark-500; padding: 1px 6px; border-radius: 10px; }
-  &__cost { font-size: 12px; color: $dark-blue-gray; }
-  &__desc { font-size: 11px; color: $gray-100; }
-  &.is-active { background: $blue-light; border: 1.5px solid $blue-dark-500; } }
+  &__name { font-size: 14px; font-weight: 500; color: $dark-blue-gray; }
+  &__badge { flex-shrink: 0; font-size: 11px; font-weight: 700; color: #606692; background: $blue-light; padding: 1px 6px; border-radius: 10px; }
+  &__cost { font-size: 12px; font-weight: 500; color: $dark-blue-gray; }
+  &__desc { font-size: 11px; color: #b4b9c4; }
+  &.is-active { background: $blue-light; border: 1.5px solid $blue-dark-500;
+    .modelcard__name { color: $blue-dark-500; }
+    .modelcard__badge { background: $blue-dark-500; color: $white; } } }
 .genimg__brand { margin-bottom: 16px; }
 .err { color: $red; font-size: 13px; margin-bottom: 12px; }
-.genimg__footer { @include flex(space-between, flex-end); border-top: 1px solid $lightGray; padding-top: 16px; }
-.cost { &__label { font-size: 12px; color: $gray-100; } &__value { font-size: 17px; font-weight: 700; color: $blue-dark-300; } }
-.result__head { @include flex(space-between, baseline); margin-bottom: 16px;
-  .result__title { font-size: 18px; font-weight: 700; color: $blue-dark-300; }
-  .result__hint { font-size: 12px; color: $gray-100; } }
+.genimg__footer { @include flex(space-between, flex-end); border-top: 1px solid $gray; margin: auto -24px 0; padding: 14px 24px 0; }
+.cost { &__label { font-size: 12px; color: #b4b9c4; } &__value { @include flex(flex-start, center, 4px); font-size: 16px; font-weight: 700; color: $dark-blue-gray; } &__icon { width: 16px; height: 16px; flex-shrink: 0; } }
+.result__head { @include flex(space-between, center);
+  .result__title { font-size: 18px; font-weight: 700; color: $dark-blue-gray; }
+  .result__hint { font-size: 12px; color: #b4b9c4; } }
 .result__empty { color: $gray-100; font-size: 14px; padding: 40px 0; text-align: center; }
-.result__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.result__thumb { @include flex(center, center); position: relative; aspect-ratio: 311 / 187; background: $blue-light; border-radius: 10px; color: $babyBlue; font-size: 30px; margin-bottom: 10px; }
+// 結果面板最大寬度：內容區照樣流動填滿，但結果面板封頂，避免超寬螢幕下 2 欄卡片被撐太大（可調整此值）
+.genimg__result { display: flex; flex-direction: column; gap: 16px; }
+.result__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 16px;
+  @include below($bp-sm) { grid-template-columns: 1fr; } }
+.result__thumb { @include flex(center, center); position: relative; aspect-ratio: 311 / 187; background: #eef1f7; border-radius: 8px; color: $babyBlue; font-size: 30px; margin-bottom: 8px; }
 .linkbtn { font-size: 14px; color: $blue-dark-500; padding: 8px 4px; &:hover { color: $blue; } }
 .result__badge { position: absolute; top: 10px; left: 10px; background: $green; color: $white; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
 .result__actions { @include flex(flex-start, center, 8px); }

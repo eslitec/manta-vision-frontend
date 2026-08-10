@@ -1,6 +1,6 @@
 <template lang="pug">
 .layout
-  aside.sidebar
+  aside.sidebar(:class="{ 'is-open': sidebarOpen }")
     .sidebar__logo MantaGO
     .sidebar__brand
       span.sidebar__avatar
@@ -20,8 +20,11 @@
     .sidebar__footer
       span.sidebar__footer-link 教學文件
       span.sidebar__footer-link 登出
+  .layout__overlay(v-if="sidebarOpen" @click="sidebarOpen = false")
   .main
     header.topbar
+      button.topbar__menu(@click="sidebarOpen = true" aria-label="開啟選單")
+        i.ti.ti-menu-2
       .topbar__crumb
         span.topbar__cur 日安選物
         span.topbar__sep ›
@@ -38,13 +41,14 @@
           span.topbar__user-dot
           span Mavis｜擁有者
     main.content
-      router-view
+      .content__inner
+        router-view
   TaskCenterPanel(v-model:open="taskPanelOpen")
   GenerationToast
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import FeedBadge from '@/components/FeedBadge.vue'
@@ -59,6 +63,11 @@ import { useGenerationTasksStore } from '@/stores/generationTasks'
 
 const route = useRoute()
 const taskPanelOpen = ref(false)
+const sidebarOpen = ref(false)
+watch(
+  () => route.path,
+  () => (sidebarOpen.value = false), // 換頁自動收起手機抽屜
+)
 const { activeCount, unreadCount } = storeToRefs(useGenerationTasksStore())
 const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.startsWith(to))
 const navItems = [
@@ -266,5 +275,68 @@ const navItems = [
   flex: 1;
   overflow-y: auto;
   padding: 32px;
+  display: flex;
+  flex-direction: column;
+}
+.content__inner {
+  width: 100%;
+  flex: 1;
+}
+
+// ── RWD：手機側邊欄抽屜（<768px）──
+.topbar__menu {
+  // 桌機隱藏；注意不可用 @include flex()，那會輸出 display:flex 蓋掉這個 none
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: none;
+  color: $blue-dark-500;
+  font-size: 22px;
+  margin-right: 4px;
+  @include below($bp-md) {
+    display: flex;
+  }
+}
+.layout__overlay {
+  display: none;
+  @include below($bp-md) {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(23, 30, 82, 0.4);
+  }
+}
+@include below($bp-md) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    &.is-open {
+      transform: translateX(0);
+    }
+  }
+  .content {
+    padding: 20px 16px;
+  }
+  .topbar {
+    padding: 0 12px;
+  }
+  .topbar__crumb {
+    display: none;
+  }
+  .topbar__right {
+    gap: 10px;
+  }
+  .topbar__user span:last-child {
+    display: none;
+  }
 }
 </style>

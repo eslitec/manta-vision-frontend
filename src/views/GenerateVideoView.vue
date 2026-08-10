@@ -23,21 +23,27 @@
         span.step__title 4. 生成模型
         span.step__hint 倍率以標準模型 45 顆/支 為基準
       .models
-        button.model(v-for="t in modelTiers" :key="t.key" :class="{ 'is-active': modelTier === t.key }" @click="modelTier = t.key")
-          span {{ t.label }}
-          span.model__mult ×{{ t.multiplier }}
+        button.modelcard(v-for="t in modelTiers" :key="t.key" :class="{ 'is-active': modelTier === t.key }" @click="modelTier = t.key")
+          .modelcard__top
+            span.modelcard__name {{ t.label }}
+            span.modelcard__badge ×{{ t.multiplier }}
+          span.modelcard__cost {{ 45 * t.multiplier }} 顆／支
+          span.modelcard__desc {{ VIDEO_DESC[t.key] }}
     BrandToggle.video__brand(v-model="applyBrand" @edit="goBrandSettings")
-    p.warn
-      i.ti.ti-alert-triangle
-      span 影片生成 飼料消耗較高，生成前會再次確認
-    p.err(v-if="errorMsg") {{ errorMsg }}
-    .video__footer
-      .cost
-        .cost__label 預估消耗
-        .cost__value {{ estCost }} 顆飼料
-      PrimaryButton(:disabled="busy" @click="confirmOpen = true")
-        i.ti.ti-plus
-        span 生成影片
+    .video__sticky
+      p.warn
+        i.ti.ti-alert-triangle
+        span 影片生成 飼料消耗較高，生成前會再次確認
+      p.err(v-if="errorMsg") {{ errorMsg }}
+      .video__footer
+        .cost
+          .cost__label 預估消耗
+          .cost__value
+            IconFeedBottleSmall.cost__icon
+            span {{ estCost }} 顆飼料
+        PrimaryButton(:disabled="busy" @click="confirmOpen = true")
+          i.ti.ti-plus
+          span 生成影片
 
   section.panel.video__preview
     h2.preview__title {{ previewTitle }}
@@ -83,6 +89,7 @@ import ConfirmGenerateDialog from '@/components/ConfirmGenerateDialog.vue'
 import PrimaryButton from '@/components/PrimaryButton.vue'
 import OutlineButton from '@/components/OutlineButton.vue'
 import BrandToggle from '@/components/BrandToggle.vue'
+import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
 import { isInsufficientFeed } from '@/utils/error'
 import { VIDEO_MODEL_TIERS } from '@/types/api'
@@ -102,6 +109,11 @@ const template = ref('鏡頭推移')
 const ratios = ['9:16', '1:1', '16:9']
 const ratio = ref('9:16')
 const modelTiers = VIDEO_MODEL_TIERS
+const VIDEO_DESC: Record<VideoModelTier, string> = {
+  standard: '5 秒・流暢',
+  advanced: '10 秒・細緻',
+  pro: '10 秒・最高',
+}
 const modelTier = ref<VideoModelTier>('standard')
 const applyBrand = ref(true)
 const goBrandSettings = () => router.push('/settings')
@@ -188,34 +200,40 @@ function goLibrary() {
   grid-template-columns: 400px 1fr;
   gap: 16px;
   align-items: stretch;
+  min-height: 100%;
+  @include below($bp-lg) {
+    grid-template-columns: 1fr;
+  }
 }
 .panel {
-  @include card;
+  background: $white;
+  border-radius: 10px;
+  box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2);
   padding: 24px;
 }
 .video__input {
-  align-self: start;
+  display: flex;
+  flex-direction: column;
 }
 .video__preview {
   display: flex;
   flex-direction: column;
 }
 .step {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   &__title {
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 700;
-    color: $blue-dark-300;
+    color: $dark-blue-gray;
     margin-bottom: 12px;
   }
 }
 .dropzone {
   @include flex(center, center);
   flex-direction: column;
-  aspect-ratio: 4 / 3;
-  border: 1.5px dashed $gray;
-  border-radius: 10px;
-  background: $blue-light;
+  aspect-ratio: 352 / 170;
+  border-radius: 8px;
+  background: #eef1f7;
   color: $babyBlue;
   font-size: 34px;
   margin-bottom: 12px;
@@ -236,28 +254,29 @@ function goLibrary() {
 .tpl {
   padding: 8px;
   border: 1px solid $gray;
-  border-radius: 10px;
+  border-radius: 8px;
   background: $white;
   text-align: center;
   &__thumb {
     @include flex(center, center);
-    aspect-ratio: 2 / 1;
-    background: $blue-light;
-    border-radius: 8px;
+    aspect-ratio: 148 / 72;
+    background: #eef1f7;
+    border-radius: 6px;
     color: $babyBlue;
     font-size: 22px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
   }
   &__label {
     display: block;
-    font-size: 13px;
-    color: $gray-400;
-    font-weight: 500;
+    font-size: 14px;
+    color: $dark-blue-gray;
+    font-weight: 400;
   }
   &.is-active {
-    border-color: $blue-dark-300;
+    background: $blue-light;
+    border: 1.5px solid $blue-dark-500;
     .tpl__label {
-      color: $blue-dark-300;
+      color: $blue-dark-500;
       font-weight: 700;
     }
   }
@@ -272,17 +291,18 @@ function goLibrary() {
   justify-content: center;
   align-items: center;
   width: 100%;
-  padding: 7px 12px;
-  border-radius: 5px;
-  font-size: 14px;
+  height: 38px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 700;
   border: 1px solid $gray;
   background: $white;
-  color: $gray-400;
+  color: $dark-blue-gray;
   &.is-active {
-    background: $white;
-    color: $blue-dark-300;
-    border-color: $blue-dark-300;
-    font-weight: 600;
+    background: $blue-light;
+    color: $blue-dark-500;
+    border: 1.5px solid $blue-dark-500;
   }
 }
 .step__head {
@@ -290,39 +310,64 @@ function goLibrary() {
   margin-bottom: 12px;
   .step__title {
     margin-bottom: 0;
+    font-size: 14px;
+    font-weight: 500;
   }
 }
 .step__hint {
-  font-size: 12px;
-  color: $gray-100;
+  font-size: 11px;
+  color: #b4b9c4;
 }
 .models {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
-.model {
-  @include flex(center, center, 6px);
-  padding: 7px 16px;
-  border-radius: 5px;
-  font-size: 14px;
+.modelcard {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+  padding: 10px;
   border: 1px solid $gray;
+  border-radius: 8px;
   background: $white;
-  color: $gray-400;
-  &__mult {
-    padding: 2px 7px;
-    border-radius: 999px;
-    background: $lightGray;
-    color: $gray-100;
+  text-align: left;
+  &__top {
+    @include flex(space-between, center, 6px);
+    width: 100%;
+  }
+  &__name {
+    font-size: 14px;
+    font-weight: 500;
+    color: $dark-blue-gray;
+  }
+  &__badge {
+    flex-shrink: 0;
     font-size: 11px;
     font-weight: 700;
+    color: #606692;
+    background: $blue-light;
+    padding: 1px 6px;
+    border-radius: 10px;
+  }
+  &__cost {
+    font-size: 12px;
+    font-weight: 500;
+    color: $dark-blue-gray;
+  }
+  &__desc {
+    font-size: 11px;
+    color: #b4b9c4;
   }
   &.is-active {
-    color: $blue-dark-300;
-    border-color: $blue-dark-300;
-    font-weight: 600;
-    .model__mult {
-      background: $blue-dark-300;
+    background: $blue-light;
+    border: 1.5px solid $blue-dark-500;
+    .modelcard__name {
+      color: $blue-dark-500;
+    }
+    .modelcard__badge {
+      background: $blue-dark-500;
       color: $white;
     }
   }
@@ -331,44 +376,59 @@ function goLibrary() {
   margin: 4px 0 16px;
 }
 .warn {
-  @include flex(flex-start, flex-start, 8px);
-  background: #faeeda;
-  color: #854f0b;
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 12.5px;
-  line-height: 1.5;
-  margin: 4px 0 12px;
+  @include flex(flex-start, center, 10px);
+  background: $blue-light;
+  border-left: 3px solid $yellow;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: $dark-blue-gray;
+  line-height: 1.4;
+  margin: 0;
   i {
     flex-shrink: 0;
-    margin-top: 1px;
+    font-size: 20px;
+    color: $orange;
   }
 }
 .err {
   color: $red;
   font-size: 13px;
-  margin-bottom: 12px;
+}
+.video__sticky {
+  margin: auto -24px -24px;
+  padding: 14px 24px 24px;
+  border-top: 1px solid $gray;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
 }
 .video__footer {
   @include flex(space-between, flex-end);
-  border-top: 1px solid $lightGray;
-  padding-top: 16px;
+  margin: 0;
 }
 .cost {
   &__label {
     font-size: 12px;
-    color: $gray-100;
+    color: #b4b9c4;
   }
   &__value {
-    font-size: 17px;
+    @include flex(flex-start, center, 4px);
+    font-size: 16px;
     font-weight: 700;
-    color: $blue-dark-300;
+    color: $orange;
+  }
+  &__icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
   }
 }
 .preview__title {
   font-size: 18px;
   font-weight: 700;
-  color: $blue-dark-300;
+  color: $dark-blue-gray;
   margin-bottom: 16px;
 }
 .preview__box {

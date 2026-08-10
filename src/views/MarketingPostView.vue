@@ -7,14 +7,15 @@
         i.ti.ti-photo.dropzone__icon
         span.dropzone__name(v-if="productImage") {{ productImage.name }}
       .dropzone__actions
-        GhostButton(@click="pickerOpen = true") 從圖庫選擇
-        span.dropzone__hint 或拖曳上傳（賣什麼放什麼）
+        OutlineButton(@click="pickerOpen = true") 從圖庫選擇
     .step
       .step__title 2. 商品介紹
-      textarea.textarea(v-model="intro" rows="4" placeholder="例：純棉透氣、五色可選，主打春夏日常穿搭…")
+      .field
+        textarea.field__input(v-model="intro" maxlength="200" rows="4" placeholder="例：純棉透氣、五色可選、春夏新品限時 8 折…")
+        span.field__counter {{ intro.length }} / 200
       .insp
         button.insp__pill(@click="inspOpen = !inspOpen") 探索靈感素材
-        span.insp__hint 依商品類別給文案風格建議
+        span.insp__hint 依商品類別給文案風格參考
     BrandToggle.post__brand(v-model="applyBrand" @edit="goBrandSettings")
     .step
       .step__title 3. 輸出比例
@@ -26,7 +27,9 @@
     .post__footer
       .cost
         .cost__label 預估消耗
-        .cost__value 5 顆飼料
+        .cost__value
+          IconFeedBottleSmall.cost__icon
+          span 5 顆飼料
       PrimaryButton(:disabled="generating" @click="generate")
         i.ti(:class="generating ? 'ti-loader spin' : 'ti-plus'")
         span {{ generating ? '生成中…' : '產生貼文' }}
@@ -47,7 +50,7 @@
             p.copy__text(v-for="(line, i) in copyLines" :key="i") {{ line }}
             p.copy__tags {{ result.hashtags.join(' ') }}
           .postresult__act
-            ChipButton(@click="copyText")
+            OutlineButton(@click="copyText")
               i.ti.ti-copy
               span {{ copied ? '已複製' : '複製文案' }}
             button.linkbtn(@click="generate") 重寫文案
@@ -63,9 +66,9 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import PrimaryButton from '@/components/PrimaryButton.vue'
-import GhostButton from '@/components/GhostButton.vue'
-import ChipButton from '@/components/ChipButton.vue'
+import OutlineButton from '@/components/OutlineButton.vue'
 import BrandToggle from '@/components/BrandToggle.vue'
+import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
 import { useFeedStore } from '@/stores/feed'
 import { api } from '@/api'
 import { isInsufficientFeed } from '@/utils/error'
@@ -87,8 +90,8 @@ const copied = ref(false)
 // 輸出比例（生成前於設定區選定，影響構圖與結果預覽比例）
 const ratios = [
   { v: '1:1', label: '1:1', desc: '貼文', ar: '1 / 1' },
-  { v: '16:9', label: '16:9', desc: '橫式 Banner', ar: '16 / 9' },
-  { v: '9:16', label: '9:16', desc: '限動', ar: '9 / 16' },
+  { v: '16:9', label: '16:9', desc: '橫幅', ar: '16 / 9' },
+  { v: '9:16', label: '9:16', desc: '限動 / Reels', ar: '9 / 16' },
 ]
 const ratio = ref('1:1')
 const aspect = computed(() => ratios.find((r) => r.v === ratio.value)?.ar ?? '1 / 1')
@@ -134,35 +137,45 @@ async function copyText() {
 </script>
 
 <style scoped lang="scss">
-.post { display: grid; grid-template-columns: 400px 1fr; gap: 16px; align-items: start; }
-.panel { @include card; padding: 24px; }
-.step { margin-bottom: 20px; &__title { font-size: 15px; font-weight: 700; color: $blue-dark-300; margin-bottom: 12px; } }
-.dropzone { @include flex(center, center); flex-direction: column; aspect-ratio: 352 / 170; border: 1.5px dashed $gray; border-radius: 10px; background: $blue-light; color: $babyBlue; font-size: 34px; margin-bottom: 12px;
-  &__name { font-size: 13px; color: $gray-400; margin-top: 8px; } &__actions { @include flex(flex-start, center, 12px); } &__hint { font-size: 12px; color: $gray-100; } }
-.textarea { width: 100%; border: 1px solid $gray; border-radius: 10px; padding: 12px 14px; font-size: 14px; font-family: inherit; color: $blue-dark-300; resize: vertical; outline: none;
-  &::placeholder { color: $gray-100; } &:focus { border-color: $blue; } }
+.post { display: grid; grid-template-columns: 400px 1fr; gap: 16px; align-items: stretch; min-height: 100%;
+  @include below($bp-lg) { grid-template-columns: 1fr; } }
+.panel { background: $white; border-radius: 10px; box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2); padding: 24px; }
+.post__input { display: flex; flex-direction: column; }
+.step { margin-bottom: 16px; &__title { font-size: 16px; font-weight: 700; color: $dark-blue-gray; margin-bottom: 12px; } }
+.dropzone { @include flex(center, center); flex-direction: column; aspect-ratio: 352 / 170; border-radius: 8px; background: #eef1f7; color: $babyBlue; font-size: 34px; margin-bottom: 12px;
+  &__name { font-size: 13px; color: $gray-400; margin-top: 8px; } &__actions { @include flex(flex-start, center, 12px); } &__hint { font-size: 12px; color: #b4b9c4; } }
+.field { position: relative;
+  &__input { width: 100%; border: none; border-radius: 8px; padding: 12px 14px; font-size: 14px; font-family: inherit; color: $blue-dark-300; resize: vertical; outline: none; background: $blue-light;
+    &::placeholder { color: #b4b9c4; } }
+  &__counter { position: absolute; right: 12px; bottom: 8px; font-size: 12px; font-weight: 500; color: $orange; } }
 .insp { @include flex(flex-start, center, 8px); margin-top: 10px;
-  &__pill { padding: 4px 12px; border-radius: 999px; font-size: 13px; border: 1px solid $babyBlue; color: $blue-dark-500; background: $blue-light; }
+  &__pill { padding: 3px 12px; border-radius: 16px; font-size: 13px; color: $dark-blue-gray; background: #f6eac1; }
   &__hint { font-size: 12px; color: $gray-100; } }
 .post__brand { margin: 16px 0; }
-.ratios { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.ratiocard { @include flex(center, center, 2px); flex-direction: column; height: 60px; border: 1px solid $gray; border-radius: 8px; background: $white; color: $blue-dark-500;
-  &__label { font-size: 16px; font-weight: 700; line-height: 1.375; }
-  &__desc { font-size: 12px; color: $gray-400; }
-  &.is-active { background: $blue-light; border: 1.5px solid $blue-dark-500; } }
+.ratios { @include flex(flex-start, stretch, 8px); flex-wrap: wrap; }
+.ratiocard { @include flex(center, center, 2px); flex-direction: column; width: 112px; height: 60px; padding: 10px; border: 1px solid #d2d5dd; border-radius: 8px; background: $white;
+  &__label { font-size: 16px; font-weight: 700; line-height: 1.375; color: $dark-blue-gray; }
+  &__desc { font-size: 12px; line-height: 1.333; color: #606692; }
+  &.is-active { background: $blue-light; border: 1.5px solid $blue-dark-500;
+    .ratiocard__label { color: $blue-dark-500; } } }
 .err { color: $red; font-size: 13px; margin: 8px 0; }
-.post__footer { @include flex(space-between, flex-end); border-top: 1px solid $lightGray; padding-top: 16px; margin-top: 18px; }
-.cost { &__label { font-size: 12px; color: $gray-100; } &__value { font-size: 17px; font-weight: 700; color: $blue-dark-300; } }
-.result__title { font-size: 18px; font-weight: 700; color: $blue-dark-300; margin-bottom: 16px; }
+.post__footer { @include flex(space-between, flex-end); border-top: 1px solid $gray; margin: auto -24px 0; padding: 14px 24px 0; }
+.cost { &__label { font-size: 12px; color: #b4b9c4; } &__value { @include flex(flex-start, center, 4px); font-size: 16px; font-weight: 700; color: $dark-blue-gray; } &__icon { width: 16px; height: 16px; flex-shrink: 0; } }
+.post__result { display: flex; flex-direction: column; gap: 16px; }
+.result__title { font-size: 18px; font-weight: 700; color: $dark-blue-gray; margin-bottom: 0; }
 .result__empty { color: $gray-100; font-size: 14px; padding: 40px 0; text-align: center; }
-.postresult { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
-.postresult__col { display: flex; flex-direction: column; }
-.postresult__act { @include flex(flex-start, center, 12px); margin-top: 12px; }
-.postresult__note { @include flex(flex-start, center, 10px); background: $blue-light; border-left: 3px solid $babyBlue; border-radius: 8px; padding: 12px 14px; margin-top: 16px; font-size: 14px; font-weight: 500; color: $dark-blue-gray; line-height: 1.5;
+.postresult { @include flex(flex-start, flex-start, 20px);
+  @include below($bp-sm) { flex-direction: column; } }
+.postresult__col { display: flex; flex-direction: column;
+  &:first-child { width: 300px; flex-shrink: 0; gap: 8px; }
+  &:last-child { flex: 1; min-width: 0; gap: 12px; }
+  @include below($bp-sm) { &:first-child { width: 100%; } } }
+.postresult__act { @include flex(flex-start, center, 12px); }
+.postresult__note { @include flex(flex-start, center, 10px); background: $blue-light; border-left: 3px solid $babyBlue; border-radius: 8px; padding: 12px 14px; font-size: 14px; font-weight: 500; color: $dark-blue-gray; line-height: 1.5;
   &-icon { color: $babyBlue; font-size: 18px; flex-shrink: 0; } }
-.poster { @include flex(center, center); background: $blue-light; border-radius: 12px; color: $babyBlue; font-size: 36px; width: 100%; }
-.copy { @include card; background: $blue-light; border: none; padding: 16px 18px; flex: 1;
-  &__text { font-size: 14px; color: $blue-dark-300; line-height: 1.7; margin-bottom: 8px; } &__tags { font-size: 14px; color: $link-blue; } }
-.linkbtn { font-size: 14px; color: $blue-dark-500; padding: 8px 4px; &:hover { color: $blue; } }
+.poster { @include flex(center, center); background: #eef1f7; border-radius: 8px; color: $babyBlue; font-size: 44px; width: 100%; }
+.copy { background: $blue-light; border-radius: 8px; padding: 16px; width: 100%;
+  &__text { font-size: 16px; color: $dark-blue-gray; line-height: 1.375; margin-bottom: 8px; } &__tags { font-size: 16px; line-height: 1.375; color: $dark-blue-gray; } }
+.linkbtn { font-size: 14px; color: #606692; padding: 0; &:hover { color: $blue-dark-500; } }
 .spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
 </style>

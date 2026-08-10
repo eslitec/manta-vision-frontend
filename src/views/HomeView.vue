@@ -89,7 +89,7 @@ const genTools = [
     icon: IconGenImage,
     to: '/generate/image',
     title: '圖生圖',
-    desc: '以參考圖＋文字描述生成新圖，AI 輔助撰寫 prompt。',
+    desc: '以參考圖＋文字描述生成新圖，AI 輔助擴寫 prompt。',
   },
   {
     key: 'post',
@@ -103,7 +103,7 @@ const genTools = [
     icon: IconGenVideo,
     to: '/generate/video',
     title: '圖生影片',
-    desc: '單張圖套用動態模板，生成 5-10 秒短影片。',
+    desc: '單張圖套用動態模板，生成 5–10 秒短影片。',
   },
   {
     key: 'tryon',
@@ -117,13 +117,14 @@ const genTools = [
 
 <style scoped lang="scss">
 .home {
+  width: 100%; // 填滿側欄以外的整個內容區（對齊設計稿的滿版工作台）
   &__title {
     font-size: 24px;
     font-weight: 700;
-    color: $blue-dark-300;
+    color: $blue-dark-500;
   }
   &__subtitle {
-    color: $gray-400;
+    color: #606692;
     margin-top: 4px;
     font-size: 14px;
   }
@@ -131,15 +132,21 @@ const genTools = [
     font-size: 18px;
     font-weight: 700;
     margin: 26px 0 14px;
-    color: $blue-dark-300;
+    color: $blue-dark-500;
   }
 }
 
 .stats {
-  @include flex(flex-start, stretch, 0);
-  @include card;
+  @include flex(flex-start, center, 0);
+  background: $white;
+  border-radius: 10px;
+  box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2);
   margin-top: 22px;
   padding: 20px;
+  @include below($bp-md) {
+    flex-direction: column;
+    align-items: stretch;
+  }
   &__item {
     flex: 1;
     display: flex;
@@ -149,6 +156,13 @@ const genTools = [
     position: relative;
     &:not(:first-child) {
       margin-left: 48px;
+      @include below($bp-md) {
+        margin-left: 0;
+        margin-top: 16px;
+        &::before {
+          display: none;
+        }
+      }
       &::before {
         content: '';
         position: absolute;
@@ -156,7 +170,7 @@ const genTools = [
         transform: translateY(-50%);
         height: 40px;
         width: 1px;
-        background: $gray;
+        background: $blue-light;
       }
       &:has(.is-ok, .is-muted)::before {
         height: 40px;
@@ -166,7 +180,7 @@ const genTools = [
   &__num {
     font-size: 24px;
     font-weight: 700;
-    color: $blue-dark-300;
+    color: $blue-dark-500;
     @include flex(flex-start, center, 6px);
     small {
       align-self: flex-end;
@@ -193,7 +207,7 @@ const genTools = [
     flex-shrink: 0;
   }
   &__label {
-    color: $gray-400;
+    color: #606692;
     font-size: 12px;
   }
   &__hint {
@@ -209,11 +223,17 @@ const genTools = [
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+  @include below($bp-sm) {
+    grid-template-columns: 1fr;
+  }
 }
 
 .card {
-  @include card;
   @include flex(flex-start, flex-start, 12px);
+  background: $white;
+  border-radius: 10px;
+  box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2);
+  min-height: 124px;
   padding: 20px;
   text-align: left;
   position: relative;
@@ -221,7 +241,6 @@ const genTools = [
     box-shadow 0.15s,
     transform 0.15s;
   &:hover {
-    box-shadow: $boxShadow;
     transform: translateY(-1px);
   }
   &__icon {
@@ -243,18 +262,22 @@ const genTools = [
   &__title {
     font-size: 16px;
     font-weight: 700;
-    color: $blue-dark-300;
+    color: $blue-dark-500;
     margin-bottom: 6px;
   }
   &__desc {
-    color: $gray-400;
+    color: #606692;
     font-size: 14px;
     line-height: 1.5;
   }
   &--wide {
     grid-column: 1 / -1;
     align-items: center;
+    min-height: 0;
     margin-top: 16px;
+    padding: 20px 12px;
+    border: 1px solid $gray;
+    box-shadow: none;
   }
 }
 </style>
