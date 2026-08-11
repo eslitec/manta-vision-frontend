@@ -45,7 +45,14 @@ __screenshots__/
 
 # 本機筆記（僅供個人參考，不進版控）
 Figma-MCP-功能說明.md
+履歷素材-MantaVision專案經歷.md
 
 # 除錯產物（Playwright MCP 暫存、手動截圖）
 .playwright-mcp/
 library-*.png
+.spectra/
+openspec/.vector-search.db*
+
+# 本機臨時備份與機器本機設定（勿進版控）
+openspec/_backup-changes-*/
+.claude/settings.local.json

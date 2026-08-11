@@ -1,0 +1,48 @@
+// ── Manta Vision 色彩變數（沿用團隊 palette）──
+$white: #ffffff;
+$black: #000000;
+$blue: #467ae8;
+$blue-light: #eff2fa;
+$link-blue: #2f80ed;
+$blue-dark-100: #2a3972;
+$blue-dark-200: #242a5c;
+$blue-dark-300: #171e52;
+$blue-dark-400: #1a1c45;
+$blue-dark-500: #2e3567;
+$babyBlue: #a5c8e6;
+$dark-blue-gray: #383c4b;
+$yellow: #f2bb00;
+$orange: #ea903a;
+$orange-light: #ffb670;
+$orange-dark: #c97722;
+$red: #e34242;
+$green: #54c14f;
+$gray: #d2d5dd;
+$gray-100: #b4b9c4;
+$gray-300: #707070;
+$gray-400: #606472;
+$lightGray: #efefef;
+$tagYellow: #f1c83a;
+$tagDarkGreen: #81bc89;
+$tagDarkRed: #e27d7d;
+$tagOrange: #f2ddc8;
+$primary: $blue;
+$primaryDark: $blue-dark-500;
+$secondary: $yellow;
+$light: $gray-100;
+$dark: $gray-400;
+$danger: $red;
+$bgPrimary: $blue-light;
+$blueGradient: linear-gradient(180deg, $blue-dark-300 0%, $blue-dark-400 100%);
+$boxShadow: 0px 3px 10px #92929229;
+$boxShadowDark: 0px 3px 6px #4f4f4f29;
+$btnBoxShadow: 0px 4px 2px 0px rgba(0, 0, 0, 0.25);
+$dark-slate-blue: #171e52;
+$golden: #f2bb00;
+$slate-grey: #606472;
+$bodyPadding: 1.25rem 1.5rem;
+
+// ── RWD 斷點 ──
+$bp-lg: 1024px; // 以下：雙欄頁收成單欄
+$bp-md: 768px; // 以下：側邊欄收成抽屜、統計卡遞減
+$bp-sm: 560px; // 以下：手機單欄
