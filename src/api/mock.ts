@@ -34,34 +34,69 @@ const db = {
   generatedThisMonth: 128, // 本月已生成張數（首頁統計；產圖的模組才計入）
   folders: ['未分類', '春季企劃', '商品素材', '生成結果'],
   assets: [
-    { id: 'a1', name: '春季主視覺_01', source: '上傳', tag: 'upload', dim: '1024×758', folders: ['春季企劃'], referencedBy: 2 },
-    { id: 'a2', name: '商品_去背_白T', source: '物件素材', tag: 'object', dim: '1024×768', folders: ['商品素材'], referencedBy: 1 },
+    {
+      id: 'a1',
+      name: '春季主視覺_01',
+      source: '上傳',
+      tag: 'upload',
+      dim: '1024×758',
+      folders: ['春季企劃'],
+      referencedBy: 2,
+    },
+    {
+      id: 'a2',
+      name: '商品_去背_白T',
+      source: '物件素材',
+      tag: 'object',
+      dim: '1024×768',
+      folders: ['商品素材'],
+      referencedBy: 1,
+    },
     { id: 'a3', name: '生成_木質桌面情境', source: 'AI 生成', tag: 'ai', dim: '1024×768', folders: ['生成結果'] },
     { id: 'a4', name: '春季主視覺_調色版', source: '編輯產物', tag: 'edit', dim: '1024×768', folders: ['春季企劃'] },
     { id: 'a5', name: '門市外觀', source: '上傳', tag: 'upload', dim: '1024×768', folders: ['未分類'] },
-    { id: 'a6', name: '商品_去背_帆布袋', source: '物件素材', tag: 'object', dim: '1024×768', folders: ['商品素材'], referencedBy: 1 },
+    {
+      id: 'a6',
+      name: '商品_去背_帆布袋',
+      source: '物件素材',
+      tag: 'object',
+      dim: '1024×768',
+      folders: ['商品素材'],
+      referencedBy: 1,
+    },
     { id: 'a7', name: '生成_野餐情境', source: 'AI 生成', tag: 'ai', dim: '1024×768', folders: ['生成結果'] },
-    { id: 'a8', name: '夏季宣傳_短影片', source: '影片', tag: 'video', dim: '1080×1920', type: 'video', folders: ['生成結果'] },
+    {
+      id: 'a8',
+      name: '夏季宣傳_短影片',
+      source: '影片',
+      tag: 'video',
+      dim: '1080×1920',
+      type: 'video',
+      folders: ['生成結果'],
+    },
   ] as Asset[],
   brand: {
     name: '日安選物',
-    positioning: '嚴選日常打扮與居品，讓生活有溫度',
-    website: '',
-    industry: '服飾・生活選物',
+    positioning: '嚴選日常質感選物，讓生活有溫度',
+    website: 'www.rihan-select.com',
+    industry: '服飾 · 生活選物',
     colors: [
       { label: '主色', hex: '#2E3567' },
       { label: '輔色', hex: '#A5C8E6' },
-      { label: '互補色', hex: '#F2DB00' },
+      { label: '點綴色', hex: '#F2BB00' },
     ],
-    tones: ['溫暖親切', '文青質感'],
-    hashtags: ['#日安選物', '#日常穿搭', '#質感生活', '#OOTD'],
+    tones: [],
+    hashtags: ['#日安選物', '#選物日常', '#質感生活', '#OOTD'],
     addressing: '你',
     avoidWords: '',
     logoName: '',
     logoUrl: '',
   } as BrandProfile,
   consent: false,
-  jobs: new Map<string, { req: VideoJobReq; created: number; cost: number; failed?: boolean; failedChecked?: boolean }>(),
+  jobs: new Map<
+    string,
+    { req: VideoJobReq; created: number; cost: number; failed?: boolean; failedChecked?: boolean }
+  >(),
 }
 
 function deduct(cost: number) {
@@ -69,11 +104,6 @@ function deduct(cost: number) {
   db.feedBalance -= cost
   db.monthlyUsed += cost
 }
-function refund(cost: number) {
-  db.feedBalance += cost
-  db.monthlyUsed = Math.max(0, db.monthlyUsed - cost)
-}
-
 export const mockApi = {
   // GET /models
   async listModels(): Promise<AiModel[]> {
@@ -158,7 +188,7 @@ export const mockApi = {
   // POST /images/edit（去背／修圖，非破壞→新素材）
   async editImage(name: string): Promise<Asset> {
     await delay(600)
-    const a: Asset = { id: uid('a'), name: name + '_去背', source: '編輯產物', tag: 'edit', dim: '1024×768' }
+    const a: Asset = { id: uid('a'), name, source: '編輯產物', tag: 'edit', dim: '1024×768' }
     db.assets.unshift(a)
     return a
   },
@@ -193,8 +223,7 @@ export const mockApi = {
     await delay(1000)
     const tags = req.applyBrand ? db.brand.hashtags.slice(0, 3) : ['#新品', '#日常']
     return {
-      copy:
-        '🌿 春天就是要換上最舒服的自己\n\n全新純棉系列，透氣不悶熱，五種溫柔色調任你搭配。現在下單享春夏限時 8 折，把好天氣穿在身上 ☀',
+      copy: '🌿 春天就是要換上最舒服的自己\n\n全新純棉系列，透氣不悶熱，五種溫柔色調任你搭配。現在下單享春夏限時 8 折，把好天氣穿在身上 ☀',
       hashtags: tags,
     }
   },
@@ -208,30 +237,37 @@ export const mockApi = {
     const id = uid('job')
     db.jobs.set(id, { req, created: Date.now(), cost })
     await delay(300)
-    return { id, status: 'queued', cost }
+    return { id, status: 'pending', progress: 0, cost }
   },
 
   // GET /generate/video/:id → 查任務狀態（demo 用短時間模擬 1–2 分鐘；processing 階段有小機率模擬模型逾時失敗，讓失敗／重試／退款流程可被實際觸發與測試）
   async getVideoJob(id: string): Promise<VideoJob> {
     await delay(200)
     const j = db.jobs.get(id)
-    if (!j) return { id, status: 'failed', cost: 0, error: 'NOT_FOUND' }
-    if (j.failed) return { id, status: 'failed', cost: j.cost, error: 'MODEL_TIMEOUT' }
+    if (!j) return { id, status: 'failed', progress: 0, cost: 0, error: 'NOT_FOUND' }
+    if (j.failed) return { id, status: 'failed', progress: 0, cost: j.cost, error: 'MODEL_TIMEOUT' }
     const elapsed = Date.now() - j.created
-    let status: VideoJob['status'] = 'queued'
-    if (elapsed > 5000) status = 'done'
-    else if (elapsed > 1500) {
+    let status: VideoJob['status'] = 'pending'
+    let progress = Math.min(10, Math.round((elapsed / 1500) * 10))
+    if (elapsed > 5000) {
+      status = 'succeeded'
+      progress = 100
+    } else if (elapsed > 1500) {
       status = 'processing'
+      progress = Math.min(99, 10 + Math.round(((elapsed - 1500) / 3500) * 90))
       if (!j.failedChecked) {
         j.failedChecked = true
         if (Math.random() < 0.12) {
           j.failed = true
-          return { id, status: 'failed', cost: j.cost, error: 'MODEL_TIMEOUT' }
+          return { id, status: 'failed', progress, cost: j.cost, error: 'MODEL_TIMEOUT' }
         }
       }
     }
-    if (status === 'done') { db.successGen += 1; return { id, status, cost: j.cost, resultUrl: 'mock://video' } }
-    return { id, status, cost: j.cost }
+    if (status === 'succeeded') {
+      db.successGen += 1
+      return { id, status, progress, cost: j.cost, resultUrl: 'mock://video' }
+    }
+    return { id, status, progress, cost: j.cost }
   },
 
   // POST /generate/tryon
@@ -309,6 +345,4 @@ export const mockApi = {
     await delay(300)
     db.consent = true
   },
-
-  refundFeed: refund,
 }

@@ -38,7 +38,7 @@ export interface GeneratedPost {
 }
 
 // ── 非同步任務（圖生影）──
-export type JobStatus = 'queued' | 'processing' | 'done' | 'failed'
+export type JobStatus = 'pending' | 'processing' | 'succeeded' | 'failed'
 export type VideoModelTier = 'standard' | 'advanced' | 'pro'
 export const VIDEO_MODEL_TIERS: { key: VideoModelTier; label: string; multiplier: number }[] = [
   { key: 'standard', label: '標準', multiplier: 1 },
@@ -54,6 +54,7 @@ export interface VideoJobReq {
 export interface VideoJob {
   id: string
   status: JobStatus
+  progress: number // 0..100，由後端任務狀態 API 回傳
   cost: number
   resultUrl?: string
   error?: string
@@ -61,7 +62,7 @@ export interface VideoJob {
 
 // ── 背景生成任務（跨頁面，圖生圖／圖生影共用；驅動頂部工具列「任務」按鈕與任務中心面板）──
 export type GenerationTaskKind = 'image' | 'video'
-export type GenerationTaskStatus = 'queued' | 'processing' | 'done' | 'failed'
+export type GenerationTaskStatus = 'pending' | 'processing' | 'succeeded' | 'failed'
 export interface GenerationTask {
   id: string
   kind: GenerationTaskKind

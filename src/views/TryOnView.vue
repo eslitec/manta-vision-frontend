@@ -1,29 +1,30 @@
 <template lang="pug">
 .tryon
+  h1.visuallyHidden {{ t('routeTitles.generateTryOn') }}
   .consentBar(v-if="!consented")
-    i.ti.ti-alert-triangle.consentBar__icon
+    IconAlertTriangleFilled.consentBar__icon
     .consentBar__text
       strong {{ t('tryOn.consentBanner.title') }}
       span {{ t('tryOn.consentBanner.description') }}
-    OutlineButton(@click="showConsent = true") {{ t('tryOn.consentBanner.action') }}
+    AppButton(variant="outline" @click="showConsent = true") {{ t('tryOn.consentBanner.action') }}
 
   .tryon__body
     section.panel.tryon__input
       .step
         .step__title {{ t('tryOn.steps.model') }}
-        .subtabs
-          button.subtab(v-for="s in modelTabs" :key="s.value" :class="{ 'isActive': modelTab === s.value }" @click="modelTab = s.value") {{ s.label }}
+        .subtabs(role="tablist" :aria-label="t('tryOn.steps.model')")
+          button.subtab(v-for="s in modelTabs" :key="s.value" role="tab" :aria-selected="modelTab === s.value" :class="{ 'isActive': modelTab === s.value }" @click="modelTab = s.value") {{ s.label }}
         template(v-if="modelTab === 'builtIn'")
           .models
-            button.model(v-for="m in models" :key="m.value" :class="{ 'isActive': model === m.value }" @click="model = m.value")
+            button.model(v-for="m in models" :key="m.value" :aria-pressed="model === m.value" :class="{ 'isActive': model === m.value }" @click="model = m.value")
               span.model__thumb
-                i.ti.ti-photo
+                IconImagePlaceholder
               span.model__label {{ m.label }}
           button.link {{ t('tryOn.viewFullLibrary') }}
         template(v-else)
           label.mdrop
             input.mdrop__input(type="file" accept="image/*" @change="onModelUpload")
-            i.ti.ti-upload.mdrop__icon
+            IconUpload.mdrop__icon
             span.mdrop__title {{ t('tryOn.upload.title') }}
             span.mdrop__hint {{ t('tryOn.upload.hint') }}
           .mtip {{ t('tryOn.upload.recommendation') }}
@@ -35,37 +36,34 @@
             .uplist
               .uprow(v-for="u in uploadedModels" :key="u.id" :class="{ 'isOk': u.status === 'available' }")
                 span.uprow__thumb
-                  i.ti.ti-photo
+                  IconImagePlaceholder
                 .uprow__col
                   span.uprow__name {{ u.name }}
                   span.uprow__note(:class="{ 'isWarn': u.status !== 'available' }") {{ t(`tryOn.upload.notes.${u.noteKey}`) }}
                 span.statuspill(:class="u.status === 'available' ? 'isOk' : 'isReupload'") {{ u.status === 'available' ? t('tryOn.upload.available') : t('tryOn.upload.reupload') }}
                 button.uprow__del(@click="removeModel(u.id)" :aria-label="t('common.delete')")
-                  i.ti.ti-trash
-            label.pconsent
-              span.pconsent__box(:class="{ 'isOn': personConsent }")
-                i.ti.ti-check(v-if="personConsent")
-              input.pconsent__input(type="checkbox" v-model="personConsent")
-              span.pconsent__text {{ t('tryOn.personConsent') }}
+                  IconDelete
+            .pconsent
+              AppCheckbox.pconsent__check(v-model="personConsent") {{ t('tryOn.personConsent') }}
               button.pconsent__link(type="button" @click.prevent="showConsent = true") {{ t('tryOn.viewTerms') }}
       .step
         .step__title {{ t('tryOn.steps.apparel') }}
         .dropzone
-          i.ti.ti-photo.dropzone__icon
+          IconImagePlaceholder.dropzone__icon
           span.dropzone__name(v-if="apparel") {{ apparel.name }}
         .dropzone__actions
-          OutlineButton(@click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
+          AppButton(variant="outline" @click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
           span.dropzone__hint {{ t('tryOn.removeBackgroundHint') }}
       BrandToggle.tryon__brand(v-model="applyBrand" @edit="goBrandSettings")
-      p.err(v-if="errorMsg") {{ errorMsg }}
+      p.err(v-if="errorMsg" role="alert") {{ errorMsg }}
       .tryon__footer
         .cost
           .cost__label {{ t('common.estimatedCost') }}
           .cost__value
             IconFeedBottleSmall.cost__icon
             span {{ t('units.feed', { count: 12 }) }}
-        PrimaryButton(:disabled="generating" @click="onGenerate")
-          i.ti.ti-loader.spin(v-if="generating")
+        AppButton(:disabled="generating" @click="onGenerate")
+          IconLoader.spin(v-if="generating")
           span {{ generating ? t('common.generating') : t('tryOn.generate') }}
 
     section.panel.tryon__result
@@ -76,8 +74,8 @@
         .result__box
           IconPlayCircle.result__play
           span.result__placeholder(v-if="done") {{ t('tryOn.generated') }}
-      .result__actions(v-if="done")
-        OutlineButton(@click="saveResult") {{ savedId ? t('common.saved') : t('common.saveToLibrary') }}
+      .result__actions(v-if="done" role="status" aria-live="polite")
+        AppButton(variant="outline" @click="saveResult") {{ savedId ? t('common.saved') : t('common.saveToLibrary') }}
         button.linkbtn(@click="download") {{ t('common.download') }}
         button.linkbtn(@click="onGenerate") {{ t('common.regenerate') }}
 
@@ -85,27 +83,23 @@
 
   Teleport(to="body")
     .cmodal(v-if="showConsent" @click.self="closeConsent")
-      .cdialog
+      .cdialog(ref="consentDialogRef" role="dialog" aria-modal="true" aria-labelledby="consent-dialog-title" aria-describedby="consent-dialog-intro" tabindex="-1")
         .cdialog__head
-          i.ti.ti-alert-triangle.cdialog__alert
-          h3.cdialog__title {{ t('tryOn.terms.title') }}
+          IconAlertTriangleFilled.cdialog__alert
+          h3#consent-dialog-title.cdialog__title {{ t('tryOn.terms.title') }}
           span.cdialog__grow
-          button.cdialog__close(type="button" @click="closeConsent" :aria-label="t('common.close')")
-            i.ti.ti-x
-        p.cdialog__intro {{ t('tryOn.terms.intro') }}
+          button.cdialog__close(type="button" data-dialog-initial-focus @click="closeConsent" :aria-label="t('common.close')")
+            IconClose
+        p#consent-dialog-intro.cdialog__intro {{ t('tryOn.terms.intro') }}
         .terms
           p.terms__item(v-for="(term, index) in tm('tryOn.terms.items')" :key="index") {{ term }}
           p.terms__more {{ t('tryOn.terms.more') }}
-        label.ack
-          span.ack__box(:class="{ 'isOn': ackChecked }")
-            i.ti.ti-check(v-if="ackChecked")
-          input.ack__input(type="checkbox" v-model="ackChecked")
-          span.ack__text {{ t('tryOn.terms.acknowledgement') }}
+        AppCheckbox.ack(v-model="ackChecked") {{ t('tryOn.terms.acknowledgement') }}
         .cdialog__act
-          button.cdialog__pdf(type="button" @click="downloadTerms") {{ t('tryOn.terms.download') }}
+          AppButton.cdialog__pdf(variant="ghost" @click="downloadTerms") {{ t('tryOn.terms.download') }}
           span.cdialog__grow
-          OutlineButton(@click="goCompliance") {{ t('tryOn.terms.openCompliance') }}
-          PrimaryButton(:disabled="!ackChecked" @click="acknowledge") {{ t('tryOn.terms.understand') }}
+          AppButton(variant="outline" @click="goCompliance") {{ t('tryOn.terms.openCompliance') }}
+          AppButton(:disabled="!ackChecked" @click="acknowledge") {{ t('tryOn.terms.understand') }}
         p.cdialog__foot {{ t('tryOn.terms.footer') }}
 </template>
 
@@ -115,17 +109,24 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
-import PrimaryButton from '@/components/PrimaryButton.vue'
-import OutlineButton from '@/components/OutlineButton.vue'
+import AppButton from '@/components/AppButton.vue'
+import AppCheckbox from '@/components/AppCheckbox.vue'
 import BrandToggle from '@/components/BrandToggle.vue'
 import IconPlayCircle from '@/components/icons/IconPlayCircle.vue'
 import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
+import IconAlertTriangleFilled from '@/components/icons/IconAlertTriangleFilled.vue'
+import IconClose from '@/components/icons/IconClose.vue'
+import IconDelete from '@/components/icons/IconDelete.vue'
+import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
+import IconLoader from '@/components/icons/IconLoader.vue'
+import IconUpload from '@/components/icons/IconUpload.vue'
 import { useConsentStore } from '@/stores/consent'
 import { useFeedStore } from '@/stores/feed'
 import { useAssets } from '@/composables/useAssets'
 import { api } from '@/api'
 import { isInsufficientFeed } from '@/utils/error'
 import type { Asset } from '@/types/api'
+import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 
 const router = useRouter()
 const consentStore = useConsentStore()
@@ -159,6 +160,7 @@ const ackChecked = ref(false) // 對話框「我已取得當事人同意…」�
 const apparel = ref<Asset | null>(null)
 const pickerOpen = ref(false)
 const showConsent = ref(false)
+const consentDialogRef = ref<HTMLElement | null>(null)
 const generating = ref(false)
 const done = ref(false)
 const errorMsg = ref('')
@@ -187,6 +189,7 @@ function removeModel(id: string) {
 function closeConsent() {
   showConsent.value = false
 }
+useAccessibleDialog(showConsent, consentDialogRef, closeConsent)
 async function acknowledge() {
   if (!ackChecked.value) return // 未勾選確認前不可繼續
   await consentStore.give()
@@ -256,6 +259,16 @@ async function onGenerate() {
       color: #606692;
     }
   }
+  @include below($bp-sm) {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    &__text {
+      min-width: calc(100% - 2rem);
+    }
+    > :deep(.appButton) {
+      margin-left: auto;
+    }
+  }
 }
 .tryon {
   min-height: 100%;
@@ -313,6 +326,9 @@ async function onGenerate() {
   grid-template-columns: repeat(4, 1fr);
   gap: 0.75rem 0.625rem;
   margin-bottom: 0.625rem;
+  @include below($bp-sm) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .model {
   @include flex(center, center, 0.5rem);
@@ -490,25 +506,7 @@ async function onGenerate() {
   border-radius: 8px;
   background: $white;
   cursor: pointer;
-  &__input {
-    display: none;
-  }
-  &__box {
-    @include flex(center, center);
-    width: 1.125rem;
-    height: 1.125rem;
-    flex-shrink: 0;
-    border-radius: 4px;
-    border: 1px solid $gray;
-    background: $white;
-    color: $white;
-    font-size: 0.6875rem;
-    &.isOn {
-      background: $blue-dark-500;
-      border-color: $blue-dark-500;
-    }
-  }
-  &__text {
+  &__check {
     flex: 1;
     font-size: 0.75rem;
     font-weight: 500;
@@ -605,6 +603,35 @@ async function onGenerate() {
   background: #e4e9f2;
   border-radius: 10px;
   color: $babyBlue;
+}
+
+// Figma 14:113：result_img 為 360 × 480，置於 638 × 606 的 result_wrap 中。
+// 大螢幕讓內外兩層一起等比例縮放，避免外框變寬後影片仍停留在固定尺寸。
+@media (min-width: 80.0625rem) {
+  .tryon {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .tryon__body,
+  .tryon__input,
+  .tryon__result {
+    min-height: 0;
+  }
+
+  .result__wrap {
+    align-self: center;
+    flex: 1 1 0;
+    width: auto;
+    max-width: 100%;
+    min-height: 0;
+    aspect-ratio: 638 / 606;
+  }
+
+  .result__box {
+    width: 56.426%;
+    max-width: none;
+  }
 }
 .result__play {
   width: 4rem;
@@ -716,35 +743,14 @@ async function onGenerate() {
   }
 }
 .ack {
-  @include flex(flex-start, center, 0.625rem);
+  display: flex;
+  width: 100%;
   padding: 0.625rem 0.75rem;
   border-radius: 8px;
   background: $blue-light;
-  cursor: pointer;
-  &__input {
-    display: none;
-  }
-  &__box {
-    @include flex(center, center);
-    width: 1.125rem;
-    height: 1.125rem;
-    flex-shrink: 0;
-    border-radius: 4px;
-    border: 1px solid $gray;
-    background: $white;
-    color: $white;
-    font-size: 0.6875rem;
-    &.isOn {
-      background: $blue-dark-500;
-      border-color: $blue-dark-500;
-    }
-  }
-  &__text {
-    flex: 1;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    color: $blue-dark-500;
-  }
+  color: $blue-dark-500;
+  font-size: 0.8125rem;
+  font-weight: 500;
 }
 .spin {
   animation: spin 1s linear infinite;

@@ -12,6 +12,7 @@
         v-for="item in navItems"
         :key="item.to"
         :to="item.to"
+        :aria-current="isActive(item.to) ? 'page' : undefined"
         :class="{ 'isActive': isActive(item.to) }"
       )
         span.sidebar__itemIcon
@@ -24,16 +25,16 @@
   .main
     header.topbar
       button.topbar__menu(@click="sidebarOpen = true" :aria-label="t('layout.openMenu')")
-        i.ti.ti-menu-2
+        IconMenu
       .topbar__crumb
         span.topbar__cur {{ t('brand.name') }}
         span.topbar__sep ›
         span.topbar__cur Manta Vision
       .topbar__actions
-        button.topbar__tasks(@click="taskPanelOpen = !taskPanelOpen")
+        button.topbar__tasks(:aria-expanded="taskPanelOpen" aria-controls="generation-task-panel" @click="taskPanelOpen = !taskPanelOpen")
           span.topbar__tasksIcon
             IconTasksBadge
-          | {{ t('layout.tasks') }}
+          span.topbar__tasksLabel {{ t('layout.tasks') }}
           span.topbar__tasksBadge(v-if="unreadCount > 0") {{ unreadCount }}
           span.topbar__tasksDot(v-else-if="activeCount > 0")
         FeedBadge
@@ -60,6 +61,7 @@ import IconAiSparkle from '@/components/icons/IconAiSparkle.vue'
 import IconLibraryPhoto from '@/components/icons/IconLibraryPhoto.vue'
 import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
 import IconSettings from '@/components/icons/IconSettings.vue'
+import IconMenu from '@/components/icons/IconMenu.vue'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
 
 const route = useRoute()
@@ -215,6 +217,7 @@ const navItems = computed(() => [
     @include flex(flex-start, center, 0.375rem);
     color: $gray-400;
     font-size: 1rem;
+    white-space: nowrap;
   }
   &__cur {
     color: $blue-dark-500;
@@ -225,11 +228,14 @@ const navItems = computed(() => [
   }
   &__actions {
     @include flex(flex-start, center, 1rem);
+    margin-left: auto;
   }
   &__user {
     @include flex(flex-start, center, 0.5rem);
+    flex-shrink: 0;
     font-size: 0.875rem;
     color: #606692;
+    white-space: nowrap;
   }
   &__userDot {
     width: 1.75rem;
@@ -240,6 +246,7 @@ const navItems = computed(() => [
   &__tasks {
     @include flex(flex-start, center, 0.375rem);
     position: relative;
+    flex-shrink: 0;
     padding: 0.5625rem 0.75rem;
     border: none;
     border-radius: 18px;
@@ -247,6 +254,7 @@ const navItems = computed(() => [
     color: $blue-dark-500;
     font-size: 0.875rem;
     font-weight: 500;
+    white-space: nowrap;
   }
   &__tasksIcon {
     @include flex(center, center);
@@ -299,13 +307,13 @@ const navItems = computed(() => [
   color: $blue-dark-500;
   font-size: 1.375rem;
   margin-right: 0.25rem;
-  @include below($bp-md) {
+  @include below($bp-lg) {
     display: flex;
   }
 }
 .layout__overlay {
   display: none;
-  @include below($bp-md) {
+  @include below($bp-lg) {
     display: block;
     position: fixed;
     inset: 0;
@@ -313,7 +321,7 @@ const navItems = computed(() => [
     background: rgba(23, 30, 82, 0.4);
   }
 }
-@include below($bp-md) {
+@include below($bp-lg) {
   .sidebar {
     position: fixed;
     top: 0;
@@ -326,9 +334,6 @@ const navItems = computed(() => [
       transform: translateX(0);
     }
   }
-  .content {
-    padding: 1.25rem 1rem;
-  }
   .topbar {
     padding: 0 0.75rem;
   }
@@ -338,7 +343,39 @@ const navItems = computed(() => [
   .topbar__actions {
     gap: 0.625rem;
   }
+}
+@include below($bp-md) {
+  .content {
+    padding: 1.25rem 1rem;
+  }
+  .content__inner {
+    &::after {
+      display: block;
+      height: 1.25rem;
+      content: '';
+    }
+  }
   .topbar__user span:last-child {
+    display: none;
+  }
+}
+@include below($bp-sm) {
+  .topbar {
+    padding: 0 0.5rem;
+  }
+  .topbar__menu {
+    margin-right: 0;
+  }
+  .topbar__actions {
+    gap: 0.25rem;
+  }
+  .topbar__tasks {
+    width: 2.25rem;
+    height: 2.25rem;
+    justify-content: center;
+    padding: 0;
+  }
+  .topbar__tasksLabel {
     display: none;
   }
 }
