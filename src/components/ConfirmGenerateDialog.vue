@@ -1,12 +1,12 @@
 <template lang="pug">
 Teleport(to="body")
   .confirm(v-if="open" @click.self="cancel")
-    .confirm__modal
+    .confirm__modal(ref="dialogRef" role="alertdialog" aria-modal="true" :aria-labelledby="titleId" :aria-describedby="messageId" tabindex="-1")
       .confirm__head
         span.confirm__icon
-          i.ti.ti-alert-triangle
-        h3.confirm__title {{ resolvedTitle }}
-      p.confirm__msg {{ resolvedMessage }}
+          IconAlertTriangleFilled
+        h3.confirm__title(:id="titleId") {{ resolvedTitle }}
+      p.confirm__msg(:id="messageId") {{ resolvedMessage }}
       .confirm__rows
         .confirm__row(v-if="modelLabel")
           span {{ t('confirmGenerate.model') }}
@@ -22,19 +22,22 @@ Teleport(to="body")
             IconFeedBottleSmall
             span {{ balance.toLocaleString() }} {{ t('confirmGenerate.feedUnit') }}
       .confirm__actions
-        DialogButton(@click="cancel") {{ t('confirmGenerate.cancel') }}
-        DialogButton(variant="primary" @click="confirm")
-          i.ti.ti-plus
+        AppButton(data-dialog-initial-focus variant="outline" @click="cancel") {{ t('confirmGenerate.cancel') }}
+        AppButton(variant="primary" @click="confirm")
+          IconAddObject
           span {{ resolvedConfirmText }}
 </template>
 
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFeedStore } from '@/stores/feed'
-import DialogButton from '@/components/DialogButton.vue'
+import AppButton from '@/components/AppButton.vue'
 import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
+import IconAddObject from '@/components/icons/IconAddObject.vue'
+import IconAlertTriangleFilled from '@/components/icons/IconAlertTriangleFilled.vue'
+import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 
 const props = defineProps<{
   cost: number
@@ -47,6 +50,9 @@ const emit = defineEmits<{
   (e: 'confirm'): void
 }>()
 const open = defineModel<boolean>('open', { required: true })
+const dialogRef = ref<HTMLElement | null>(null)
+const titleId = `confirm-generate-title-${crypto.randomUUID()}`
+const messageId = `confirm-generate-message-${crypto.randomUUID()}`
 
 const { balance } = storeToRefs(useFeedStore())
 const { t } = useI18n()
@@ -56,6 +62,7 @@ const resolvedMessage = computed(() => props.message ?? t('confirmGenerate.messa
 const resolvedConfirmText = computed(() => props.confirmText ?? t('confirmGenerate.confirm'))
 
 const cancel = () => (open.value = false)
+useAccessibleDialog(open, dialogRef, cancel)
 const confirm = () => {
   emit('confirm')
   open.value = false

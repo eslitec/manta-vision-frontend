@@ -1,0 +1,17 @@
+<svg preserveAspectRatio="none" overflow="visible" width="678" height="372" viewBox="0 0 678 372" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g clip-path="url(#clip0)">
+    <path d="M46 232H666M46 174H666M46 116H666M46 58H666M46 0H666" stroke="#EFF2FA"/>
+    <path d="M46 0H666" stroke="#FF6148" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <path d="M46 46.4H666" stroke="#F2BB00" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <path d="M604 0V354" stroke="#D2D5DD"/>
+    <path d="M46 227.6L66.7 223.1L87.3 218.4L108 213.6L128.7 208.7L149.3 203.6L170 198.4L190.7 193.1L211.3 187.6L232 182L252.7 176.2L273.3 170.4L294 164.3L314.7 158.2L335.3 151.9L356 145.4L376.7 138.9L397.3 132.2L418 125.3L438.7 118.3L459.3 111.2L480 103.9L500.7 96.6L521.3 89L542 81.4L562.7 73.6L583.3 65.6L604 57.5" stroke="#2E3567" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M604 57.5L624.7 49.9L645.3 42.2L666 34.5" stroke="#EA903A" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="7 5"/>
+    <circle cx="604" cy="57.5" r="4.5" fill="#2E3567"/>
+    <circle cx="666" cy="34.5" r="4.5" fill="white" stroke="#EA903A" stroke-width="2.5"/>
+    <g fill="#A5C8E6">
+      <rect x="39.8" y="310.6" width="12.4" height="43.4" rx="2"/><rect x="60.5" y="309.2" width="12.4" height="44.8" rx="2"/><rect x="81.1" y="307.9" width="12.4" height="46.1" rx="2"/><rect x="101.8" y="306.5" width="12.4" height="47.5" rx="2"/><rect x="122.5" y="305.2" width="12.4" height="48.8" rx="2"/><rect x="143.1" y="303.8" width="12.4" height="50.2" rx="2"/><rect x="163.8" y="302.4" width="12.4" height="51.6" rx="2"/><rect x="184.5" y="301.1" width="12.4" height="52.9" rx="2"/><rect x="205.1" y="299.7" width="12.4" height="54.3" rx="2"/><rect x="225.8" y="298.4" width="12.4" height="55.6" rx="2"/><rect x="246.5" y="297" width="12.4" height="57" rx="2"/><rect x="267.1" y="295.7" width="12.4" height="58.3" rx="2"/><rect x="287.8" y="294.3" width="12.4" height="59.7" rx="2"/><rect x="308.5" y="293" width="12.4" height="61" rx="2"/><rect x="329.1" y="291.6" width="12.4" height="62.4" rx="2"/><rect x="349.8" y="290.3" width="12.4" height="63.7" rx="2"/><rect x="370.5" y="288.9" width="12.4" height="65.1" rx="2"/><rect x="391.1" y="287.5" width="12.4" height="66.5" rx="2"/><rect x="411.8" y="286.2" width="12.4" height="67.8" rx="2"/><rect x="432.5" y="284.8" width="12.4" height="69.2" rx="2"/><rect x="453.1" y="283.5" width="12.4" height="70.5" rx="2"/><rect x="473.8" y="282.1" width="12.4" height="71.9" rx="2"/><rect x="494.5" y="280.8" width="12.4" height="73.2" rx="2"/><rect x="515.1" y="279.4" width="12.4" height="74.6" rx="2"/><rect x="535.8" y="278.1" width="12.4" height="75.9" rx="2"/><rect x="556.5" y="276.7" width="12.4" height="77.3" rx="2"/><rect x="577.1" y="275.4" width="12.4" height="78.6" rx="2"/><rect x="597.8" y="274" width="12.4" height="80" rx="2"/>
+    </g>
+    <path d="M46 354H666" stroke="#D2D5DD"/>
+  </g>
+  <defs><clipPath id="clip0"><rect width="678" height="372" fill="white"/></clipPath></defs>
+</svg>
