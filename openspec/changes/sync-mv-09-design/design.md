@@ -1,6 +1,6 @@
 ## Context
 
-section ③（MV-09／09b／09c）是全新功能，程式碼尚未實作。它掛在圖庫的分頁下：`LibraryView.vue` 已有「素材庫／編輯圖片／AI 修圖」三個分頁標籤，但只有「素材庫」有內容。此 change 從零建立編輯畫布、AI 修圖與裁切預覽。
+section ③（MV-09 `566:4717`／09b `608:5147`／09c `605:4963`）掛在圖庫的三個分頁下；`ImageEditorWorkspace.vue` 提供編輯畫布、AI 修圖與裁切預覽。
 
 ## Goals / Non-Goals
 

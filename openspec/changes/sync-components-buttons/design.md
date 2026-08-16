@@ -1,39 +1,51 @@
 ## Context
 
-6 個共用按鈕元件在初版實作時 Figma MCP 尚未串接，數值靠肉眼比對截圖，累積系統性誤差。MCP 恢復（Dev seat）後，抓元件庫實際實例逐一比對，歸納出 Figma 的按鈕統一規格並修正。所有元件都是 pug 模板 + scoped SCSS，色彩／陰影常數集中在 `_variables.scss`。
-
-從 Figma `get_design_context` 抓到的精確規格（node id 為證據）：
-
-| Figma 實例 | node | 填色/邊框 | 圓角 | padding | 字重 | 陰影 |
-| --- | --- | --- | --- | --- | --- | --- |
-| btn_生成試穿圖（主要填色）| 212:1574 | bg #2E3567 | 18px | 9px 16px | Regular 400 | 0 4 2 |
-| btn_確認生成（對話框主要+圖示）| 213:1717 | bg #2E3567 | 16px | 9px pl10/pr14 | Medium 500 | 0 4 2 |
-| btn_取消（外框）| 212:1628 | border #2E3567 | 18px | 9px 16px | Medium 500 | 0 4 2 |
-| btn_從圖庫選擇（外框）| 212:1572 | border #2E3567 | 18px | 9px 16px | Medium 500 | 0 4 2 |
-| btn_存入圖庫（外框）| 212:1576 | border #2E3567 | 18px | 9px 16px | Medium 500 | 0 4 2 |
-| btn_topup_home（橘色）| 212:1520 | bg #EA903A | 16px | 9px 14px | Medium 500 | 0 4 2 |
+Figma 元件庫 `btn`（node `170:13`）提供 `primary`、`secondary`、`outline`、`alert`、`ghost`、`subtle` 六種 type，各自具有 default、hover、pressed、focus、disabled 狀態。專案過去按使用情境拆成六個 Vue 元件，無法直接表達 Figma 的 type，也造成 Dialog 與頁面按鈕重複維護。
 
 ## Goals / Non-Goals
 
-**Goals:**
+**Goals**
 
-- 6 個共用按鈕元件的顏色、圓角、內距、字重、陰影對齊 Figma 元件庫。
-- 只改視覺樣式，不動元件的 props 介面、模板結構、事件行為。
+- 讓程式碼的 variant 與 Figma type 一對一。
+- 集中管理顏色、互動狀態、尺寸、焦點與停用狀態。
+- 逐頁確認操作的 Figma 元件類型後再替換。
+- 維持鍵盤焦點可見、原生 disabled 與 loading 語意。
 
-**Non-Goals:**
+**Non-Goals**
 
-- 不重構「選錯元件」的畫面用法（例如某處該用外框鈕卻用了 chip）——那屬於各畫面的 `sync-mv-*` change。
-- 不新增／合併按鈕元件；即使修正後 `GhostButton` 與 `OutlineButton` 外觀高度接近，仍各自保留（用法語意不同，避免牽一髮動全身）。
+- 不把 chip、tab、option card、model option、icon-only、tool button 或純文字連結併入 `AppButton`。
+- 不因共用化改變既有點擊事件、路由或業務流程。
 
 ## Decisions
 
-- **顏色修正在元件內把 `$blue-dark-300` 換成 `$blue-dark-500`，不改 `$blue-dark-300` 的變數定義。** `$blue-dark-300`（#171E52）同時是全站 body／標題文字色（`ConfirmGenerateDialog`、`FeedBadge`、`GenerationToast`、`TaskCenterPanel`、`ImagePickerDialog` 等都用它當文字色），若把定義改成 #2E3567，會連帶把所有文字改亮。Figma 的按鈕主色（#2E3567）正好等於既有的 `$blue-dark-500`，所以按鈕直接改用這個變數即可，語意也正確。考慮過的替代方案：改 `$blue-dark-300` 定義——已否決，波及全站文字色。
-  - 附註：`sync-mv-00-design` 的 design.md 曾記載「已把 `$blue-dark-300` 從 #171E52 改成 #2E3567」，但實際 `_variables.scss` 仍是 #171E52——該修正沒有真的落地。本 change 改用「元件內換變數」的作法取代，避免全站文字色被牽動。
+### 單一元件，以 variant 對應 Figma type
 
-- **圓角統一 18px（對話框帶圖示版與橘色鈕為 16px）。** Figma 頁面按鈕一致是 18px 圓角矩形；程式碼原本混用 10px（Primary）與 999px 全圓（Ghost／Dialog／Chip），全圓 pill 是誤讀。對話框 `btn_確認生成` 與 `btn_topup_home` 在 Figma 是 16px，故 `TopupButton` 取 16px；`DialogButton` 因同時涵蓋 `btn_取消`（18px）與 `btn_確認生成`（16px），取頁面標準 18px 讓對話框按鈕組視覺一致（差 2px，可接受）。
+使用 `AppButton` 的 `variant` prop，而不是為每個 type 建立獨立元件。這可避免六份相似的模板與狀態 CSS，並降低頁面誤用顏色或互動狀態的風險。
 
-- **陰影改用修正後的 `$btnBoxShadow`（0px 4px 2px）。** Figma 所有按鈕都是 `0 4 2`，程式碼的 `$btnBoxShadow` 是 `0 4 4`。此變數只被按鈕引用，直接改定義即可一次修正 Primary／Outline／Topup，其餘元件補上 `box-shadow: $btnBoxShadow`。
+### 共用視覺規則
 
-- **字重統一 Medium(500)。** Figma 按鈕多為 Noto Sans TC Medium；`PrimaryButton` 原本 600 過粗。主 CTA 節點（`btn_生成試穿圖`）雖標為 Regular 400，但取按鈕家族一致的 500，避免同類按鈕字重不一。
+- 基準高度：36px。
+- 文字：14px、Medium 500、18px line-height。
+- 一般圓角：18px；圖示緊湊版與儲值按鈕：16px。
+- primary：`#2E3567`；secondary：`#EA903A`。
+- primary、secondary、outline、alert 使用 `$btnBoxShadow`；ghost、subtle 不加陰影。
+- focus 使用 Figma 黃色焦點環，並保留足夠辨識度的深藍外環以符合無障礙需求。
 
-- **padding 統一 9px 16px（橘色鈕 9px 14px）、高度落在 36px。** `9px（上下）+ 14px 文字行高（含 lh18）+ 9px = 36px`，與 Figma 實例高度一致。`PrimaryButton` 原本 `11px 20px` 偏高偏寬。
+### 頁面對照原則
+
+| 畫面／位置 | Figma type | 程式碼 |
+| --- | --- | --- |
+| 儲值 | secondary | `variant="secondary"` |
+| 圖庫「上傳圖片」與「從圖庫加入」 | btn_icon／primary | `variant="primary" icon` |
+| 主要生成、儲存、前往圖庫 | primary | 預設 variant |
+| 從圖庫選擇、取消、下載、重新生成 | outline | `variant="outline"` |
+| 批次刪除、永久刪除 | alert | `variant="alert"` |
+| 批次下載、低強度文字操作 | ghost | `variant="ghost"` |
+| 圖片結果次要操作 | subtle | `variant="subtle"` |
+
+實際替換以對應畫面的 Figma instance 為準。MV03（node `12:2`）、MV04 結果畫面（node `491:9643`）、MV08（node `239:2924`）、圖庫批次列（node `440:6912`）及帶圖示按鈕元件（node `213:106`）已逐項核對。
+
+## Risks / Trade-offs
+
+- 頁面若以深層 selector 重寫共用按鈕，會再次造成漂移；頁面只應控制排列、寬度或 RWD，不應重寫 variant 顏色與狀態。
+- 某些操作外觀看似按鈕，但在 Figma 屬於 chip、tab 或純文字 action；錯誤替換會改變尺寸與資訊層級，因此保留原元件。
