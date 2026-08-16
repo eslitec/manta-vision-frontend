@@ -1,41 +1,46 @@
 <template lang="pug">
 Teleport(to="body")
   .picker(v-if="open" @click.self="close")
-    .picker__modal
+    .picker__modal(ref="dialogRef" role="dialog" aria-modal="true" :aria-labelledby="titleId" :aria-describedby="descriptionId" tabindex="-1")
       header.picker__head
         div
-          .picker__title {{ resolvedTitle }}
-          .picker__sub {{ t('imagePicker.subtitle') }}
-        button.picker__close(@click="close" :aria-label="t('common.close')")
-          i.ti.ti-x
+          .picker__title(:id="titleId") {{ resolvedTitle }}
+          .picker__sub(:id="descriptionId") {{ t('imagePicker.subtitle') }}
+        button.picker__close(data-dialog-initial-focus @click="close" :aria-label="t('common.close')")
+          IconClose
       .picker__toolbar
-        .search
-          i.ti.ti-search.search__icon
-          input.search__input(v-model="keyword" type="text" :placeholder="t('imagePicker.searchPlaceholder')")
+        AppSearchbar.picker__search(v-model="keyword" :label="t('imagePicker.searchPlaceholder')" :placeholder="t('imagePicker.searchPlaceholder')")
         .sources
-          button.chip(v-for="s in sources" :key="s.label" :class="{ 'isActive': activeSource === s.value }" @click="activeSource = s.value") {{ s.label }}
+          button.chip(v-for="s in sources" :key="s.label" :aria-pressed="activeSource === s.value" :class="{ 'isActive': activeSource === s.value }" @click="activeSource = s.value") {{ s.label }}
       .picker__grid
-        button.pick(v-for="a in filtered" :key="a.id" :class="{ 'isSelected': selectedIds.includes(a.id) }" @click="toggle(a.id)")
+        button.pick(v-for="a in filtered" :key="a.id" :aria-pressed="selectedIds.includes(a.id)" :class="{ 'isSelected': selectedIds.includes(a.id) }" @click="toggle(a.id)")
           .pick__thumb
             span.pick__check(v-if="selectedIds.includes(a.id)")
-              i.ti.ti-check
-            i.ti(:class="a.type === 'video' ? 'ti-player-play' : 'ti-photo'")
+              IconCheck
+            IconMovie(v-if="a.type === 'video'")
+            IconImagePlaceholder(v-else)
           .pick__meta
             span.pick__name {{ a.name }}
             span.tag {{ sourceLabel(a.tag) }}
       footer.picker__foot
         span.picker__count {{ t('imagePicker.selectedCount', { count }) }}
         .picker__actions
-          DialogButton(@click="close") {{ t('common.cancel') }}
-          DialogButton(variant="primary" :disabled="!count" @click="confirm") {{ multiple ? t('imagePicker.addSelected', { count }) : t('imagePicker.selectOne') }}
+          AppButton(variant="outline" @click="close") {{ t('common.cancel') }}
+          AppButton(variant="primary" :disabled="!count" @click="confirm") {{ multiple ? t('imagePicker.addSelected', { count }) : t('imagePicker.selectOne') }}
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAssets } from '@/composables/useAssets'
-import DialogButton from '@/components/DialogButton.vue'
+import AppButton from '@/components/AppButton.vue'
+import AppSearchbar from '@/components/AppSearchbar.vue'
+import IconCheck from '@/components/icons/IconCheck.vue'
+import IconClose from '@/components/icons/IconClose.vue'
+import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
+import IconMovie from '@/components/icons/IconMovie.vue'
 import type { Asset } from '@/types/asset'
+import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 
 const props = withDefaults(defineProps<{ title?: string; multiple?: boolean }>(), {
   title: undefined,
@@ -46,6 +51,9 @@ const emit = defineEmits<{
   (e: 'select-many', assets: Asset[]): void
 }>()
 const open = defineModel<boolean>('open', { required: true })
+const dialogRef = ref<HTMLElement | null>(null)
+const titleId = `image-picker-title-${crypto.randomUUID()}`
+const descriptionId = `image-picker-description-${crypto.randomUUID()}`
 
 const { assets, load } = useAssets()
 const { t } = useI18n()
@@ -92,6 +100,7 @@ watch(open, (v) => {
 })
 
 const close = () => (open.value = false)
+useAccessibleDialog(open, dialogRef, close)
 const confirm = () => {
   const chosen = assets.value.filter((a) => selectedIds.value.includes(a.id))
   if (!chosen.length) return
@@ -142,35 +151,16 @@ const confirm = () => {
   @include flex(space-between, center, 0.75rem);
   margin-bottom: 1rem;
 }
-.search {
-  position: relative;
+.picker__search {
   flex: 1;
-  &__icon {
-    position: absolute;
-    left: 0.75rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: $gray-100;
-    font-size: 1rem;
-  }
-  &__input {
-    width: 100%;
-    height: 2.375rem;
-    border: 1px solid $gray;
-    border-radius: 999px;
-    padding: 0 0.875rem 0 2.125rem;
-    font-size: 0.875rem;
-    color: $blue-dark-300;
-    outline: none;
-    &:focus {
-      border-color: $blue;
-    }
-  }
+  width: auto;
 }
 .sources {
   @include flex(flex-start, center, 0.375rem);
 }
 .chip {
+  min-width: 1.5rem;
+  min-height: 1.5rem;
   padding: 0.3125rem 0.75rem;
   border-radius: 999px;
   font-size: 0.8125rem;
