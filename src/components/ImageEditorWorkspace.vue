@@ -45,15 +45,16 @@
           span.option__cost(:class="{ free: o.free }")
             IconFeedBottleSmall(v-if="!o.free")
             b {{ o.free ? t('editor.free') : t('editor.feedShort', { count: o.cost }) }}
-      h3 {{ t(retouchMethod === 'command' ? 'editor.retouch.steps.requiredInstruction' : 'editor.retouch.steps.instruction') }}
-      textarea(
-        v-model="retouchInstruction"
-        maxlength="200"
-        :required="retouchMethod === 'command'"
-        :aria-label="t(retouchMethod === 'command' ? 'editor.retouch.steps.requiredInstruction' : 'editor.retouch.steps.instruction')"
-        :placeholder="t('editor.retouch.placeholder')"
-      )
-      small.charCounter {{ retouchInstruction.length }} / 200
+      template(v-if="retouchMethod === 'command'")
+        h3 {{ t('editor.retouch.steps.requiredInstruction') }}
+        textarea(
+          v-model="retouchInstruction"
+          maxlength="200"
+          required
+          :aria-label="t('editor.retouch.steps.requiredInstruction')"
+          :placeholder="t('editor.retouch.placeholder')"
+        )
+        small.charCounter {{ retouchInstruction.length }} / 200
       footer.panelAction
         span {{ t('common.estimatedCost') }} #[b {{ t('units.feed', { count: estimatedRetouchCost }) }}]
         AppButton(:disabled="!canStartRetouch" @click="startRetouch") {{ t('editor.retouch.start') }}
