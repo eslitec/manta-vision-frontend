@@ -1,193 +1,241 @@
 <template lang="pug">
 .brand(v-if="profile")
   header.brand__head
-    h1.brand__title 品牌資訊維護
-    p.brand__sub 維護此機器人的品牌描述與詞文素材。
-    p.brand__note
-      i.ti.ti-info-circle
-      span 品牌設定目前僅套用於「AI 產生行銷 PO 文」；圖生圖、圖生影、AI 試穿不會帶入品牌。
+    h1.brand__title {{ t('brandSettings.title') }}
+    p.brand__subtitle {{ t('brandSettings.subtitle') }}
+  nav.brandTabs(role="tablist" :aria-label="t('brandSettings.title')")
+    AppTab(
+      v-for="item in tabs"
+      :id="`brand-tab-${item.value}`"
+      :key="item.value"
+      :active="tab === item.value"
+      :aria-controls="`brand-panel-${item.value}`"
+      @click="tab = item.value"
+    ) {{ item.label }}
 
-  section.card
-    h3.card__title 品牌基本資料
+  section#brand-panel-basic.card.card--basic(v-if="tab === 'basic'" role="tabpanel" aria-labelledby="brand-tab-basic")
+    .card__head
+      h2 {{ t('brandSettings.tabs.basic') }}
     .field
-      label 品牌名稱
-      input(type="text" v-model="profile.name")
+      label(for="brand-name") {{ t('brandSettings.fields.name') }} #[small {{ profile.name.length }} / 20]
+      input#brand-name(v-model="profile.name" maxlength="20" :placeholder="t('brand.name')")
     .field
-      label 一句話定位
-      input(type="text" v-model="profile.positioning" placeholder="嚴選日常打扮與居品，讓生活有溫度")
+      label(for="brand-positioning") {{ t('brandSettings.fields.positioning') }} #[small {{ profile.positioning.length }} / 30]
+      input#brand-positioning(v-model="profile.positioning" maxlength="30" :placeholder="t('brandSettings.placeholders.positioning')")
     .field
-      label 官方網站
-      input(type="text" v-model="profile.website" placeholder="https://…")
+      label(for="brand-website") {{ t('brandSettings.fields.website') }}
+      input#brand-website(v-model="profile.website" inputmode="url" placeholder="www.rihan-select.com")
     .field
-      label 產業別
-      input(type="text" v-model="profile.industry")
+      label(for="brand-industry") {{ t('brandSettings.fields.industry') }}
+      .selectWrap
+        select#brand-industry(v-model="profile.industry")
+          option(v-for="item in industries" :key="item.value" :value="item.value") {{ item.label }}
+        IconChevronDown
 
-  section.card
-    h3.card__title 品牌視覺識別
+  section#brand-panel-visual.card.card--visual(v-else-if="tab === 'visual'" role="tabpanel" aria-labelledby="brand-tab-visual")
+    .card__head
+      h2 {{ t('brandSettings.tabs.visual') }}
+      p.card__sub {{ t('brandSettings.visualSubtitle') }}
     .field
-      label 品牌 Logo
-      label.logo
-        input.logo__input(type="file" accept="image/png,image/svg+xml,image/*" @change="onLogo")
-        img.logo__preview(v-if="profile.logoUrl" :src="profile.logoUrl" alt="Logo")
-        i.ti.ti-photo(v-else)
-        span {{ profile.logoName || '上傳 Logo（PNG／SVG，標準去背）' }}
+      label {{ t('brandSettings.fields.logo') }}
+      label.logo(for="brand-logo-upload")
+        input#brand-logo-upload(type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" @change="onLogo")
+        IconImagePlaceholder
+        .logo__copy
+          strong {{ profile.logoName || t('brandSettings.logoUpload') }}
+          span {{ t('brandSettings.logoUsage') }}
+      p.paletteStatus(v-if="analyzing" role="status" aria-live="polite") {{ t('brandSettings.palette.analyzing') }}
+      p.paletteStatus.paletteStatus--error(v-else-if="paletteError" role="alert") {{ paletteError }}
+      .detectedPalette(v-else-if="detectedColors.length" aria-labelledby="detected-palette-title")
+        .detectedPalette__head
+          strong#detected-palette-title {{ t('brandSettings.palette.title') }}
+          span {{ t('brandSettings.palette.hint') }}
+        .detectedPalette__colors
+          button.detectedColor(
+            v-for="color in detectedColors"
+            :key="color"
+            type="button"
+            :class="{ 'isSelected': selectedColor === color }"
+            :aria-pressed="selectedColor === color"
+            :aria-label="t('brandSettings.palette.select', { color })"
+            @click="selectedColor = color"
+          )
+            span.detectedColor__sample(:style="{ backgroundColor: color }" aria-hidden="true")
+            span {{ color }}
+        .detectedPalette__assign(v-if="selectedColor")
+          span {{ t('brandSettings.palette.assign', { color: selectedColor }) }}
+          .detectedPalette__actions
+            AppButton(
+              v-for="(label, index) in colorLabels"
+              :key="label"
+              size="compact"
+              :variant="profile.colors[index]?.hex.toUpperCase() === selectedColor ? 'primary' : 'outline'"
+              @click="assignColor(index)"
+            ) {{ t('brandSettings.palette.setAs', { role: label }) }}
     .field
-      label 品牌色票
+      label {{ t('brandSettings.fields.colors') }}
       .swatches
         .swatch(v-for="(c, i) in profile.colors" :key="i")
-          input.swatch__chip(type="color" v-model="c.hex")
-          button.swatch__del(@click="removeColor(i)" aria-label="移除")
-            i.ti.ti-x
-          input.swatch__label(type="text" v-model="c.label")
-          span.swatch__hex {{ c.hex.toUpperCase() }}
-        button.swatch__add(@click="addColor")
-          i.ti.ti-plus
-          span 新增
-      .suggest(v-if="analyzing || suggested.length")
-        .suggest__head
-          span.suggest__title(v-if="analyzing") 分析 Logo 顏色中…
-          span.suggest__title(v-else) 從 Logo 抽取的顏色（點色塊加入色票）
-          button.suggest__apply(v-if="suggested.length" @click="applyAllSuggested") 全部套用
-        .suggest__chips(v-if="suggested.length")
-          button.suggest__chip(
-            v-for="c in suggested"
-            :key="c"
-            :style="{ background: c }"
-            :title="c"
-            @click="addSuggested(c)"
-          )
-            span.suggest__hex {{ c }}
+          input(type="color" v-model="c.hex" :aria-label="colorLabels[i] || t('brandSettings.color.new')")
+          span.swatch__name {{ colorLabels[i] || t('brandSettings.color.new') }}
+          span {{ c.hex.toUpperCase() }}
+        button.swatch.swatch--add(type="button" :aria-label="t('common.add')" @click="addColor")
+          span.swatch__color(aria-hidden="true")
+          span.swatch__name {{ t('common.add') }}
 
-  section.card
-    h3.card__title 文案風格
+  section#brand-panel-copy.card.card--copy(v-else-if="tab === 'copy'" role="tabpanel" aria-labelledby="brand-tab-copy")
+    .card__head
+      h2 {{ t('brandSettings.tabs.copy') }}
+      p.card__sub {{ t('brandSettings.copySubtitle') }}
     .field
-      label 語氣風格（可複選）
+      label {{ t('brandSettings.fields.tones') }}
       .chips
-        button.chip(v-for="t in toneOptions" :key="t" :class="{ 'is-on': profile.tones.includes(t) }" @click="toggleTone(t)") {{ t }}
+        button.chip(v-for="t in toneOptions" :key="t" type="button" :aria-pressed="profile.tones.includes(t)" :class="{ active: profile.tones.includes(t) }" @click="toggleTone(t)") {{ t }}
     .field
-      label 常用 Hashtag
+      label {{ t('brandSettings.fields.hashtags') }}
       .chips
         span.tag(v-for="(h, i) in profile.hashtags" :key="h")
-          span {{ h }}
-          button.tag__del(@click="removeHashtag(i)" aria-label="移除")
-            i.ti.ti-x
-        input.tagadd(
-          v-if="addingTag"
-          ref="tagInput"
-          v-model="newTag"
-          type="text"
-          placeholder="輸入標籤，Enter 新增"
-          @keyup.enter="confirmAddTag"
-          @keyup.esc="cancelAddTag"
-          @blur="confirmAddTag"
-        )
-        button.chip(v-else @click="startAddTag") ＋ 新增標籤
+          | {{ h }}
+          button.tag__remove(type="button" :aria-label="`${t('common.delete')} ${h}`" @click="removeHashtag(i)") ×
+        input.tagInput(v-if="addingTag" ref="tagInput" v-model="newTag" :aria-label="t('brandSettings.addHashtag')" @keyup.enter="confirmAddTag" @blur="confirmAddTag")
+        button.chip.chip--add(v-else type="button" @click="startAddTag") {{ t('brandSettings.addHashtag') }}
     .field
-      label 稱呼客戶方式
-      input.short(type="text" v-model="profile.addressing")
+      label(for="brand-addressing") {{ t('brandSettings.fields.addressing') }}
+      .selectWrap
+        select#brand-addressing(v-model="profile.addressing")
+          option(v-for="item in addressingOptions" :key="item.value" :value="item.value") {{ item.label }}
+        IconChevronDown
     .field
-      label 避免使用的字詞／不希望提及
-      textarea(v-model="profile.avoidWords" rows="2" placeholder="例：最便宜、瘋狂促銷字眼、缺乏品味…")
+      label(for="brand-avoid-words") {{ t('brandSettings.fields.avoidWords') }}
+      textarea#brand-avoid-words(v-model="profile.avoidWords" rows="3" :placeholder="t('brandSettings.placeholders.avoidWords')")
 
-  .brand__foot
-    span.brand__saved(v-if="saved") 已儲存
-    PrimaryButton(:disabled="saving" @click="onSave") {{ saving ? '儲存中…' : '儲存設定' }}
+  section#brand-panel-compliance.card.card--compliance(v-else role="tabpanel" aria-labelledby="brand-tab-compliance")
+    .card__head
+      h2 {{ t('brandSettings.tabs.compliance') }}
+    .notice
+      IconAlertTriangleFilled
+      span {{ t('brandSettings.complianceNotice') }}
+    .field
+      label(for="brand-portrait-consent") {{ t('brandSettings.fields.portraitConsent') }}
+      textarea#brand-portrait-consent(v-model="portraitConsent" rows="4")
+    .field
+      label(for="brand-image-license") {{ t('brandSettings.fields.imageLicense') }} #[small {{ imageLicense.length }} / 200]
+      input#brand-image-license(v-model="imageLicense" maxlength="200")
+
+  footer.brand__foot
+    span(v-if="saved" role="status" aria-live="polite") {{ t('common.saved') }}
+    AppButton(variant="outline" @click="store.load(true)") {{ t('common.cancel') }}
+    AppButton(:loading="saving" @click="onSave") {{ saving ? t('common.saving') : t('brandSettings.save') }}
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { useBrandStore } from '@/stores/brand'
-import PrimaryButton from '@/components/PrimaryButton.vue'
+import AppButton from '@/components/AppButton.vue'
+import AppTab from '@/components/AppTab.vue'
+import IconAlertTriangleFilled from '@/components/icons/IconAlertTriangleFilled.vue'
+import IconChevronDown from '@/components/icons/IconChevronDown.vue'
+import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
 import { extractColors } from '@/utils/colors'
-
 const store = useBrandStore()
 const { profile, saving } = storeToRefs(store)
+const { t } = useI18n()
+const tabs = computed(() =>
+  ['basic', 'visual', 'copy', 'compliance'].map((value) => ({ value, label: t(`brandSettings.tabs.${value}`) })),
+)
+const tab = ref('basic')
 const saved = ref(false)
+const toneOptions = computed(() =>
+  ['warm', 'literary', 'professional', 'playful', 'minimal', 'luxury'].map((key) => t(`brandSettings.tones.${key}`)),
+)
+const colorLabels = computed(() => ['primary', 'secondary', 'accent'].map((key) => t(`brandSettings.color.${key}`)))
+const industries = computed(() =>
+  ['服飾 · 生活選物', '美妝保養', '食品餐飲', '其他'].map((value, index) => ({
+    value,
+    label: t(`brandSettings.industries.${index}`),
+  })),
+)
+const addressingOptions = computed(() =>
+  ['你', '您', '親愛的顧客'].map((value, index) => ({ value, label: t(`brandSettings.addressing.${index}`) })),
+)
+const portraitConsent = ref(t('brandSettings.defaults.portraitConsent'))
+const imageLicense = ref(t('brandSettings.defaults.imageLicense'))
+const detectedColors = ref<string[]>([])
+const selectedColor = ref('')
 const analyzing = ref(false)
-const suggested = ref<string[]>([])
-
-const toneOptions = ['溫暖親切', '文青質感', '專業可信', '活潑俏皮', '簡約網感']
-
+const paletteError = ref('')
+const addingTag = ref(false),
+  newTag = ref(''),
+  tagInput = ref<HTMLInputElement | null>(null)
 onMounted(store.load)
-
-function readAsDataURL(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(r.result as string)
-    r.onerror = reject
-    r.readAsDataURL(file)
-  })
-}
-
-async function onLogo(e: Event) {
-  const f = (e.target as HTMLInputElement).files?.[0]
-  if (!f || !profile.value) return
-  profile.value.logoName = f.name
-  // mock：Logo 轉 data URL 存進 profile，會跟著「儲存設定」一起被記錄、也能預覽。
-  // 後端就緒後改為上傳 blob 到 R2、把 logoUrl 換成 R2 網址。
-  try {
-    profile.value.logoUrl = await readAsDataURL(f)
-  } catch {
-    /* 讀取失敗就不設預覽 */
-  }
-  analyzing.value = true
-  suggested.value = []
-  try {
-    suggested.value = await extractColors(f) // 前端分析 Logo 主導色
-  } catch {
-    suggested.value = []
-  } finally {
-    analyzing.value = false
-  }
-}
-function addSuggested(hex: string) {
-  if (!profile.value) return
-  if (profile.value.colors.some((c) => c.hex.toUpperCase() === hex.toUpperCase())) return // 已有則略過
-  profile.value.colors.push({ label: '品牌色', hex })
-}
-function applyAllSuggested() {
-  suggested.value.forEach(addSuggested)
-}
 function toggleTone(t: string) {
   if (!profile.value) return
   const i = profile.value.tones.indexOf(t)
   if (i >= 0) profile.value.tones.splice(i, 1)
   else profile.value.tones.push(t)
 }
-
-// 常用 Hashtag：刪除與新增（行內輸入）
-const addingTag = ref(false)
-const newTag = ref('')
-const tagInput = ref<HTMLInputElement | null>(null)
-
 function removeHashtag(i: number) {
   profile.value?.hashtags.splice(i, 1)
 }
 async function startAddTag() {
   addingTag.value = true
-  newTag.value = ''
   await nextTick()
   tagInput.value?.focus()
 }
 function confirmAddTag() {
-  if (profile.value) {
-    let t = newTag.value.trim()
-    if (t) {
-      if (!t.startsWith('#')) t = '#' + t // 沒帶井號自動補上
-      if (!profile.value.hashtags.includes(t)) profile.value.hashtags.push(t)
-    }
+  let t = newTag.value.trim()
+  if (profile.value && t) {
+    if (!t.startsWith('#')) t = '#' + t
+    if (!profile.value.hashtags.includes(t)) profile.value.hashtags.push(t)
   }
   addingTag.value = false
-}
-function cancelAddTag() {
-  addingTag.value = false
+  newTag.value = ''
 }
 function addColor() {
-  profile.value?.colors.push({ label: '新色', hex: '#888888' })
+  profile.value?.colors.push({ label: t('brandSettings.color.new'), hex: '#ffffff' })
 }
-function removeColor(i: number) {
-  profile.value?.colors.splice(i, 1)
+async function onLogo(e: Event) {
+  const f = (e.target as HTMLInputElement).files?.[0]
+  if (!f || !profile.value) return
+  analyzing.value = true
+  paletteError.value = ''
+  detectedColors.value = []
+  selectedColor.value = ''
+  profile.value.logoName = f.name
+  try {
+    const [logoUrl, colors] = await Promise.all([fileToDataUrl(f), extractColors(f, 8)])
+    profile.value.logoUrl = logoUrl
+    detectedColors.value = colors
+    selectedColor.value = colors[0] ?? ''
+    if (!colors.length) paletteError.value = t('brandSettings.palette.noColors')
+  } catch {
+    paletteError.value = t('brandSettings.palette.failed')
+  } finally {
+    analyzing.value = false
+  }
+}
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+function assignColor(index: number) {
+  if (!profile.value || !selectedColor.value) return
+  while (profile.value.colors.length <= index) {
+    profile.value.colors.push({ label: colorLabels.value[profile.value.colors.length] ?? '', hex: '#FFFFFF' })
+  }
+  const previousIndex = profile.value.colors.findIndex(
+    (color, colorIndex) => colorIndex !== index && color.hex.toUpperCase() === selectedColor.value,
+  )
+  if (previousIndex >= 0) {
+    profile.value.colors[previousIndex].hex = profile.value.colors[index].hex
+  }
+  profile.value.colors[index].hex = selectedColor.value
 }
 async function onSave() {
   await store.save()
@@ -197,54 +245,504 @@ async function onSave() {
 </script>
 
 <style scoped lang="scss">
-.brand { max-width: 680px; }
-.brand__head { margin-bottom: 20px; }
-.brand__title { font-size: 24px; font-weight: 800; color: $blue-dark-300; }
-.brand__sub { font-size: 14px; color: $gray-400; margin-top: 4px; }
-.brand__note { @include flex(flex-start, center, 8px); margin-top: 12px; padding: 10px 14px; background: $blue-light; border-radius: 10px; font-size: 13px; color: $blue-dark-300;
-  i { font-size: 16px; color: $blue; flex-shrink: 0; } }
-.card { @include card; padding: 22px 24px; margin-bottom: 16px; }
-.card__title { font-size: 16px; font-weight: 700; color: $blue-dark-300; margin-bottom: 16px; }
-.field { margin-bottom: 16px; &:last-child { margin-bottom: 0; }
-  label { display: block; font-size: 13px; color: $gray-400; margin-bottom: 6px; }
-  input:not([type='color']):not([type='file']):not(.tagadd), textarea { width: 100%; border: 1px solid $gray; border-radius: 10px; padding: 10px 14px; font-size: 14px; font-family: inherit; color: $blue-dark-300; outline: none; resize: vertical;
-    &:focus { border-color: $blue; } &::placeholder { color: $gray-100; } }
-  input.short { max-width: 160px; } }
-.logo { display: flex; align-items: center; gap: 12px; border: 1.5px dashed $gray; border-radius: 10px; padding: 16px; color: $gray-100; font-size: 20px; background: $blue-light; cursor: pointer;
-  &:hover { border-color: $blue; }
-  &__input { display: none; }
-  &__preview { width: 40px; height: 40px; border-radius: 8px; object-fit: contain; background: $white; border: 1px solid $gray; flex-shrink: 0; }
-  span { font-size: 13px; color: $gray-400; } }
-.suggest { margin-top: 16px; padding: 14px; border: 1px dashed $babyBlue; border-radius: 10px; background: $blue-light;
-  &__head { @include flex(space-between, center); margin-bottom: 10px; }
-  &__title { font-size: 13px; color: $gray-400; }
-  &__apply { font-size: 13px; font-weight: 600; color: $blue; }
-  &__chips { @include flex(flex-start, center, 10px); flex-wrap: wrap; }
-  &__chip { @include flex(flex-end, center); width: 72px; height: 48px; border-radius: 8px; border: 1px solid rgba(23,30,82,.12); cursor: pointer; overflow: hidden;
-    &:hover { transform: translateY(-1px); } }
-  &__hex { width: 100%; text-align: center; font-size: 10px; font-weight: 600; color: $white; background: rgba(23,30,82,.4); padding: 2px 0; } }
-.swatches { @include flex(flex-start, flex-start, 16px); flex-wrap: wrap; }
-.swatch { position: relative; @include flex(flex-start, center, 6px); flex-direction: column; width: 64px;
-  &__chip { width: 56px; height: 44px; border-radius: 8px; border: 1px solid $gray; padding: 0; cursor: pointer;
-    &::-webkit-color-swatch-wrapper { padding: 0; }
-    &::-webkit-color-swatch { border: none; border-radius: 7px; }
-    &::-moz-color-swatch { border: none; border-radius: 7px; } }
-  &__del { position: absolute; top: -7px; right: 2px; width: 20px; height: 20px; border-radius: 50%; background: $red; color: $white; @include flex(center, center); opacity: 0; transition: opacity .12s; box-shadow: $boxShadow; z-index: 2;
-    i { font-size: 13px; line-height: 1; } }
-  &:hover &__del { opacity: 1; }
-  &__label { width: 100%; text-align: center; font-size: 12px; color: $blue-dark-300; border: none; padding: 0; outline: none; background: none;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; &:focus { color: $blue; } }
-  &__hex { font-size: 11px; color: $gray-100; white-space: nowrap; }
-  &__add { @include flex(center, center, 4px); flex-direction: column; width: 56px; height: 44px; border: 1px dashed $gray; border-radius: 8px; color: $gray-100; font-size: 16px;
-    span { font-size: 12px; } } }
-.chips { @include flex(flex-start, center, 8px); flex-wrap: wrap; }
-.chip { padding: 6px 14px; border-radius: 999px; font-size: 13px; color: $gray-400; border: 1px solid $gray; background: $white;
-  &.is-on { background: $blue-dark-300; color: $white; border-color: $blue-dark-300; } }
-.tag { @include flex(center, center, 6px); padding: 6px 8px 6px 12px; border-radius: 999px; font-size: 13px; background: $tagOrange; color: #99521e;
-  &__del { @include flex(center, center); width: 16px; height: 16px; border-radius: 50%; color: #99521e; opacity: .55; flex-shrink: 0;
-    i { font-size: 12px; line-height: 1; }
-    &:hover { opacity: 1; background: rgba(153, 82, 30, .16); } } }
-.tagadd { height: 32px; border: 1px solid $blue; border-radius: 999px; padding: 0 14px; font-size: 13px; font-family: inherit; color: $blue-dark-300; outline: none; }
-.brand__foot { @include flex(flex-end, center, 12px); margin-top: 20px; }
-.brand__saved { font-size: 13px; color: $green; }
+.brand {
+  width: 100%;
+  color: $dark-blue-gray;
+
+  &__head {
+    height: 3.125rem;
+  }
+
+  &__title {
+    color: $blue-dark-500;
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.8125rem;
+  }
+
+  &__subtitle {
+    margin-top: 0.125rem;
+    color: #606692;
+    font-size: 0.875rem;
+    line-height: 1.1875rem;
+  }
+
+  &__foot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1rem;
+
+    span {
+      color: #45b85b;
+      font-size: 0.75rem;
+    }
+  }
+}
+
+.brandTabs {
+  display: flex;
+  gap: 1.5rem;
+  height: 1.5625rem;
+  margin: 1rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid $gray;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  :deep(.appTab) {
+    flex-shrink: 0;
+    height: 1.5625rem;
+    line-height: 1.0625rem;
+    white-space: nowrap;
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow: hidden;
+  padding: 1.5rem;
+  border-radius: 10px;
+  background: $white;
+  box-shadow: 0 4px 7px rgba(96, 100, 114, 0.2);
+
+  &__head {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+
+    h2 {
+      color: $blue-dark-500;
+      font-size: 1.125rem;
+      font-weight: 700;
+      line-height: 1.375rem;
+    }
+  }
+
+  &__sub {
+    color: $gray-100;
+    font-size: 0.75rem;
+    line-height: 0.9375rem;
+  }
+}
+
+.card--visual .card__head h2,
+.card--copy .card__head h2 {
+  line-height: 1.3125rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow: hidden;
+
+  > label:not(.logo) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: $dark-blue-gray;
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1.25rem;
+
+    small {
+      color: $gray-100;
+      font-size: 0.75rem;
+      font-weight: 400;
+      line-height: normal;
+    }
+  }
+
+  input:not([type='color']):not([type='file']),
+  textarea,
+  select {
+    width: 100%;
+    border: 1px solid $gray;
+    border-radius: 18px;
+    outline: none;
+    background: $white;
+    color: $gray-100;
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 400;
+
+    &:focus-visible {
+      outline: 2px solid $yellow;
+      outline-offset: 2px;
+    }
+  }
+
+  input:not([type='color']):not([type='file']) {
+    height: 2.0625rem;
+    padding: 0.5rem 0.875rem;
+  }
+
+  textarea {
+    width: 12.5rem;
+    max-width: 100%;
+    padding: 0.75rem;
+    border: 0;
+    border-radius: 8px;
+    background: $blue-light;
+    color: $dark-blue-gray;
+    line-height: 1.25rem;
+    resize: none;
+  }
+}
+
+.selectWrap {
+  position: relative;
+
+  select {
+    height: 2.75rem;
+    padding: 0.75rem 2.75rem 0.75rem 0.75rem;
+    appearance: none;
+    border: 0;
+    border-radius: 8px;
+    background: $blue-light;
+    color: $dark-blue-gray;
+    line-height: 1.25rem;
+  }
+
+  svg {
+    position: absolute;
+    top: 50%;
+    right: 0.75rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    color: $dark-blue-gray;
+    pointer-events: none;
+    transform: translateY(-50%);
+  }
+}
+
+.logo {
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-start !important;
+  gap: 0.75rem;
+  padding: 0.9375rem 1rem;
+  border: 1px dashed #d2d5dd;
+  border-radius: 8px;
+  cursor: pointer;
+
+  input {
+    display: none;
+  }
+
+  > svg {
+    flex-shrink: 0;
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  &__copy {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+
+    strong {
+      color: $blue-dark-500;
+      font-size: 0.875rem;
+      line-height: 1.25rem;
+    }
+
+    span {
+      color: $gray-100;
+      font-size: 0.75rem;
+      line-height: 1rem;
+    }
+  }
+}
+
+.swatches {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  overflow-x: auto;
+}
+
+.paletteStatus {
+  color: #606692;
+  font-size: 0.75rem;
+  line-height: 1rem;
+
+  &--error {
+    color: #d93e28;
+  }
+}
+
+.detectedPalette {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  border-radius: 8px;
+  background: $blue-light;
+
+  &__head {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+
+    strong {
+      color: $blue-dark-500;
+      font-size: 0.875rem;
+      line-height: 1.25rem;
+    }
+
+    span {
+      color: #606692;
+      font-size: 0.75rem;
+      line-height: 1rem;
+    }
+  }
+
+  &__colors,
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  &__assign {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    color: #606692;
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+}
+
+.detectedColor {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2.75rem;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid #d2d5dd;
+  border-radius: 8px;
+  background: $white;
+  color: #606692;
+  font-size: 0.75rem;
+  line-height: 1rem;
+
+  &__sample {
+    width: 1.75rem;
+    height: 1.75rem;
+    flex-shrink: 0;
+    border: 1px solid #d2d5dd;
+    border-radius: 6px;
+  }
+
+  &.isSelected {
+    border-color: $blue-dark-500;
+    box-shadow: 0 0 0 1px $blue-dark-500;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $yellow;
+    outline-offset: 2px;
+  }
+}
+
+.swatch {
+  display: flex;
+  flex: 0 0 6.25rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  color: #606692;
+  font-size: 0.75rem;
+  line-height: 1rem;
+
+  input,
+  &__color {
+    width: 3rem;
+    height: 3rem;
+    padding: 0;
+    overflow: hidden;
+    appearance: none;
+    border: 1px solid $blue-light;
+    border-radius: 8px;
+    background: $white;
+  }
+
+  input::-webkit-color-swatch-wrapper {
+    padding: 0;
+  }
+
+  input::-webkit-color-swatch {
+    border: 0;
+  }
+
+  input::-moz-color-swatch {
+    border: 0;
+  }
+
+  &__name {
+    color: #606692;
+    font-weight: 400;
+  }
+
+  > span:last-child:not(.swatch__name) {
+    color: $gray-100;
+  }
+
+  &--add {
+    border: 0;
+    background: transparent;
+
+    &:focus-visible {
+      outline: 2px solid $yellow;
+      outline-offset: 2px;
+    }
+  }
+}
+
+.chips {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.chip {
+  height: 1.375rem;
+  padding: 0.1875rem 0.75rem;
+  border: 1px solid #d2d5dd;
+  border-radius: 16px;
+  background: $white;
+  color: #606692;
+  font-size: 0.8125rem;
+  line-height: 0.875rem;
+
+  &.active {
+    border-color: #606692;
+    color: $blue-dark-500;
+  }
+
+  &--add {
+    height: 2rem;
+    padding: 0.375rem 0.875rem;
+    border-color: $gray-100;
+    border-style: dashed;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $yellow;
+    outline-offset: 2px;
+  }
+}
+
+.tag {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 1.75rem;
+  padding: 0 0.75rem;
+  border-radius: 14px;
+  background: #f6eac1;
+  color: $orange;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+
+  &__remove {
+    position: absolute;
+    top: -0.375rem;
+    right: -0.375rem;
+    display: grid;
+    width: 1rem;
+    height: 1rem;
+    place-items: center;
+    border: 1px solid $gray;
+    border-radius: 50%;
+    opacity: 0;
+    background: $white;
+    color: $dark-blue-gray;
+    font-size: 0.75rem;
+    line-height: 1;
+    transition: opacity 0.15s;
+  }
+
+  &:hover &__remove,
+  &__remove:focus-visible {
+    opacity: 1;
+  }
+}
+
+.tagInput {
+  max-width: 12.5rem;
+  height: 2rem !important;
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem 0.875rem;
+  border-left: 3px solid #f2bb00;
+  border-radius: 8px;
+  background: $blue-light;
+  color: $dark-blue-gray;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: normal;
+
+  svg {
+    flex-shrink: 0;
+    width: 1.25rem;
+    height: 1.25rem;
+    color: $yellow;
+  }
+}
+
+.card--copy textarea {
+  height: 5rem;
+  color: $gray-100;
+}
+
+.card--compliance textarea {
+  height: 5.5rem;
+}
+
+@media (max-width: $bp-md) {
+  .brand {
+    &__head {
+      height: auto;
+    }
+
+    &__foot {
+      flex-wrap: wrap;
+    }
+  }
+
+  .brandTabs {
+    margin: 0.75rem 0 1rem;
+  }
+
+  .card {
+    padding: 1rem;
+  }
+
+  .field textarea {
+    width: 100%;
+  }
+
+  .logo__copy {
+    white-space: normal;
+  }
+}
 </style>

@@ -1,59 +1,63 @@
 <template lang="pug">
 .genimg
+  h1.visuallyHidden {{ t('routeTitles.generateImage') }}
   section.panel.genimg__input
     .step
       .step__title {{ t('image.steps.reference') }}
       .dropzone
-        i.ti.ti-photo.dropzone__icon
+        IconImagePlaceholder.dropzone__icon
         span.dropzone__name(v-if="refImage") {{ refImage.name }}
       .dropzone__actions
-        GhostButton(@click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
+        AppButton(variant="outline" @click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
         span.dropzone__hint {{ t('common.orDragUpload') }}
 
     .step
       .step__title {{ t('image.steps.prompt') }}
-      textarea.textarea(v-model="prompt" rows="4" :placeholder="t('image.promptPlaceholder')")
+      textarea#image-prompt.textarea(v-model="prompt" rows="4" :aria-label="t('image.steps.prompt')" :placeholder="t('image.promptPlaceholder')")
       .assist
         button.assist__action(:disabled="assisting || !prompt" @click="assist")
-          i.ti(:class="assisting ? 'ti-loader spin' : 'ti-sparkles'")
           span {{ assisting ? t('image.assisting') : t('image.assist') }}
         span.assist__hint {{ t('image.assistHint') }}
       button.advanced(@click="advancedOpen = !advancedOpen")
         span {{ t('image.advancedSettings') }}
-        i.ti(:class="advancedOpen ? 'ti-chevron-up' : 'ti-chevron-down'")
+        IconChevronDown(:class="{ isUp: advancedOpen }")
       .adv(v-show="advancedOpen")
         .adv__row
-          label.adv__label
+          label.adv__label(for="image-reference-strength")
             span {{ t('image.referenceStrength') }}
             span.adv__val {{ referenceStrength.toFixed(2) }}
-          input.adv__range(type="range" min="0" max="1" step="0.05" v-model.number="referenceStrength")
-          span.adv__hint {{ t('image.strengthHint') }}{{ refImage ? '' : t('image.referenceRequired') }}
+          input#image-reference-strength.adv__range(type="range" min="0" max="1" step="0.05" v-model.number="referenceStrength" :aria-describedby="'image-reference-strength-hint'")
+          span#image-reference-strength-hint.adv__hint {{ t('image.strengthHint') }}{{ refImage ? '' : t('image.referenceRequired') }}
         .adv__row
-          label.adv__label {{ t('image.negativePrompt') }}
-          input.adv__input(type="text" v-model="negativePrompt" :placeholder="t('image.negativePlaceholder')")
+          label.adv__label(for="image-negative-prompt") {{ t('image.negativePrompt') }}
+          input#image-negative-prompt.adv__input(type="text" v-model="negativePrompt" :placeholder="t('image.negativePlaceholder')")
         .adv__row
-          label.adv__label {{ t('image.seed') }}
-          input.adv__input(type="number" v-model="seedInput" :placeholder="t('image.seedPlaceholder')")
+          label.adv__label(for="image-seed") {{ t('image.seed') }}
+          input#image-seed.adv__input(type="number" v-model="seedInput" :placeholder="t('image.seedPlaceholder')")
 
     .step
       .step__head
         span.step__title {{ t('image.steps.model') }}
         span.step__hint {{ t('image.modelHint') }}
       .models
-        button.modelcard(v-for="t in imageTiers" :key="t.key" :class="{ 'isActive': imageTier === t.key }" @click="imageTier = t.key")
-          .modelcard__header
-            span.modelcard__name {{ $t(`modelTiers.${t.key}.label`) }}
-            span.modelcard__badge ×{{ t.multiplier }}
-          span.modelcard__cost {{ $t('image.feedPerImage', { count: IMAGE_BASE_COST * t.multiplier }) }}
-          span.modelcard__desc {{ $t(`image.modelDescriptions.${t.key}`) }}
+        ModelOption(
+          v-for="tier in imageTiers"
+          :key="tier.key"
+          :name="$t(`modelTiers.${tier.key}.label`)"
+          :multiplier="tier.multiplier"
+          :cost="$t('image.feedPerImage', { count: IMAGE_BASE_COST * tier.multiplier })"
+          :description="$t(`image.modelDescriptions.${tier.key}`)"
+          :selected="imageTier === tier.key"
+          @click="imageTier = tier.key"
+        )
 
     BrandToggle.genimg__brand(v-model="applyBrand" @edit="goBrandSettings")
 
     .count
       span.count__label {{ t('image.count') }}
-      button.count__pill(v-for="c in counts" :key="c" :class="{ 'isActive': count === c }" @click="count = c") {{ t('image.imageCount', { count: c }) }}
+      button.count__pill(v-for="c in counts" :key="c" :aria-pressed="count === c" :class="{ 'isActive': count === c }" @click="count = c") {{ t('image.imageCount', { count: c }) }}
 
-    p.err(v-if="errorMsg") {{ errorMsg }}
+    p.err(v-if="errorMsg" role="alert") {{ errorMsg }}
 
     .genimg__footer
       .cost
@@ -61,8 +65,8 @@
         .cost__value
           IconFeedBottleSmall.cost__icon
           span {{ t('units.feed', { count: estCost }) }}
-      PrimaryButton(:disabled="generating || !prompt" @click="generate")
-        i.ti(:class="generating ? 'ti-loader spin' : 'ti-plus'")
+      AppButton(:disabled="generating || !prompt" @click="generate")
+        component(:is="generating ? IconLoader : IconAddObject" :class="{ spin: generating }")
         span {{ generating ? t('common.generating') : t('image.generate') }}
 
   section.panel.genimg__result
@@ -70,15 +74,15 @@
       h2.result__title {{ t('common.generationResult') }}
       span.result__hint {{ t('image.resultHint') }}
     .result__empty(v-if="!results.length") {{ t('image.emptyResult') }}
-    .result__grid(v-else)
+    .result__grid(v-else role="status" aria-live="polite")
       .result__item(v-for="r in results" :key="r.id")
         .result__thumb
           span.result__badge(v-if="r.adopted") {{ t('image.adopted') }}
-          i.ti.ti-photo
+          IconImagePlaceholder
         .result__actions
-          PrimaryButton(@click="saveToLib(r)") {{ r.savedAssetId ? t('common.saved') : t('common.saveToLibrary') }}
-          ChipButton(variant="plain" @click="download(r)") {{ t('common.download') }}
-          ChipButton(variant="plain" @click="regen(r)") {{ t('common.regenerate') }}
+          AppButton(@click="saveToLib(r)") {{ r.savedAssetId ? t('common.saved') : t('common.saveToLibrary') }}
+          AppButton(variant="subtle" @click="download(r)") {{ t('common.download') }}
+          AppButton(variant="subtle" @click="regen(r)") {{ t('common.regenerate') }}
 
   ImagePickerDialog(v-model:open="pickerOpen" :title="t('image.pickerTitle')" @select="onPickReference")
 </template>
@@ -87,11 +91,15 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
-import PrimaryButton from '@/components/PrimaryButton.vue'
-import GhostButton from '@/components/GhostButton.vue'
-import ChipButton from '@/components/ChipButton.vue'
+import AppButton from '@/components/AppButton.vue'
 import BrandToggle from '@/components/BrandToggle.vue'
+import ModelOption from '@/components/ModelOption.vue'
 import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
+import IconAddObject from '@/components/icons/IconAddObject.vue'
+import IconAiSparkle from '@/components/icons/IconAiSparkle.vue'
+import IconChevronDown from '@/components/icons/IconChevronDown.vue'
+import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
+import IconLoader from '@/components/icons/IconLoader.vue'
 import { useRouter } from 'vue-router'
 import { useFeedStore } from '@/stores/feed'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
@@ -136,7 +144,7 @@ onMounted(() => {
 })
 
 const tierMultiplier = computed(() => imageTiers.find((t) => t.key === imageTier.value)?.multiplier ?? 1)
-const estCost = computed(() => count.value * IMAGE_BASE_COST * tierMultiplier.value)
+const estCost = computed(() => IMAGE_BASE_COST * tierMultiplier.value)
 
 // AI 輔助描述：呼叫增強器把口語擴寫成結構化 prompt
 async function assist() {
@@ -217,8 +225,10 @@ const goBrandSettings = () => router.push('/settings')
 
 <style scoped lang="scss">
 .genimg {
+  width: 100%;
+  min-width: 0;
   display: grid;
-  grid-template-columns: 25rem 1fr;
+  grid-template-columns: minmax(20rem, 25rem) minmax(0, 1fr);
   gap: 1rem;
   align-items: stretch;
   min-height: 100%;
@@ -330,6 +340,9 @@ const goBrandSettings = () => router.push('/settings')
   margin-bottom: 0.75rem;
   background: $blue-light;
 }
+.isUp {
+  transform: rotate(180deg);
+}
 .adv {
   border: 1px solid $gray;
   border-radius: 10px;
@@ -416,54 +429,20 @@ const goBrandSettings = () => router.push('/settings')
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
+  @include below($bp-sm) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    :deep(.modelOption:last-child) {
+      grid-column: 1 / -1;
+    }
+  }
 }
-.modelcard {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1875rem;
-  align-items: flex-start;
-  padding: 0.625rem;
-  border: 1px solid $gray;
-  border-radius: 8px;
-  background: $white;
-  text-align: left;
-  &__header {
-    @include flex(space-between, center, 0.375rem);
-    width: 100%;
-  }
-  &__name {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: $dark-blue-gray;
-  }
-  &__badge {
-    flex-shrink: 0;
-    font-size: 0.6875rem;
-    font-weight: 700;
-    color: #606692;
-    background: $blue-light;
-    padding: 0.0625rem 0.375rem;
-    border-radius: 10px;
-  }
-  &__cost {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: $dark-blue-gray;
-  }
-  &__desc {
-    font-size: 0.6875rem;
-    color: #b4b9c4;
-  }
-  &.isActive {
-    background: $blue-light;
-    border: 1.5px solid $blue-dark-500;
-    .modelcard__name {
-      color: $blue-dark-500;
-    }
-    .modelcard__badge {
-      background: $blue-dark-500;
-      color: $white;
-    }
+@include below($bp-sm) {
+  .advanced {
+    height: auto;
+    min-height: 2.5rem;
+    gap: 0.75rem;
+    line-height: 1.25rem;
+    text-align: left;
   }
 }
 .genimg__brand {
@@ -517,17 +496,34 @@ const goBrandSettings = () => router.push('/settings')
 }
 // 結果面板最大寬度：內容區照樣流動填滿，但結果面板封頂，避免超寬螢幕下 2 欄卡片被撐太大（可調整此值）
 .genimg__result {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 .result__grid {
+  width: 100%;
+  min-width: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.25rem 1rem;
+
+  // Figma 11:89：最大桌面版維持 311 × 187px 的結果卡尺寸，
+  // 避免卡片隨寬螢幕無限制放大，導致四張結果超出可視高度。
+  @media (min-width: 1440px) {
+    grid-template-columns: repeat(2, 19.4375rem);
+  }
+
+  @include below($bp-lg) {
+    max-width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   @include below($bp-sm) {
     grid-template-columns: 1fr;
   }
+}
+.result__item {
+  min-width: 0;
 }
 .result__thumb {
   @include flex(center, center);
@@ -560,6 +556,7 @@ const goBrandSettings = () => router.push('/settings')
 }
 .result__actions {
   @include flex(flex-start, center, 0.5rem);
+  flex-wrap: wrap;
 }
 .spin {
   animation: spin 1s linear infinite;

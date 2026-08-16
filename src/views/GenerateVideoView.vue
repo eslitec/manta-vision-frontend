@@ -1,61 +1,66 @@
 <template lang="pug">
 .video
+  h1.visuallyHidden {{ t('routeTitles.generateVideo') }}
   section.panel.video__input
     .step
       .step__title {{ t('video.steps.source') }}
       .dropzone
-        i.ti.ti-photo.dropzone__icon
+        IconImagePlaceholder.dropzone__icon
         span.dropzone__name(v-if="sourceImage") {{ sourceImage.name }}
-      OutlineButton.dropzone__pick(@click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
+      AppButton.dropzone__pick(variant="outline" @click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
     .step
       .step__title {{ t('video.steps.template') }}
       .templates
-        button.tpl(v-for="item in templates" :key="item.key" :class="{ 'isActive': template === item.key }" @click="template = item.key")
+        button.tpl(v-for="item in templates" :key="item.key" :aria-pressed="template === item.key" :class="{ 'isActive': template === item.key }" @click="template = item.key")
           .tpl__thumb
-            i.ti.ti-player-play
+            IconMovie
           span.tpl__label {{ item.name }}
     .step
       .step__title {{ t('video.steps.ratio') }}
       .ratios
-        button.ratio(v-for="r in ratios" :key="r" :class="{ 'isActive': ratio === r }" @click="ratio = r") {{ r }}
+        button.ratio(v-for="r in ratios" :key="r" :aria-pressed="ratio === r" :class="{ 'isActive': ratio === r }" @click="ratio = r") {{ r }}
     .step
       .step__head
         span.step__title {{ t('video.steps.model') }}
         span.step__hint {{ t('video.modelHint') }}
       .models
-        button.modelcard(v-for="t in modelTiers" :key="t.key" :class="{ 'isActive': modelTier === t.key }" @click="modelTier = t.key")
-          .modelcard__header
-            span.modelcard__name {{ $t(`modelTiers.${t.key}.label`) }}
-            span.modelcard__badge ×{{ t.multiplier }}
-          span.modelcard__cost {{ $t('units.feedPerVideo', { count: 45 * t.multiplier }) }}
-          span.modelcard__desc {{ $t(`video.modelDescriptions.${t.key}`) }}
+        ModelOption(
+          v-for="tier in modelTiers"
+          :key="tier.key"
+          :name="$t(`modelTiers.${tier.key}.label`)"
+          :multiplier="tier.multiplier"
+          :cost="$t('units.feedPerVideo', { count: 45 * tier.multiplier })"
+          :description="$t(`video.modelDescriptions.${tier.key}`)"
+          :selected="modelTier === tier.key"
+          @click="modelTier = tier.key"
+        )
     .video__sticky
       p.warn
-        i.ti.ti-alert-triangle
+        IconAlertTriangleFilled
         span {{ t('video.highCostWarning') }}
-      p.err(v-if="errorMsg") {{ errorMsg }}
+      p.err(v-if="errorMsg" role="alert") {{ errorMsg }}
       .video__footer
         .cost
           .cost__label {{ t('common.estimatedCost') }}
           .cost__value
             IconFeedBottleSmall.cost__icon
             span {{ t('units.feed', { count: estCost }) }}
-        PrimaryButton(:disabled="busy" @click="confirmOpen = true")
-          i.ti.ti-plus
+        AppButton(:disabled="busy" @click="confirmOpen = true")
+          IconAddObject
           span {{ t('video.generate') }}
 
   section.panel.video__preview
     h2.preview__title {{ previewTitle }}
     .preview__box
       template(v-if="myTask?.status === 'failed'")
-        i.ti.ti-alert-triangle
-        span.preview__hint {{ myTask.error === 'MODEL_TIMEOUT' ? t('video.timeoutRefund') : t('common.generationFailed') }}
+        IconAlertTriangleFilled
+        span.preview__hint {{ t('common.generationFailed') }}
       template(v-else)
-        i.ti.ti-player-play
+        IconMovie
         span.preview__hint(v-if="!myTask") {{ t('video.previewHint') }}
 
     //- 生成中：進度狀態區塊（對齊設計稿 MV-04c）
-    .taskstat(v-if="busy")
+    .taskstat(v-if="busy" role="status" aria-live="polite" aria-busy="true")
       .taskstat__head
         span.taskstat__dot
         span.taskstat__label {{ statusLabel }}
@@ -65,15 +70,15 @@
         span.taskstat__pct {{ myTask?.progress ?? 0 }}%
         span.taskstat__eta(v-if="etaText") {{ etaText }}
       p.taskstat__note {{ t('video.backgroundNote') }}
-      OutlineButton.taskstat__cancel(@click="cancelCurrent") {{ t('video.cancelTask') }}
-    template(v-if="myTask?.status === 'done'")
+    template(v-if="myTask?.status === 'succeeded'")
+      .visuallyHidden(role="status" aria-live="polite") {{ t('video.completed') }}
       p.result__meta
         span.result__dot
         span {{ t('video.completed') }}
       .result__actions
-        OutlineButton(@click="download") {{ t('common.download') }}
-        OutlineButton(@click="startGenerate") {{ t('common.regenerate') }}
-        PrimaryButton(@click="goLibrary") {{ t('common.openLibrary') }}
+        AppButton(variant="outline" @click="download") {{ t('common.download') }}
+        AppButton(variant="outline" @click="startGenerate") {{ t('common.regenerate') }}
+        AppButton(@click="goLibrary") {{ t('common.openLibrary') }}
       p.result__stat {{ t('video.resultStats', { cost: myTask.cost, elapsed: elapsedText(myTask) }) }}
 
   ImagePickerDialog(v-model:open="pickerOpen" :title="t('video.pickerTitle')" @select="onPick")
@@ -86,9 +91,13 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import ConfirmGenerateDialog from '@/components/ConfirmGenerateDialog.vue'
-import PrimaryButton from '@/components/PrimaryButton.vue'
-import OutlineButton from '@/components/OutlineButton.vue'
+import AppButton from '@/components/AppButton.vue'
+import ModelOption from '@/components/ModelOption.vue'
 import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
+import IconAddObject from '@/components/icons/IconAddObject.vue'
+import IconAlertTriangleFilled from '@/components/icons/IconAlertTriangleFilled.vue'
+import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
+import IconMovie from '@/components/icons/IconMovie.vue'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
 import { isInsufficientFeed } from '@/utils/error'
 import { VIDEO_MODEL_TIERS } from '@/types/api'
@@ -129,10 +138,10 @@ const modelLabelText = computed(() => {
 // 這頁只呈現「這次瀏覽時自己送出的任務」；任務本身在背景持續追蹤，離開頁面不受影響，
 // 完整的任務清單（含離開此頁後仍在跑的任務）另外在頂部工具列的任務中心面板查看。
 const myTask = computed(() => tasksStore.tasks.find((t) => t.id === myTaskId.value))
-const busy = computed(() => myTask.value?.status === 'queued' || myTask.value?.status === 'processing')
+const busy = computed(() => myTask.value?.status === 'pending' || myTask.value?.status === 'processing')
 
 const previewTitle = computed(() =>
-  myTask.value?.status === 'done'
+  myTask.value?.status === 'succeeded'
     ? t('video.previewDone')
     : busy.value
       ? t('video.previewProcessing')
@@ -146,8 +155,8 @@ const genStep = computed(() => {
   return p < 35 ? 1 : p < 65 ? 2 : p < 90 ? 3 : 4
 })
 const statusLabel = computed(() =>
-  myTask.value?.status === 'queued'
-    ? t('taskCenter.queued')
+  myTask.value?.status === 'pending'
+    ? t('taskCenter.pending')
     : t('video.processingStep', {
         step: genStep.value,
         phase: t(`video.phases.${GEN_PHASES[genStep.value - 1]}`),
@@ -163,10 +172,6 @@ const etaText = computed(() => {
     ? t('common.remainingMinutesSeconds', { minutes: m, seconds: String(s).padStart(2, '0') })
     : t('common.remainingSeconds', { seconds: s })
 })
-function cancelCurrent() {
-  if (myTask.value) tasksStore.cancelTask(myTask.value.id)
-}
-
 const onPick = (a: Asset) => {
   sourceImage.value = a
 }
@@ -333,53 +338,10 @@ function goLibrary() {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
-}
-.modelcard {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1875rem;
-  align-items: flex-start;
-  padding: 0.625rem;
-  border: 1px solid $gray;
-  border-radius: 8px;
-  background: $white;
-  text-align: left;
-  &__header {
-    @include flex(space-between, center, 0.375rem);
-    width: 100%;
-  }
-  &__name {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: $dark-blue-gray;
-  }
-  &__badge {
-    flex-shrink: 0;
-    font-size: 0.6875rem;
-    font-weight: 700;
-    color: #606692;
-    background: $blue-light;
-    padding: 0.0625rem 0.375rem;
-    border-radius: 10px;
-  }
-  &__cost {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: $dark-blue-gray;
-  }
-  &__desc {
-    font-size: 0.6875rem;
-    color: #b4b9c4;
-  }
-  &.isActive {
-    background: $blue-light;
-    border: 1.5px solid $blue-dark-500;
-    .modelcard__name {
-      color: $blue-dark-500;
-    }
-    .modelcard__badge {
-      background: $blue-dark-500;
-      color: $white;
+  @include below($bp-sm) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    :deep(.modelOption:last-child) {
+      grid-column: 1 / -1;
     }
   }
 }
@@ -394,7 +356,7 @@ function goLibrary() {
   color: $dark-blue-gray;
   line-height: 1.4;
   margin: 0;
-  i {
+  svg {
     flex-shrink: 0;
     font-size: 1.25rem;
     color: $orange;
@@ -508,9 +470,6 @@ function goLibrary() {
     color: #606692;
     text-align: center;
     line-height: 1.5;
-  }
-  &__cancel {
-    margin-top: 0.125rem;
   }
 }
 .preview__spin {

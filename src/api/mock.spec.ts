@@ -41,10 +41,11 @@ describe('計費與扣點', () => {
     expect((await api.getFeed()).balance).toBe(before - 15)
   })
 
-  it('createVideoJob 扣 45 顆並回傳 queued', async () => {
+  it('createVideoJob 扣 45 顆並回傳 pending 與 0% 進度', async () => {
     const before = (await api.getFeed()).balance
     const job = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'standard' })
-    expect(job.status).toBe('queued')
+    expect(job.status).toBe('pending')
+    expect(job.progress).toBe(0)
     expect(job.cost).toBe(45)
     expect((await api.getFeed()).balance).toBe(before - 45)
   })
@@ -56,13 +57,6 @@ describe('計費與扣點', () => {
     const pro = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'pro' })
     expect(pro.cost).toBe(180)
     expect((await api.getFeed()).balance).toBe(before - 90 - 180)
-  })
-
-  it('refundFeed 退還飼料（失敗退點）', async () => {
-    const before = (await api.getFeed()).balance
-    await api.tryOn() // -15
-    api.refundFeed(15)
-    expect((await api.getFeed()).balance).toBe(before)
   })
 })
 
@@ -82,7 +76,7 @@ describe('AI 輔助描述', () => {
 describe('品牌套用（行銷 PO 文）', () => {
   it('applyBrand=true 帶入品牌 hashtag', async () => {
     const post = await api.generatePost({ intro: 'x', applyBrand: true })
-    expect(post.hashtags).toEqual(['#日安選物', '#日常穿搭', '#質感生活'])
+    expect(post.hashtags).toEqual(['#日安選物', '#選物日常', '#質感生活'])
   })
 
   it('applyBrand=false 使用預設 hashtag', async () => {
@@ -98,15 +92,26 @@ describe('圖生影非同步任務', () => {
     expect(j.error).toBe('NOT_FOUND')
   })
 
-  it('依經過時間由 queued → done（覆寫 Date.now 模擬時間流逝）', async () => {
+  it('依經過時間由 pending → processing → succeeded 並回傳進度', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
     const job = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'standard' })
-    // 剛建立：queued
-    expect((await api.getVideoJob(job.id)).status).toBe('queued')
-    // 模擬經過 6 秒：done（delay 用 setTimeout，不受 Date.now 影響）
-    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 6000)
-    const done = await api.getVideoJob(job.id)
-    expect(done.status).toBe('done')
-    expect(done.resultUrl).toBeTruthy()
+    // 剛建立：pending
+    const pending = await api.getVideoJob(job.id)
+    expect(pending.status).toBe('pending')
+    expect(pending.progress).toBeGreaterThanOrEqual(0)
+    expect(pending.progress).toBeLessThanOrEqual(10)
+    const baseNow = Date.now()
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(baseNow + 3000)
+    const processing = await api.getVideoJob(job.id)
+    expect(processing.status).toBe('processing')
+    expect(processing.progress).toBeGreaterThan(0)
+    expect(processing.progress).toBeLessThan(100)
+    // 模擬經過 6 秒：succeeded（delay 用 setTimeout，不受 Date.now 影響）
+    nowSpy.mockReturnValue(baseNow + 6000)
+    const succeeded = await api.getVideoJob(job.id)
+    expect(succeeded.status).toBe('succeeded')
+    expect(succeeded.progress).toBe(100)
+    expect(succeeded.resultUrl).toBeTruthy()
   })
 })
 
@@ -124,7 +129,7 @@ describe('素材（圖庫）', () => {
     const countBefore = (await api.listImages()).length
     const a = await api.editImage('原圖')
     expect(a.source).toBe('編輯產物')
-    expect(a.name).toContain('_去背')
+    expect(a.name).toBe('原圖')
     expect((await api.listImages()).length).toBe(countBefore + 1)
   })
 

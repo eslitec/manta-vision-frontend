@@ -20,7 +20,7 @@
         | {{ t('home.brandComplete') }}
       .stats__num.isMuted(v-else) ○ {{ t('home.brandIncomplete') }}
       .stats__hint {{ brandReady ? t('home.brandCompleteHint') : t('home.brandIncompleteHint') }}
-    TopupButton {{ t('home.topup') }}
+    AppButton(variant="secondary") {{ t('home.topup') }}
 
   h2.home__sectionTitle {{ t('home.sectionTitle') }}
   .cards
@@ -38,7 +38,7 @@
     .card__body
       .card__title {{ t('home.libraryTitle') }}
       .card__desc {{ t('home.libraryDescription') }}
-    OutlineButton(tag="span") {{ t('home.openLibrary') }}
+    AppButton(tag="span" variant="outline") {{ t('home.openLibrary') }}
 </template>
 
 <script setup lang="ts">
@@ -57,8 +57,7 @@ import IconLibraryPhotoLarge from '@/components/icons/IconLibraryPhotoLarge.vue'
 import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
 import IconFeedBottleBadge from '@/components/icons/IconFeedBottleBadge.vue'
 import IconCheckCircle from '@/components/icons/IconCheckCircle.vue'
-import TopupButton from '@/components/TopupButton.vue'
-import OutlineButton from '@/components/OutlineButton.vue'
+import AppButton from '@/components/AppButton.vue'
 
 const feed = useFeedStore()
 const { balance } = storeToRefs(feed)
@@ -217,7 +216,7 @@ const genTools = computed(() => [
     color: $gray-100;
     font-size: 0.75rem;
   }
-  :deep(.secondaryBtn) {
+  :deep(.appButton) {
     align-self: center;
   }
 }

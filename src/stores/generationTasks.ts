@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/api'
-import { useFeedStore } from '@/stores/feed'
 import { i18n } from '@/lang'
 import type { GenerationTask, GeneratedImage, VideoJobReq } from '@/types/api'
 
@@ -16,10 +15,10 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
   const timers = new Map<string, number>()
 
   const activeCount = computed(
-    () => tasks.value.filter((t) => t.status === 'queued' || t.status === 'processing').length,
+    () => tasks.value.filter((t) => t.status === 'pending' || t.status === 'processing').length,
   )
   const unreadCount = computed(
-    () => tasks.value.filter((t) => (t.status === 'done' || t.status === 'failed') && !t.read).length,
+    () => tasks.value.filter((t) => (t.status === 'succeeded' || t.status === 'failed') && !t.read).length,
   )
 
   function showToast(task: GenerationTask, kind: 'done' | 'failed') {
@@ -30,9 +29,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
       message:
         kind === 'done'
           ? t('generationToast.saved', { name: task.name })
-          : task.error === 'MODEL_TIMEOUT'
-            ? t('generationToast.timeoutRefund', { name: task.name, cost: task.cost })
-            : t('generationToast.failed', { name: task.name }),
+          : t('generationToast.failed', { name: task.name }),
       kind,
     }
   }
@@ -55,9 +52,8 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
       const j = await api.getVideoJob(taskId)
       t.status = j.status
       // mock：processing 期間讓進度平滑往上爬（真實後端應回傳實際百分比）
-      if (j.status === 'processing') t.progress = Math.min(92, Math.max(20, (t.progress ?? 0) + 8))
-      else if (j.status === 'queued') t.progress = 5
-      if (j.status === 'done') {
+      t.progress = Math.max(0, Math.min(100, j.progress))
+      if (j.status === 'succeeded') {
         clearTimer(taskId)
         t.progress = 100
         t.doneAt = Date.now()
@@ -68,8 +64,6 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
         t.error = j.error
         t.doneAt = Date.now()
         t.read = false
-        await api.refundFeed(t.cost)
-        await useFeedStore().refresh()
         showToast(t, 'failed')
       }
     }, 1000)
@@ -84,7 +78,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
       kind: 'video',
       name,
       status: job.status,
-      progress: 5,
+      progress: job.progress,
       cost: job.cost,
       read: true,
       createdAt: Date.now(),
@@ -114,7 +108,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     tasks.value.unshift(task)
     try {
       const result = await run()
-      task.status = 'done'
+      task.status = 'succeeded'
       task.progress = 100
       task.doneAt = Date.now()
       task.read = false
@@ -126,15 +120,6 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
       task.read = false
       throw e
     }
-  }
-
-  async function cancelTask(id: string) {
-    const t = tasks.value.find((x) => x.id === id)
-    if (!t) return
-    clearTimer(id)
-    tasks.value = tasks.value.filter((x) => x.id !== id)
-    await api.refundFeed(t.cost)
-    await useFeedStore().refresh()
   }
 
   async function retryTask(id: string): Promise<string | undefined> {
@@ -157,7 +142,6 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     unreadCount,
     createVideoTask,
     createImageTask,
-    cancelTask,
     retryTask,
     markAllRead,
     dismissToast,
