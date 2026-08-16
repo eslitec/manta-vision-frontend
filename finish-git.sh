@@ -11,7 +11,7 @@ echo "==> 1) 取消暫存，回到已完成的 commit 1，準備做乾淨的分�
 git reset -q
 
 echo "==> 2) 分組 Conventional Commits（commit 2~11）"
-git add src/assets/scss/_variables.scss src/components/PrimaryButton.vue src/components/GhostButton.vue src/components/OutlineButton.vue src/components/DialogButton.vue src/components/ChipButton.vue src/components/TopupButton.vue
+git add src/assets/scss/_variables.scss src/components/AppButton.vue
 git commit -m "fix(components): 按鈕元件顏色/圓角/內距/陰影對齊 Figma 元件庫"
 
 git add src/components/BrandToggle.vue src/components/TaskCenterPanel.vue src/components/GenerationToast.vue src/components/FeedBadge.vue src/components/ConfirmGenerateDialog.vue src/components/ImagePickerDialog.vue
