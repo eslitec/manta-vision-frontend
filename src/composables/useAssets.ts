@@ -34,15 +34,15 @@ async function upload(file: File, folder?: string) {
   return a
 }
 
-// 把既有素材加入資料夾（多重歸屬）；完成後重讀以反映最新歸屬
-async function addToFolder(assetIds: string[], folder: string) {
-  await api.addToFolder(assetIds, folder)
+// 把選取素材移至資料夾（1:N＝替換歸屬，會離開原資料夾）；完成後重讀
+async function moveToFolder(assetIds: string[], folder: string) {
+  await api.moveToFolder(assetIds, folder)
   await load(true)
 }
 
-// 把素材移出資料夾（素材仍保留在圖庫，只是不再屬於這個資料夾）
-async function removeFromFolder(assetIds: string[], folder: string) {
-  await api.removeFromFolder(assetIds, folder)
+// 把選取素材移出目前資料夾（1:N＝移回未分類，素材仍保留在圖庫）
+async function removeFromFolder(assetIds: string[]) {
+  await api.removeFromFolder(assetIds)
   await load(true)
 }
 
@@ -74,7 +74,7 @@ export function useAssets() {
     load,
     loadFolders,
     addFolder,
-    addToFolder,
+    moveToFolder,
     removeFromFolder,
     deleteAssets,
     upload,

@@ -476,7 +476,7 @@ export default {
     nextPage: 'Next page',
     pageNumber: 'Page {page}',
     pickerTitle: 'Add from library to “{folder}”',
-    moveDescription: 'Add {count} selected assets to a folder. Assets may belong to multiple folders.',
+    moveDescription: 'Move {count} selected assets to a folder. Each asset belongs to one folder and will leave its current folder.',
     createFolderPlaceholder: 'Or create a new folder…',
     moveInto: 'Move into {folder}',
     deleteTitle: 'Delete {count} assets?',

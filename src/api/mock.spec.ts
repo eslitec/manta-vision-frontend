@@ -142,12 +142,12 @@ describe('素材（圖庫）', () => {
   it('uploadImage 指定資料夾則落到該資料夾', async () => {
     const file = new File(['x'], '海報.png')
     const a = await api.uploadImage(file, '春季企劃')
-    expect(a.folders).toContain('春季企劃')
+    expect(a.folderId).toBe('春季企劃')
   })
 
   it('uploadImage 未指定資料夾則進未分類', async () => {
     const a = await api.uploadImage(new File(['x'], '隨手拍.png'))
-    expect(a.folders).toContain('未分類')
+    expect(a.folderId).toBe('未分類')
   })
 })
 
@@ -165,18 +165,17 @@ describe('資料夾', () => {
     expect(again.filter((f) => f === '冬季企劃')).toHaveLength(1)
   })
 
-  it('addToFolder 多重歸屬：加入新資料夾但保留原本歸屬', async () => {
+  it('moveToFolder 1:N：移至資料夾會替換原本歸屬', async () => {
     // a1 原本在「春季企劃」
-    await api.addToFolder(['a1'], '蘋果')
+    await api.moveToFolder(['a1'], '蘋果')
     const a1 = (await api.listImages()).find((a) => a.id === 'a1')!
-    expect(a1.folders).toContain('蘋果')
-    expect(a1.folders).toContain('春季企劃') // 原本的仍在
+    expect(a1.folderId).toBe('蘋果')
   })
 
-  it('addToFolder 對已在該資料夾的素材不重複加入', async () => {
-    await api.addToFolder(['a1'], '春季企劃')
+  it('removeFromFolder 1:N：移出後回到未分類', async () => {
+    await api.removeFromFolder(['a1'])
     const a1 = (await api.listImages()).find((a) => a.id === 'a1')!
-    expect(a1.folders!.filter((f) => f === '春季企劃')).toHaveLength(1)
+    expect(a1.folderId).toBe('未分類')
   })
 })
 

@@ -185,10 +185,10 @@ import IconMovie from '@/components/icons/IconMovie.vue'
 import IconPlayTriangle from '@/components/icons/IconPlayTriangle.vue'
 import IconUpload from '@/components/icons/IconUpload.vue'
 import ImageEditorWorkspace from '@/components/ImageEditorWorkspace.vue'
-import { CATEGORY_TAGS, type Asset, type AssetTag } from '@/types/asset'
+import { CATEGORY_TAGS, UNFILED_FOLDER, type Asset, type AssetTag } from '@/types/asset'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 
-const { assets, folders, load, loadFolders, addFolder, addToFolder, removeFromFolder, deleteAssets, upload } =
+const { assets, folders, load, loadFolders, addFolder, moveToFolder, removeFromFolder, deleteAssets, upload } =
   useAssets()
 const { t } = useI18n()
 const moveDialogRef = ref<HTMLElement | null>(null)
@@ -259,7 +259,7 @@ const categoryCounts = computed(() => {
 })
 const folderCounts = computed(() => {
   const map = new Map<string, number>()
-  for (const f of folders.value) map.set(f, assets.value.filter((a) => a.folders?.includes(f)).length)
+  for (const f of folders.value) map.set(f, assets.value.filter((a) => (a.folderId ?? UNFILED_FOLDER) === f).length)
   return map
 })
 const activeViewLabel = computed(() => {
@@ -280,7 +280,7 @@ const filtered = computed(() =>
   assets.value.filter((a) => {
     const v = activeView.value
     const byView =
-      v.kind === 'all' ? true : v.kind === 'category' ? a.tag === v.tag : (a.folders?.includes(v.name) ?? false)
+      v.kind === 'all' ? true : v.kind === 'category' ? a.tag === v.tag : (a.folderId ?? UNFILED_FOLDER) === v.name
     const bySource = activeSource.value === 'all' || a.tag === activeSource.value
     const byKeyword = !keyword.value || a.name.includes(keyword.value)
     return byView && bySource && byKeyword
@@ -352,14 +352,14 @@ async function createFolderForMove() {
 }
 async function confirmMoveToFolder() {
   if (!moveTargetFolder.value) return
-  await addToFolder([...selectedIds.value], moveTargetFolder.value)
+  await moveToFolder([...selectedIds.value], moveTargetFolder.value)
   moveDialogOpen.value = false
   clearSelection()
 }
 
 async function removeSelectedFromFolder() {
   if (activeView.value.kind !== 'folder') return
-  await removeFromFolder([...selectedIds.value], activeView.value.name)
+  await removeFromFolder([...selectedIds.value])
   clearSelection()
 }
 
@@ -389,7 +389,7 @@ function downloadSelected() {
 const pickerOpen = ref(false)
 async function onAddFromLibrary(picked: Asset[]) {
   if (activeView.value.kind !== 'folder') return
-  await addToFolder(
+  await moveToFolder(
     picked.map((a) => a.id),
     activeView.value.name,
   )
