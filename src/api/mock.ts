@@ -40,7 +40,7 @@ const db = {
       source: '上傳',
       tag: 'upload',
       dim: '1024×758',
-      folders: ['春季企劃'],
+      folderId: '春季企劃',
       referencedBy: 2,
     },
     {
@@ -49,22 +49,22 @@ const db = {
       source: '物件素材',
       tag: 'object',
       dim: '1024×768',
-      folders: ['商品素材'],
+      folderId: '商品素材',
       referencedBy: 1,
     },
-    { id: 'a3', name: '生成_木質桌面情境', source: 'AI 生成', tag: 'ai', dim: '1024×768', folders: ['生成結果'] },
-    { id: 'a4', name: '春季主視覺_調色版', source: '編輯產物', tag: 'edit', dim: '1024×768', folders: ['春季企劃'] },
-    { id: 'a5', name: '門市外觀', source: '上傳', tag: 'upload', dim: '1024×768', folders: ['未分類'] },
+    { id: 'a3', name: '生成_木質桌面情境', source: 'AI 生成', tag: 'ai', dim: '1024×768', folderId: '生成結果' },
+    { id: 'a4', name: '春季主視覺_調色版', source: '編輯產物', tag: 'edit', dim: '1024×768', folderId: '春季企劃' },
+    { id: 'a5', name: '門市外觀', source: '上傳', tag: 'upload', dim: '1024×768', folderId: '未分類' },
     {
       id: 'a6',
       name: '商品_去背_帆布袋',
       source: '物件素材',
       tag: 'object',
       dim: '1024×768',
-      folders: ['商品素材'],
+      folderId: '商品素材',
       referencedBy: 1,
     },
-    { id: 'a7', name: '生成_野餐情境', source: 'AI 生成', tag: 'ai', dim: '1024×768', folders: ['生成結果'] },
+    { id: 'a7', name: '生成_野餐情境', source: 'AI 生成', tag: 'ai', dim: '1024×768', folderId: '生成結果' },
     {
       id: 'a8',
       name: '夏季宣傳_短影片',
@@ -72,7 +72,7 @@ const db = {
       tag: 'video',
       dim: '1080×1920',
       type: 'video',
-      folders: ['生成結果'],
+      folderId: '生成結果',
     },
   ] as Asset[],
   brand: {
@@ -144,22 +144,19 @@ export const mockApi = {
     return [...db.folders]
   },
 
-  // PATCH /images/folders（把既有素材加入資料夾；多重歸屬、去重，不影響原本歸屬）
-  async addToFolder(assetIds: string[], folder: string): Promise<void> {
+  // PATCH /images/folders（把選取素材移至資料夾；1:N＝直接替換 folderId，會離開原資料夾）
+  async moveToFolder(assetIds: string[], folder: string): Promise<void> {
     await delay(250)
     for (const a of db.assets) {
-      if (!assetIds.includes(a.id)) continue
-      a.folders = a.folders ?? []
-      if (!a.folders.includes(folder)) a.folders.push(folder)
+      if (assetIds.includes(a.id)) a.folderId = folder
     }
   },
 
-  // PATCH /images/folders/remove（把素材移出資料夾；素材本身與其他歸屬不受影響）
-  async removeFromFolder(assetIds: string[], folder: string): Promise<void> {
+  // PATCH /images/folders/remove（把選取素材移出目前資料夾；1:N＝folderId 設回未分類，素材仍保留在圖庫）
+  async removeFromFolder(assetIds: string[]): Promise<void> {
     await delay(250)
     for (const a of db.assets) {
-      if (!assetIds.includes(a.id)) continue
-      a.folders = (a.folders ?? []).filter((f) => f !== folder)
+      if (assetIds.includes(a.id)) a.folderId = UNFILED_FOLDER
     }
   },
 
@@ -179,7 +176,7 @@ export const mockApi = {
       source: '上傳',
       tag: 'upload',
       dim: '1024×768',
-      folders: [folder ?? UNFILED_FOLDER],
+      folderId: folder ?? UNFILED_FOLDER,
     }
     db.assets.unshift(a)
     return a
@@ -188,7 +185,7 @@ export const mockApi = {
   // POST /images/edit（去背／修圖，非破壞→新素材）
   async editImage(name: string): Promise<Asset> {
     await delay(600)
-    const a: Asset = { id: uid('a'), name, source: '編輯產物', tag: 'edit', dim: '1024×768' }
+    const a: Asset = { id: uid('a'), name, source: '編輯產物', tag: 'edit', dim: '1024×768', folderId: UNFILED_FOLDER }
     db.assets.unshift(a)
     return a
   },
@@ -283,7 +280,7 @@ export const mockApi = {
   // 存入圖庫（選用）→ 生成結果落地成 AI 生成素材，並記錄採用
   async saveGenerated(name: string): Promise<Asset> {
     await delay(300)
-    const a: Asset = { id: uid('a'), name, source: 'AI 生成', tag: 'ai', dim: '1024×768' }
+    const a: Asset = { id: uid('a'), name, source: 'AI 生成', tag: 'ai', dim: '1024×768', folderId: UNFILED_FOLDER }
     db.assets.unshift(a)
     return a
   },
