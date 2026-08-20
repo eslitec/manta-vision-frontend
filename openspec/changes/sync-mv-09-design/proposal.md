@@ -25,3 +25,6 @@
 - `src/views/LibraryView.vue`（分頁內容）或新增獨立編輯／修圖元件
 - 新增 API：`api.editImage` 已有雛形（去背→編輯產物），需擴充為修圖項目與扣款
 - `stores/feed`（AI 工具即時扣款）、`useAssets`（另存新素材）
+- `src/components/ImageEditorWorkspace.vue`——編輯畫布主元件：`fontOptions`／`fontGroups`／`fontMenuOpen`／`selectFont`、字型 listbox template 與樣式
+- `src/lang/zh-Hant.ts`、`src/lang/en.ts`——`editor.fontGroups`、`editor.fontOptions`、`editor.fontDescriptions`、`editor.fontNoteLicense`、`editor.fontNoteUpload`、`editor.textSettings`
+- `index.html`——Google Fonts 載入清單（新增 Inter、Roboto，移除設計稿未收錄的字體）

@@ -31,3 +31,24 @@ AI 修圖 SHALL 提供分項修飾（去除雜物／修復瑕疵／光線校正�
 #### Scenario: 使用者切換裁切比例
 - **WHEN** 使用者選擇某個裁切比例
 - **THEN** 各通路預覽更新並標示是否會被裁掉邊緣，且不扣飼料
+
+### Requirement: 字型選單的九個字體家族與 Figma list_font 逐項一致
+文字圖層屬性面板的字型選單 SHALL 提供與 Figma `list_font`（node `1157:872`）一致的字體家族選項，分為「中文」與「英數」兩組共九項，不得多也不得少；選單 SHALL 以自訂 listbox（`role="listbox"` / `role="option"`）呈現分組標頭、字體名稱、副標與選中列打勾，並提供 default／active 兩種 trigger 框線狀態。
+
+#### Scenario: 使用者開啟字型選單
+- **WHEN** 使用者點擊字型下拉 trigger
+- **THEN** trigger 框線由 `#d2d5dd`（default）變為 `#2e3567`（active），並展開自訂 listbox
+
+##### Example: 九個字體家族分兩組
+| 分組 | 字體 |
+| --- | --- |
+| 中文（思源系列・開放商用） | 思源黑體 Noto Sans TC、思源宋體 Noto Serif TC |
+| 英數（系統安全字體） | Inter、Roboto、Arial、Helvetica、Georgia、Times New Roman、Courier New |
+
+#### Scenario: 選單不含設計稿未收錄的字體
+- **WHEN** 使用者開啟字型選單
+- **THEN** 選單 SHALL NOT 出現 Chiron GoRound TC、霞鶩文楷 TC、jf open 粉圓、芫荽
+
+#### Scenario: 使用者選取一個字體家族
+- **WHEN** 使用者在 listbox 點選某個字體家族
+- **THEN** 該列以 Medium 500 字重與 `#eff2fa` 底色標示為選中，並顯示 14×14 打勾圖示
