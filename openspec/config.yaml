@@ -39,6 +39,23 @@ context: |
   MV-04 圖生影片、MV-05 AI 試穿、MV-06 飼料用量、MV-07 AI 表現指標、
   MV-08 品牌資訊維護、MV-09 圖片編輯與 AI 修圖。
 
+  撰寫規格文件的慣例（2026-08-20 全面 analyze 後訂定，用來消除既有的
+  56 個「Requirement has no matching task」與 67 個「Scenario has no
+  concrete examples」告警，新文件請一開始就照做）：
+    - spec.md 的每個 Requirement，tasks.md 都要有至少一個任務在描述裡
+      引用該 Requirement 的標題原文，spectra analyze 才配對得到。
+    - spec.md 的每個 Scenario 底下要加 `##### Example:` 區塊，寫具體的
+      GIVEN / WHEN / THEN 資料（實際數值、實際文案），不要只寫抽象敘述。
+    - 規範語句用 SHALL / SHALL NOT，避免 may、should、可能、盡量。
+    - design.md 的每個設計決策標題，也要有對應任務引用，否則會被回報
+      「Design topic not referenced in tasks」。
+    - proposal.md 的 Capabilities 段落，只有真正要新增或修改的 capability
+      才用反引號標示。說明性文字提到其他 change 的 capability 時不要加
+      反引號，否則 analyze 會判定本 change 宣告了該 capability 卻缺 spec 檔
+      （mv-01、mv-02 就是這樣各產生一個 CRITICAL）。
+    - 提到 BEM 修飾詞時寫完整 class（`.folders__item--folder`），不要只寫
+      `--folder`，否則 drift 的 anchor 掃描會誤判成 CLI flag。
+
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
 # Example:
