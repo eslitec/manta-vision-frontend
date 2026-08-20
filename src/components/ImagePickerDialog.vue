@@ -16,7 +16,7 @@ Teleport(to="body")
         button.pick(v-for="a in filtered" :key="a.id" :aria-pressed="selectedIds.includes(a.id)" :class="{ 'isSelected': selectedIds.includes(a.id) }" @click="toggle(a.id)")
           .pick__thumb
             span.pick__check(v-if="selectedIds.includes(a.id)")
-              IconCheck
+              IconCheckCircle
             IconMovie(v-if="a.type === 'video'")
             IconImagePlaceholder(v-else)
           .pick__meta
@@ -35,7 +35,7 @@ import { useI18n } from 'vue-i18n'
 import { useAssets } from '@/composables/useAssets'
 import AppButton from '@/components/AppButton.vue'
 import AppSearchbar from '@/components/AppSearchbar.vue'
-import IconCheck from '@/components/icons/IconCheck.vue'
+import IconCheckCircle from '@/components/icons/IconCheckCircle.vue'
 import IconClose from '@/components/icons/IconClose.vue'
 import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
 import IconMovie from '@/components/icons/IconMovie.vue'
@@ -207,10 +207,14 @@ const confirm = () => {
     width: 1.375rem;
     height: 1.375rem;
     border-radius: 50%;
-    background: $blue;
-    color: $white;
-    font-size: 0.875rem;
+    background: $blue-dark-500;
     @include flex(center, center);
+
+    svg {
+      display: block;
+      width: 1.25rem;
+      height: 1.25rem;
+    }
   }
   &__meta {
     @include flex(space-between, center, 0.375rem);
