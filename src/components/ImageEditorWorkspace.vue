@@ -217,6 +217,7 @@
               :aria-label="t('editor.fontFamily')"
               aria-haspopup="listbox"
               :aria-expanded="fontMenuOpen"
+              :class="{ isOpen: fontMenuOpen }"
               @click="fontMenuOpen = !fontMenuOpen"
             )
               span.fontSelect__value {{ t(`editor.fontOptions.${selectedFontId}`) }}
@@ -1581,6 +1582,12 @@ const previews = computed(() =>
   font-family: inherit;
   line-height: normal;
   cursor: pointer;
+
+  // dropdown state=default 框線 #d2d5dd（由 .properties__text 共用規則帶入）、
+  // state=active 框線 #2e3567（Figma node 1157:623）
+  &.isOpen {
+    border-color: #2e3567;
+  }
 
   svg {
     width: 0.75rem;
