@@ -185,6 +185,13 @@ export default {
     referenceRequired: '（需先選參考圖）',
     negativePrompt: '負面提示',
     negativePlaceholder: '不希望出現：模糊、多餘手指、浮水印、文字…',
+    negativePresets: {
+      blur: '模糊',
+      fingers: '變形手指',
+      messyBg: '雜亂背景',
+      watermark: '文字浮水印',
+      overexposed: '過曝',
+    },
     seed: '種子',
     seedPlaceholder: '留空＝隨機（固定可重現同一張）',
     modelHint: '倍率以標準模型 8 顆／張為基準',
