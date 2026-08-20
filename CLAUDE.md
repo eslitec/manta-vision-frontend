@@ -141,9 +141,29 @@ Spectra 也支援 `spx/<change-name>` 分支隔離，以及 `spectra park <name>
 
 - `tools:` 目前只填 `claude`。實測填 `codex` / `gemini` 會被無聲忽略（`spectra update` 只回報 claude，也沒產生 `AGENTS.md` / `GEMINI.md`）。
 
+### spec 檔語言（已定案，勿逕自更動）
+
+**spec 採繁體中文描述 + 英文規範關鍵字**（`SHALL` / `SHALL NOT`，以及 `Requirement` / `Scenario` / `WHEN` / `THEN` 等結構關鍵字）。
+
+`spectra-propose` 與 `spectra-ingest` 的 SKILL.md 寫著「spec 必須用英文，因為它使用規範性語言」。本專案**明知該建議而選擇維持繁中**，理由完整記錄在 `openspec/config.yaml` 的 context，摘要：規則要保護的規範關鍵字本來就是英文；`validate --strict` 對 14 個中文 spec 全過；而且 analyze 的 coverage 配對是拿 Requirement 標題比對 tasks.md 的中文文字，spec 改英文會讓配對結構性失效。
+
+看到那條例外條款時，不要「修正」既有 spec。
+
+### Requirement 與 tasks 的配對規則（已實測）
+
+analyze 的 coverage 檢查要求**任務描述裡逐字包含 Requirement 的完整標題**。寫法：
+
+```markdown
+- [x] 1.5 對齊 Requirement「非破壞編輯，另存為新素材」：另存為新素材提示，不覆寫原圖
+```
+
+只有部分詞語重疊不算 —— 原本寫「非破壞編輯提示：另存為新素材，不覆寫原圖」就配不上，因為「提示：」把標題字串切斷了。2026-08-20 在 `sync-mv-09-design` 實測：4 個 Requirement 從全部 no matching task 變成 Coverage Clean。
+
 ### 已知待處理
 
 最新的分級待辦清單在 `SPECTRA-AUDIT-20260820.md`（取代已過期的 `SPECTRA-CHANGE-CHECKLIST.md`）。目前最需要注意的是 `openspec/specs/` 尚不存在 —— 兩個已歸檔的 change 當初沒有 delta spec，正式規格基線是空的，所有能力規格只存在於各 active change 的 `specs/<capability>/spec.md`。
+
+另有 52 個「Requirement has no matching task」散在其餘 10 個 change，用上面的逐字引用寫法即可機械式消除。
 
 ## 環境備註
 
