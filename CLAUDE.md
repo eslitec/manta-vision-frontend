@@ -129,12 +129,21 @@ Spectra 也支援 `spx/<change-name>` 分支隔離，以及 `spectra park <name>
 5. 完成後跑 `npm run build`、`npm test`、`spectra validate <change> --strict`
 6. **PR 合併並確認不再修改之後**才 `spectra archive <change>`
 
+### 指令使用備註
+
+- `spectra validate` 吃 `--all`，但 **`analyze` 與 `drift` 不吃**，必須逐一指定 change 名稱，否則會回 `Error: Multiple changes found`。要一次掃全部可以用：
+
+  ```powershell
+  Get-ChildItem openspec\changes -Directory |
+    Where-Object Name -ne 'archive' |
+    ForEach-Object { Write-Host "`n=== $($_.Name) ==="; spectra analyze $_.Name; spectra drift $_.Name }
+  ```
+
+- `tools:` 目前只填 `claude`。實測填 `codex` / `gemini` 會被無聲忽略（`spectra update` 只回報 claude，也沒產生 `AGENTS.md` / `GEMINI.md`）。
+
 ### 已知待處理
 
-- `.spectra.yaml` 的 `tools` 與 `claude_slash_commands` 目前都是註解狀態，`spectra update` 不會產生 AI 工具的指令檔；`.claude/skills/` 底下仍是舊的 `openspec-*` 技能。
-- `.spectra.yaml` 是 `locale: en`，但既有規格主要寫繁體中文。
-
-這兩項與其他未完成項目都列在 `SPECTRA-CHANGE-CHECKLIST.md`。
+最新的分級待辦清單在 `SPECTRA-AUDIT-20260820.md`（取代已過期的 `SPECTRA-CHANGE-CHECKLIST.md`）。目前最需要注意的是 `openspec/specs/` 尚不存在 —— 兩個已歸檔的 change 當初沒有 delta spec，正式規格基線是空的，所有能力規格只存在於各 active change 的 `specs/<capability>/spec.md`。
 
 ## 環境備註
 

@@ -28,7 +28,9 @@ claude_slash_commands: true
 #   apply: high
 
 # AI tools to generate instruction files for
+# 2026-08-20 實測：填入 codex / gemini 時 spectra update 只回報
+# 「✓ Updated instruction files for: claude」，沒有錯誤也沒有產生
+# AGENTS.md / GEMINI.md，代表這兩個識別字不被目前版本接受。
+# 若之後要納入其他 agent，先用 `spectra update --help` 查支援清單。
 tools:
   - claude
-  - codex
-  - gemini
