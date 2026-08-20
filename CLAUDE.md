@@ -2,6 +2,8 @@
 
 給 Claude（或其他 AI 協作工具）在這個 repo 工作時的指引。
 
+> **先讀這兩節**：程式修改一律走 [Spectra 流程](#spectraspec-driven-development-所有程式修改的預設流程)；每完成一個功能就依 [Commit 規範](#commit-規範重要) 提交。
+
 ## 專案概要
 
 Manta Vision 前端。Vue 3 + TypeScript + Vite，SFC 的 template 用 **Pug**，樣式寫在 SFC 內（部分共用樣式在 `src/assets/scss/`），狀態用 Pinia，多語系用 vue-i18n。
@@ -63,9 +65,47 @@ refactor(library): 資料夾改回 1:N（移至＝替換 folderId、移出＝回
 - **清單／選項類 UI 要與設計稿逐項一致，不多不少。** 例如編輯器的字型選單就是 Figma `list_font`（node `1157:872`）的九個字體家族，不可自行增刪。
 - 色碼直接抄設計稿的值，不要用「看起來很接近」的既有變數替代。
 
-## OpenSpec
+## Spectra（spec-driven development）— 所有程式修改的預設流程
 
-`openspec/` 底下是變更提案與規格文件，`.claude/skills/openspec-*` 提供對應流程（propose / apply / update / archive / sync-specs）。做較大的功能改動時走這套流程；小修不必。
+本專案已導入 [Spectra](https://github.com/kaochenlong/spectra-app)（[說明頁](https://spectra.5xcamp.us/)）。Spectra 是 OpenSpec 工作流的桌面應用，資料格式與 OpenSpec 相容，因此規格仍放在 `openspec/`。
+
+**以後任何程式修改都要走 Spectra 流程，不要直接改檔案就送出。** 包含視覺校正、bug 修正、小重構在內；真正的例外只有純文件與設定檔的錯字修正。
+
+專案現況：`.spectra.yaml`（設定）、`.spectra/changes/`（Spectra 狀態）、`openspec/changes/`（提案與規格）、`openspec/config.yaml`（專案上下文）都已初始化。`SPECTRA-CHANGE-CHECKLIST.md` 記錄了上一次健檢的結論與待辦，動手前先看過。
+
+### 官方工作流
+
+`discuss → propose → apply → ingest → archive`
+
+對應的 Claude Code slash commands：
+
+| 指令               | 用途                                           |
+| ------------------ | ---------------------------------------------- |
+| `/spectra-discuss` | 聚焦的設計討論                                 |
+| `/spectra-propose` | 產生 proposal / spec / design / tasks 四份文件 |
+| `/spectra-apply`   | 依 tasks 實作                                  |
+| `/spectra-ingest`  | 開發中需求變動時，把實作回補進規格             |
+| `/spectra-archive` | 完成後歸檔                                     |
+| `/spectra-debug`   | 系統化除錯（最多 3 次嘗試）                    |
+| `/spectra-ask`     | 用自然語言查規格（RAG 向量檢索）               |
+
+Spectra 也支援 `spx/<change-name>` 分支隔離，以及 `spectra park <name>` / `spectra unpark <name>` 暫時收起進行中的 change。
+
+### 每個 change 的檢查順序
+
+1. `spectra status <change>` — 確認 artifact 是否齊全
+2. `spectra analyze <change>` — 先處理矛盾、缺口、沒有對應 task 的 requirement
+3. `spectra drift <change>` — 確認程式檔案與 anchor 沒有失效
+4. 需求中途變動就更新同一個 change（ingest），**不要只改程式、也不要把舊 task 硬留成完成**
+5. 完成後跑 `npm run build`、`npm test`、`spectra validate <change> --strict`
+6. **PR 合併並確認不再修改之後**才 `spectra archive <change>`
+
+### 已知待處理
+
+- `.spectra.yaml` 的 `tools` 與 `claude_slash_commands` 目前都是註解狀態，`spectra update` 不會產生 AI 工具的指令檔；`.claude/skills/` 底下仍是舊的 `openspec-*` 技能。
+- `.spectra.yaml` 是 `locale: en`，但既有規格主要寫繁體中文。
+
+這兩項與其他未完成項目都列在 `SPECTRA-CHANGE-CHECKLIST.md`。
 
 ## 環境備註
 
