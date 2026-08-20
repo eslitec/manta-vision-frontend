@@ -2,12 +2,42 @@ schema: spec-driven
 
 # Project context (optional)
 # This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  產品：Manta Vision（MantaGO 旗下的 AI 影像生成／編輯前端）。
+  以「飼料」為點數單位，AI 類工具執行當下即扣款，純幾何操作（裁切、旋轉）不扣。
+  編輯一律非破壞：改動另存為新素材（source tag `edit`），原圖保留、來源鏈可回溯。
+
+  技術棧：Vue 3 + TypeScript + Vite。SFC 的 template 使用 Pug，樣式寫在 SFC 內
+  （少量共用樣式在 src/assets/scss/）。狀態管理 Pinia，路由 vue-router，
+  多語系 vue-i18n。測試 Vitest。後端目前以 mock 為主（src/api/mock）。
+
+  指令：
+    npm run dev          開發伺服器
+    npm run build        vue-tsc --noEmit 型別檢查 + vite build（改完務必跑過）
+    npm run lint         ESLint
+    npm run format       Prettier（src/）
+    npm test             Vitest
+
+  慣例：
+    - 樣式單位：字體、元件尺寸、間距、定位偏移用 rem（16px baseline 換算）；
+      border、radius、shadow、breakpoint、outline、SVG 幾何值維持 px。
+    - line-height 一律寫成無單位比例（22px ÷ 16px → 1.375），不寫死 px。
+    - 多語系：新增 UI 字串必須同時補 src/lang/en.ts 與 src/lang/zh-Hant.ts，
+      兩邊 key 結構一致，不可只改一邊。
+    - 圖示：多色／多路徑插畫用 src/components/icons/ 底下的行內 SVG 元件；
+      單色線稿圖示可用 @tabler/icons-webfont（i.ti.ti-*）。
+    - 按鈕一律用共用的 AppButton，不要再造獨立按鈕元件。
+    - commit 遵循 Conventional Commits，標題與 body 寫繁體中文；
+      對齊設計稿的改動要在 body 註明 Figma node id。
+
+  設計依據：Figma「MantaGO draft」，fileKey ysYFocN2TtBSeJHdGS5d7R。
+    - 數值一律用 Figma MCP 的 get_design_context 取得，不靠截圖目測。
+    - 清單／選項類 UI 要與設計稿逐項一致，不多不少。
+    - 色碼直接抄設計稿的值，不要用「看起來很接近」的既有變數替代。
+
+  頁面代號：MV-00 首頁工作台、MV-01 圖庫管理、MV-02 圖生圖、MV-03 行銷 PO 文、
+  MV-04 圖生影片、MV-05 AI 試穿、MV-06 飼料用量、MV-07 AI 表現指標、
+  MV-08 品牌資訊維護、MV-09 圖片編輯與 AI 修圖。
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
