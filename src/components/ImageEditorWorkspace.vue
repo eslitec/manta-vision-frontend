@@ -214,7 +214,8 @@
           label.fontSelect
             span.visuallyHidden {{ t('editor.fontFamily') }}
             select(v-model="selectedFontId" :aria-label="t('editor.fontFamily')")
-              option(v-for="option in fontOptions" :key="option.id" :value="option.id") {{ t(`editor.fontOptions.${option.id}`) }}
+              optgroup(v-for="group in fontGroups" :key="group.id" :label="t(`editor.fontGroups.${group.id}`)")
+                option(v-for="option in group.options" :key="option.id" :value="option.id") {{ t(`editor.fontOptions.${option.id}`) }}
             IconChevronDown
           label.colorPicker(:aria-label="t('editor.textColor')" :style="{ '--selected-color': textColor }")
             input(v-model="textColor" type="color" :title="t('editor.textColor')")
@@ -386,40 +387,25 @@ const zoomOut = () => {
 const zoomIn = () => {
   zoomPercent.value = Math.min(zoomMax, zoomPercent.value + zoomStep)
 }
+// 選項與 Figma `list_font`（node 1157:872）逐項對齊：兩個分組、九個字體家族，不多不少。
+// Figma 的屬性面板只有「文字內容／字型／字級／對齊」，沒有字重選擇器，因此字重固定 700。
 const fontOptions = [
-  { id: 'sansThin', family: "'Noto Sans TC', sans-serif", weight: 100 },
-  { id: 'sansExtraLight', family: "'Noto Sans TC', sans-serif", weight: 200 },
-  { id: 'sansLight', family: "'Noto Sans TC', sans-serif", weight: 300 },
-  { id: 'sansRegular', family: "'Noto Sans TC', sans-serif", weight: 400 },
-  { id: 'sansMedium', family: "'Noto Sans TC', sans-serif", weight: 500 },
-  { id: 'sansSemiBold', family: "'Noto Sans TC', sans-serif", weight: 600 },
-  { id: 'sansBold', family: "'Noto Sans TC', sans-serif", weight: 700 },
-  { id: 'sansExtraBold', family: "'Noto Sans TC', sans-serif", weight: 800 },
-  { id: 'sansBlack', family: "'Noto Sans TC', sans-serif", weight: 900 },
-  { id: 'serifExtraLight', family: "'Noto Serif TC', serif", weight: 200 },
-  { id: 'serifLight', family: "'Noto Serif TC', serif", weight: 300 },
-  { id: 'serifRegular', family: "'Noto Serif TC', serif", weight: 400 },
-  { id: 'serifMedium', family: "'Noto Serif TC', serif", weight: 500 },
-  { id: 'serifSemiBold', family: "'Noto Serif TC', serif", weight: 600 },
-  { id: 'serifBold', family: "'Noto Serif TC', serif", weight: 700 },
-  { id: 'serifExtraBold', family: "'Noto Serif TC', serif", weight: 800 },
-  { id: 'serifBlack', family: "'Noto Serif TC', serif", weight: 900 },
-  { id: 'goRoundExtraLight', family: "'Chiron GoRound TC', sans-serif", weight: 200 },
-  { id: 'goRoundLight', family: "'Chiron GoRound TC', sans-serif", weight: 300 },
-  { id: 'goRoundRegular', family: "'Chiron GoRound TC', sans-serif", weight: 400 },
-  { id: 'goRoundMedium', family: "'Chiron GoRound TC', sans-serif", weight: 500 },
-  { id: 'goRoundSemiBold', family: "'Chiron GoRound TC', sans-serif", weight: 600 },
-  { id: 'goRoundBold', family: "'Chiron GoRound TC', sans-serif", weight: 700 },
-  { id: 'goRoundExtraBold', family: "'Chiron GoRound TC', sans-serif", weight: 800 },
-  { id: 'goRoundBlack', family: "'Chiron GoRound TC', sans-serif", weight: 900 },
-  { id: 'wenKaiLight', family: "'LXGW WenKai TC', cursive", weight: 300 },
-  { id: 'wenKaiRegular', family: "'LXGW WenKai TC', cursive", weight: 400 },
-  { id: 'wenKaiBold', family: "'LXGW WenKai TC', cursive", weight: 700 },
-  { id: 'huninn', family: "'Huninn', sans-serif", weight: 400 },
-  { id: 'iansui', family: "'Iansui', cursive", weight: 400 },
+  { id: 'notoSansTC', group: 'zh', family: "'Noto Sans TC', sans-serif", weight: 700 },
+  { id: 'notoSerifTC', group: 'zh', family: "'Noto Serif TC', serif", weight: 700 },
+  { id: 'inter', group: 'latin', family: "'Inter', sans-serif", weight: 700 },
+  { id: 'roboto', group: 'latin', family: "'Roboto', sans-serif", weight: 700 },
+  { id: 'arial', group: 'latin', family: 'Arial, Helvetica, sans-serif', weight: 700 },
+  { id: 'helvetica', group: 'latin', family: 'Helvetica, Arial, sans-serif', weight: 700 },
+  { id: 'georgia', group: 'latin', family: "Georgia, 'Times New Roman', serif", weight: 700 },
+  { id: 'timesNewRoman', group: 'latin', family: "'Times New Roman', Times, serif", weight: 700 },
+  { id: 'courierNew', group: 'latin', family: "'Courier New', Courier, monospace", weight: 700 },
 ] as const
-const selectedFontId = ref<(typeof fontOptions)[number]['id']>('sansBold')
-const selectedFont = computed(() => fontOptions.find((option) => option.id === selectedFontId.value) ?? fontOptions[2])
+const fontGroups = [
+  { id: 'zh' as const, options: fontOptions.filter((option) => option.group === 'zh') },
+  { id: 'latin' as const, options: fontOptions.filter((option) => option.group === 'latin') },
+]
+const selectedFontId = ref<(typeof fontOptions)[number]['id']>('notoSansTC')
+const selectedFont = computed(() => fontOptions.find((option) => option.id === selectedFontId.value) ?? fontOptions[0])
 const textObjectStyle = computed(() => ({
   left: `${textPosition.x}%`,
   top: `${textPosition.y}%`,
@@ -1532,7 +1518,7 @@ const previews = computed(() =>
 .fontSelect {
   position: relative;
   display: flex;
-  height: 2rem;
+  height: 2.25rem;
   min-width: 0;
   flex: 1;
   align-items: center;
