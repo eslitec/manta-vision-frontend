@@ -1,0 +1,18 @@
+# 統一以 LF 儲存並簽出。
+# 專案原本沒有這個檔案、core.autocrlf 也沒設定，導致 Windows 端工具把
+# src/ 與 openspec/ 底下的檔案整批改寫成 CRLF，git status 出現 20 幾個
+# 「有改動」但實際一行內容都沒變的檔案，diff review 與 spectra drift
+# 的 anchor 比對都會被假差異淹沒。
+* text=auto eol=lf
+
+# 二進位檔不做換行轉換
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary
