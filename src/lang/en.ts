@@ -206,6 +206,13 @@ export default {
     referenceRequired: ' (select a reference first)',
     negativePrompt: 'Negative prompt',
     negativePlaceholder: 'Exclude: blur, extra fingers, watermarks, text…',
+    negativePresets: {
+      blur: 'Blurry',
+      fingers: 'Deformed fingers',
+      messyBg: 'Messy background',
+      watermark: 'Text watermark',
+      overexposed: 'Overexposed',
+    },
     seed: 'Seed',
     seedPlaceholder: 'Leave blank for random (fixed values reproduce results)',
     modelHint: 'Multipliers are based on Standard at 8 feed/image',

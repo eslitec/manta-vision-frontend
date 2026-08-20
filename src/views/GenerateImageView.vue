@@ -31,6 +31,15 @@
         .adv__row
           label.adv__label(for="image-negative-prompt") {{ t('image.negativePrompt') }}
           input#image-negative-prompt.adv__input(type="text" v-model="negativePrompt" :placeholder="t('image.negativePlaceholder')")
+          .adv__negpreset
+            button.adv__negchip(
+              v-for="key in negativePresetKeys"
+              :key="key"
+              type="button"
+              :class="{ isActive: isNegativeActive(t(`image.negativePresets.${key}`)) }"
+              :aria-pressed="isNegativeActive(t(`image.negativePresets.${key}`))"
+              @click="toggleNegativePreset(t(`image.negativePresets.${key}`))"
+            ) {{ t(`image.negativePresets.${key}`) }}
         .adv__row
           label.adv__label(for="image-seed") {{ t('image.seed') }}
           input#image-seed.adv__input(type="number" v-model="seedInput" :placeholder="t('image.seedPlaceholder')")
@@ -138,6 +147,25 @@ const results = ref<GeneratedImage[]>([])
 const referenceStrength = ref(0.5)
 const negativePrompt = ref('')
 const seedInput = ref('')
+
+// 負面提示預設詞（點選即帶入下方負面提示欄）
+const negativePresetKeys = ['blur', 'fingers', 'messyBg', 'watermark', 'overexposed'] as const
+
+// 把負面提示欄拆成詞陣列（相容半形逗號與全形「、」）
+const negativeParts = computed(() =>
+  negativePrompt.value
+    .split(/[,、]\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean),
+)
+const isNegativeActive = (word: string) => negativeParts.value.includes(word)
+
+// 點選預設詞 → toggle：已在欄位內則移除、否則加入（以「、」分隔）
+function toggleNegativePreset(word: string) {
+  const parts = negativeParts.value
+  const next = parts.includes(word) ? parts.filter((p) => p !== word) : [...parts, word]
+  negativePrompt.value = next.join('、')
+}
 
 onMounted(() => {
   if (!feed.loaded) feed.refresh()
@@ -374,6 +402,35 @@ const goBrandSettings = () => router.push('/settings')
   &__hint {
     font-size: 0.75rem;
     color: $gray-100;
+  }
+  &__negpreset {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    margin-top: 0.125rem;
+  }
+  &__negchip {
+    padding: 0.375rem 0.75rem;
+    border: 1px solid $gray;
+    border-radius: 18px;
+    background: $white;
+    color: $dark-blue-gray;
+    font-size: 0.875rem;
+    font-family: inherit;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+    &:hover {
+      border-color: $blue-dark-500;
+    }
+    &.isActive {
+      border-color: $blue-dark-500;
+      background: $blue-dark-500;
+      color: $white;
+    }
   }
   &__input {
     width: 100%;
