@@ -248,7 +248,14 @@
           small(:class="p.warn?'warn':''") {{ p.warn ? t('editor.croppedWarning') : t('editor.fullyVisible') }}
       p.cropNote {{ t('editor.cropNote') }}
   ImagePickerDialog(v-model:open="editorPickerOpen" :title="editorPickerTitle" @select="selectEditorAsset")
-  SaveAssetDialog(v-model:open="saveDialogOpen" :default-name="suggestedAssetName" :loading="savingAsset" @save="saveAsNewAsset")
+  SaveAssetDialog(
+    v-model:open="saveDialogOpen"
+    :default-name="suggestedAssetName"
+    :original-name="selectedAssetName"
+    :folders="folders"
+    :loading="savingAsset"
+    @save="saveAsNewAsset"
+  )
 </template>
 
 <script setup lang="ts">
@@ -273,7 +280,7 @@ import IconRefresh from '@/components/icons/IconRefresh.vue'
 import type { Asset } from '@/types/asset'
 const props = defineProps<{ mode: string }>()
 const { t } = useI18n()
-const { saveEdited } = useAssets()
+const { saveEdited, folders, loadFolders } = useAssets()
 const tool = ref('remove'),
   ratio = ref('square')
 const editorPickerOpen = ref(false)
@@ -310,15 +317,48 @@ const suggestedAssetName = computed(() => {
 const openSaveDialog = () => {
   if (savingAsset.value || savedAssetId.value) return
   saveError.value = false
+  loadFolders() // 讓「存放位置」下拉能列出使用者資料夾
   saveDialogOpen.value = true
 }
-const saveAsNewAsset = async (name: string) => {
+
+type SaveAssetPayload = { name: string; folder: string; keepLayers: boolean; alsoDownload: boolean }
+
+// MOCK：目前編輯器沒有真實影像位元組，因此以 canvas 產生一張佔位 PNG 供實際下載；
+// 後端就緒後把這裡改成下載素材的真實 URL 即可。
+function downloadEditedCopy(name: string) {
+  const canvas = document.createElement('canvas')
+  canvas.width = 1024
+  canvas.height = 768
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  ctx.fillStyle = '#eef1f7'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.fillStyle = '#2e3567'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.font = '600 44px "Noto Sans TC", "PingFang TC", sans-serif'
+  ctx.fillText(name, canvas.width / 2, canvas.height / 2)
+  canvas.toBlob((blob) => {
+    if (!blob) return
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${name}.png`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }, 'image/png')
+}
+
+const saveAsNewAsset = async (payload: SaveAssetPayload) => {
   if (savingAsset.value || savedAssetId.value) return
   savingAsset.value = true
   saveError.value = false
   try {
-    const saved = await saveEdited(name)
+    const saved = await saveEdited(payload.name, { folder: payload.folder, keepLayers: payload.keepLayers })
     savedAssetId.value = saved.id
+    if (payload.alsoDownload) downloadEditedCopy(payload.name)
     saveDialogOpen.value = false
   } catch {
     saveError.value = true
