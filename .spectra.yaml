@@ -6,7 +6,8 @@
 # spec_dir: docs/specs
 
 # Language for AI-generated artifacts
-locale: en
+# 既有規格文件都是繁體中文，讓 Spectra 產生的 artifact 跟著一致。
+locale: zh-TW
 
 # Workflow toggles
 # tdd: true
@@ -14,7 +15,7 @@ locale: en
 # parallel_tasks: true
 
 # Claude slash commands (set true to also generate /spectra:X commands)
-# claude_slash_commands: true
+claude_slash_commands: true
 
 # Enable git worktree support for isolated change branches
 # worktree: true
@@ -27,6 +28,7 @@ locale: en
 #   apply: high
 
 # AI tools to generate instruction files for
-# tools:
-#   - claude
-#   - cursor
+tools:
+  - claude
+  - codex
+  - gemini
