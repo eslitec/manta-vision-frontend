@@ -1618,19 +1618,21 @@ const previews = computed(() =>
   top: calc(100% + 0.25rem);
   left: 0;
   width: 18rem;
-  border-radius: 0.75rem;
+  border: 1px solid #d2d5dd;
+  border-radius: 0.625rem;
   background: #fff;
-  box-shadow: 0 0.5rem 1.5rem rgba(46, 53, 103, 0.14);
+  box-shadow: 0 0.5rem 0.75rem rgba(0, 0, 0, 0.16);
 }
 .fontMenu__scroll {
   position: relative;
 }
 .fontMenu__list {
   display: flex;
-  max-height: 17.875rem;
+  height: 17.875rem;
   flex-direction: column;
   padding: 0.5rem;
   gap: 0.125rem;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 .fontMenu__group {
@@ -1706,19 +1708,17 @@ const previews = computed(() =>
 .fontMenu__note {
   display: flex;
   flex-direction: column;
-  padding: 0.625rem 1rem 0.875rem;
-  border-top: 1px solid #eff2fa;
-  gap: 0.125rem;
+  padding: 0.625rem 0.75rem 0.75rem;
+  border-top: 1px solid #d2d5dd;
+  gap: 0.1875rem;
+  font-size: 0.625rem;
+  line-height: normal;
 }
 .fontMenu__noteMain {
   color: #606692;
-  font-size: 0.6875rem;
-  line-height: 1.4;
 }
 .fontMenu__noteSub {
   color: #b4b9c4;
-  font-size: 0.6875rem;
-  line-height: 1.4;
 }
 .colorPicker {
   position: relative;
