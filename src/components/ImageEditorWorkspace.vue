@@ -211,12 +211,38 @@
         h3 {{ t('editor.textProperties') }}
         input.properties__text(v-model="textContent" :aria-label="t('editor.textContent')")
         .fontRow
-          label.fontSelect
-            span.visuallyHidden {{ t('editor.fontFamily') }}
-            select(v-model="selectedFontId" :aria-label="t('editor.fontFamily')")
-              optgroup(v-for="group in fontGroups" :key="group.id" :label="t(`editor.fontGroups.${group.id}`)")
-                option(v-for="option in group.options" :key="option.id" :value="option.id") {{ t(`editor.fontOptions.${option.id}`) }}
-            IconChevronDown
+          .fontSelect(ref="fontSelectEl")
+            button.fontSelect__trigger(
+              type="button"
+              :aria-label="t('editor.fontFamily')"
+              aria-haspopup="listbox"
+              :aria-expanded="fontMenuOpen"
+              @click="fontMenuOpen = !fontMenuOpen"
+            )
+              span.fontSelect__value {{ t(`editor.fontOptions.${selectedFontId}`) }}
+              IconChevronDown(:class="{ isUp: fontMenuOpen }")
+            .fontMenu(v-if="fontMenuOpen")
+              .fontMenu__scroll
+                .fontMenu__list(role="listbox" :aria-label="t('editor.fontFamily')")
+                  template(v-for="group in fontGroups" :key="group.id")
+                    .fontMenu__group {{ t(`editor.fontGroups.${group.id}`) }}
+                    button.fontMenu__item(
+                      v-for="option in group.options"
+                      :key="option.id"
+                      type="button"
+                      role="option"
+                      :aria-selected="option.id === selectedFontId"
+                      :class="{ isSelected: option.id === selectedFontId }"
+                      @click="selectFont(option.id)"
+                    )
+                      span.fontMenu__col
+                        span.fontMenu__name {{ t(`editor.fontOptions.${option.id}`) }}
+                        span.fontMenu__desc {{ t(`editor.fontDescriptions.${option.id}`) }}
+                      IconCheckCircle.fontMenu__check(v-if="option.id === selectedFontId")
+                span.fontMenu__fade(aria-hidden="true")
+              .fontMenu__note
+                span.fontMenu__noteMain {{ t('editor.fontNoteLicense') }}
+                span.fontMenu__noteSub {{ t('editor.fontNoteUpload') }}
           label.colorPicker(:aria-label="t('editor.textColor')" :style="{ '--selected-color': textColor }")
             input(v-model="textColor" type="color" :title="t('editor.textColor')")
         small.properties__settings {{ t('editor.textSettings') }}
@@ -275,6 +301,7 @@ import IconTextDocument from '@/components/icons/IconTextDocument.vue'
 import IconEdit from '@/components/icons/IconEdit.vue'
 import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
 import IconBack from '@/components/icons/IconBack.vue'
+import IconCheckCircle from '@/components/icons/IconCheckCircle.vue'
 import IconChevronDown from '@/components/icons/IconChevronDown.vue'
 import IconNext from '@/components/icons/IconNext.vue'
 import IconRefresh from '@/components/icons/IconRefresh.vue'
@@ -404,8 +431,31 @@ const fontGroups = [
   { id: 'zh' as const, options: fontOptions.filter((option) => option.group === 'zh') },
   { id: 'latin' as const, options: fontOptions.filter((option) => option.group === 'latin') },
 ]
-const selectedFontId = ref<(typeof fontOptions)[number]['id']>('notoSansTC')
+type FontId = (typeof fontOptions)[number]['id']
+const selectedFontId = ref<FontId>('notoSansTC')
 const selectedFont = computed(() => fontOptions.find((option) => option.id === selectedFontId.value) ?? fontOptions[0])
+// 設計稿的字型選單是自訂面板（每列有副標、選中列有打勾），原生 select 的 option 由
+// 作業系統繪製，做不出這個樣式，因此自行實作 listbox。
+const fontMenuOpen = ref(false)
+const fontSelectEl = ref<HTMLElement | null>(null)
+const selectFont = (id: FontId) => {
+  selectedFontId.value = id
+  fontMenuOpen.value = false
+}
+const onFontMenuPointerDown = (event: MouseEvent) => {
+  if (!fontMenuOpen.value) return
+  if (fontSelectEl.value?.contains(event.target as Node)) return
+  fontMenuOpen.value = false
+}
+const onFontMenuKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape' && fontMenuOpen.value) fontMenuOpen.value = false
+}
+document.addEventListener('pointerdown', onFontMenuPointerDown)
+document.addEventListener('keydown', onFontMenuKeydown)
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onFontMenuPointerDown)
+  document.removeEventListener('keydown', onFontMenuKeydown)
+})
 const textObjectStyle = computed(() => ({
   left: `${textPosition.x}%`,
   top: `${textPosition.y}%`,
@@ -1497,7 +1547,7 @@ const previews = computed(() =>
   padding-left: 0;
 }
 .properties__text,
-.fontSelect {
+.fontSelect__trigger {
   width: 100%;
   border: 1px solid #d2d5dd;
   border-radius: 1.125rem;
@@ -1517,40 +1567,151 @@ const previews = computed(() =>
 }
 .fontSelect {
   position: relative;
-  display: flex;
-  height: 2.25rem;
   min-width: 0;
   flex: 1;
+}
+.fontSelect__trigger {
+  display: flex;
+  height: 2.25rem;
   align-items: center;
   justify-content: space-between;
   gap: 0.375rem;
   padding: 0.4375rem 0.75rem 0.4375rem 0.875rem;
   color: #383c4b;
-
-  select {
-    width: 100%;
-    min-width: 0;
-    border: 0;
-    outline: 0;
-    appearance: none;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    line-height: normal;
-    cursor: pointer;
-  }
+  font-family: inherit;
+  line-height: normal;
+  cursor: pointer;
 
   svg {
     width: 0.75rem;
     height: 0.75rem;
+    flex: none;
     color: #383c4b;
     pointer-events: none;
+    transition: transform 0.15s ease;
   }
 
-  &:focus-within {
+  svg.isUp {
+    transform: rotate(180deg);
+  }
+
+  &:focus-visible {
     outline: 2px solid #f2bb00;
     outline-offset: 2px;
   }
+}
+.fontSelect__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fontMenu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  width: 18rem;
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow: 0 0.5rem 1.5rem rgba(46, 53, 103, 0.14);
+}
+.fontMenu__scroll {
+  position: relative;
+}
+.fontMenu__list {
+  display: flex;
+  max-height: 17.875rem;
+  flex-direction: column;
+  padding: 0.5rem;
+  gap: 0.125rem;
+  overflow-y: auto;
+}
+.fontMenu__group {
+  color: #b4b9c4;
+  font-size: 0.625rem;
+  font-weight: 500;
+  line-height: normal;
+}
+.fontMenu__item {
+  display: flex;
+  align-items: center;
+  padding: 0.4375rem 0.625rem;
+  border: 0;
+  border-radius: 0.375rem;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  gap: 0.5rem;
+  text-align: left;
+
+  &.isSelected {
+    background: #eff2fa;
+  }
+
+  &:hover:not(.isSelected) {
+    background: #f7f8fc;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #f2bb00;
+    outline-offset: -2px;
+  }
+}
+.fontMenu__col {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.0625rem;
+}
+.fontMenu__name {
+  overflow: hidden;
+  color: #2e3567;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fontMenu__item.isSelected .fontMenu__name {
+  font-weight: 500;
+}
+.fontMenu__desc {
+  color: #b4b9c4;
+  font-size: 0.625rem;
+  font-weight: 400;
+  line-height: normal;
+}
+.fontMenu__check {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex: none;
+}
+.fontMenu__fade {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1.375rem;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff);
+  pointer-events: none;
+}
+.fontMenu__note {
+  display: flex;
+  flex-direction: column;
+  padding: 0.625rem 1rem 0.875rem;
+  border-top: 1px solid #eff2fa;
+  gap: 0.125rem;
+}
+.fontMenu__noteMain {
+  color: #606692;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+}
+.fontMenu__noteSub {
+  color: #b4b9c4;
+  font-size: 0.6875rem;
+  line-height: 1.4;
 }
 .colorPicker {
   position: relative;
