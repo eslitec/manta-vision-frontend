@@ -14,7 +14,9 @@ MantaGO 的 Figma 設計稿在 MV-02（圖生圖／AI 生成工作台底下的�
 - `generate-image-ui`：圖生圖頁面（MV-02）——使用者選擇 AI 模型、上傳或從圖庫選取參考圖、輸入生成描述（含 AI 輔助擴寫與進階設定）、送出生成請求並檢視／存入圖庫／下載／重生成結果的畫面呈現。
 
 ### Modified Capabilities
-（無——目前預期不需要改動 `home-workbench-ui` 共用外殼；如果後續截圖顯示側邊欄「AI 生成工作台」的選取樣式跟目前 `DefaultLayout.vue` 已實作的不一致，會在這裡補上）
+（無）
+
+備註：本 change 不改動共用外殼那個 capability（home-workbench-ui，屬於 MV-00）。若後續截圖顯示側邊欄「AI 生成工作台」的選取樣式跟目前 DefaultLayout.vue 已實作的不一致，再回來補上並改列為 Modified。此處刻意不加反引號，避免 spectra analyze 把它判讀成本 change 宣告了該 capability 卻缺少對應的 spec 檔。
 
 ## Impact
 

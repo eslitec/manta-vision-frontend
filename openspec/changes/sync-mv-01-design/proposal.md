@@ -19,7 +19,9 @@ MantaGO 的 Figma 設計稿在 MV-01（圖庫管理中心，`LibraryView.vue`）
 - `library-management-ui`：圖庫管理中心頁面（MV-01）——使用者檢視、篩選、搜尋、上傳素材，管理資料夾，並對選取的素材執行批次操作（移動、移出、刪除）的畫面呈現。
 
 ### Modified Capabilities
-（無——目前預期不需要改動 `home-workbench-ui` 這個共用外殼；非同步生成進度功能會需要調整 `DefaultLayout.vue`，但那部分已明確排除在這個 change 之外，見上方 What Changes）
+（無）
+
+備註：本 change 不改動共用外殼那個 capability（home-workbench-ui，屬於 MV-00）。非同步生成進度功能會需要調整 DefaultLayout.vue，但那部分已明確排除在這個 change 之外，見上方 What Changes。此處刻意不加反引號，避免 spectra analyze 把它判讀成本 change 宣告了該 capability 卻缺少對應的 spec 檔。
 
 ## Impact
 
