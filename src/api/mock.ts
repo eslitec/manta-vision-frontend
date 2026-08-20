@@ -183,9 +183,18 @@ export const mockApi = {
   },
 
   // POST /images/edit（去背／修圖，非破壞→新素材）
-  async editImage(name: string): Promise<Asset> {
+  // opts.folder：使用者選定的存放位置（我的資料夾）；opts.keepLayers：是否保留可再編輯的圖層資訊
+  async editImage(name: string, opts?: { folder?: string; keepLayers?: boolean }): Promise<Asset> {
     await delay(600)
-    const a: Asset = { id: uid('a'), name, source: '編輯產物', tag: 'edit', dim: '1024×768', folderId: UNFILED_FOLDER }
+    const a: Asset = {
+      id: uid('a'),
+      name,
+      source: '編輯產物',
+      tag: 'edit',
+      dim: '1024×768',
+      folderId: opts?.folder ?? UNFILED_FOLDER,
+      editable: opts?.keepLayers ?? false,
+    }
     db.assets.unshift(a)
     return a
   },

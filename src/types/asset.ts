@@ -9,6 +9,7 @@ export interface Asset {
   dim: string
   type?: 'image' | 'video'
   folderId?: string // 使用者歸檔的資料夾（1:N；一張素材只屬於一個資料夾，未設＝未分類；與「來源」是獨立維度）
+  editable?: boolean // 是否保留可再編輯的圖層資訊（編輯產物專用；未保留＝已平面化）
   referencedBy?: number // 被多少筆生成結果引用（作為來源／參考圖）；刪除會斷開這些生成紀錄的來源鏈
 }
 
