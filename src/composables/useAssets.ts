@@ -60,8 +60,8 @@ async function saveGenerated(name: string) {
 }
 
 // 編輯器採非破壞式儲存：後端建立新的「編輯產物」，原素材不會被覆寫。
-async function saveEdited(name: string) {
-  const a = await api.editImage(name)
+async function saveEdited(name: string, opts?: { folder?: string; keepLayers?: boolean }) {
+  const a = await api.editImage(name, opts)
   assets.value.unshift(a)
   return a
 }
