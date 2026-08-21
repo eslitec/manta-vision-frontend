@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change 'allow-edited-assets-as-generation-input'. Update Purpose after archive.
+定義編輯產物在生成流程中的可用性：非破壞編輯另存產生的素材（source tag `edit`）在共用素材 picker 與各生成頁面中，SHALL 與上傳、AI 生成等其他來源享有相同的可選取與回傳待遇，不因 tag 為 `edit` 而被排除。這是「編輯 → 再生成」這條循環得以成立的前提。
 
 ## Requirements
 
