@@ -25,6 +25,7 @@
 
 ## 4. 串接與驗證
 
-- [ ] 4.1 擴充 `api.editImage`／扣款（`stores/feed`）與另存（`useAssets`）
+- [x] 4.1 擴充 `api.editImage`／扣款（`stores/feed`）與另存（`useAssets`）：把「另存」與「扣款」拆成不同端點——新增 `api.getEditorPricing()`（價目表）、`api.applyEditTool(tool)`（編輯畫布套用 AI 工具，執行當下扣款）、`api.retouchImage(req)`（AI 修圖，成本由後端依價目表計算），`api.editImage` 維持只建立編輯產物、不扣飼料；`ImageEditorWorkspace.vue` 接上 `useFeedStore` 並在每次扣款後 `feed.refresh()`，「本次編輯已使用的 AI 工具」面板改為依實際套用結果渲染（原本寫死 8 顆）。驗證：`mock.spec.ts` 補 7 個測試（價目表為複本、背景移除扣 8 其餘為 0、快速修圖加總、指令式含基本費且濾掉快速項、全免費不扣、另存不扣且不覆寫、餘額不足擲 `INSUFFICIENT_FEED` 不扣款）共 68 個測試全過；並以 Playwright 實測 1,240 → 背景移除 1,232 → 重複點擊仍 1,232 → 裁切仍 1,232 → 快速修圖 1,216
 - [x] 4.2 `npm run build` 通過、與設計稿視覺比對
 - [x] 4.3 為 `ImageEditorWorkspace.vue` 的字型選單、圖層面板、AI 修圖、裁切四個區塊各補 anchor，讓 `spectra drift` 對這四塊的改動有覆蓋：已在 design.md 新增「實作對照」章節，逐塊列出實際存在的程式符號（`fontOptions`／`layers`／`retouchOptions`／`cropRect` 等）與跨檔依賴（`SaveAssetDialog.vue`／`useAssets.ts`／`feed.ts`／`mock.ts`／`IconCheckCircle.vue`）。驗證結果（2026-08-21）：`spectra drift sync-mv-09-design` 由 `0/6` 提升為 **`0/28 anchors broken`**，anchor 數增為 4.7 倍且無任何失效，四個區塊皆已納入偵測範圍
+- [x] 4.4 修正指令式修圖會把未計費項目算進結果的問題：`estimatedRetouchCost` 用的是 `retouchOptionsForMethod`（只含該修圖方式開放的項目），但送出時用的是 `retouchOptions`（全部），導致指令式修圖的「已套用」標籤會列出沒收費的快速項目。前後端各修一半——前端改送 `retouchOptionsForMethod`，後端 `retouchImage` 也會依 method 過濾，不信任前端送來的清單。驗證：`mock.spec.ts`「指令式修圖含基本費，且只認光線校正與放大兩個加購項」

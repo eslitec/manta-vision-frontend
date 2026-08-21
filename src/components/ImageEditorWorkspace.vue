@@ -55,9 +55,10 @@
           :placeholder="t('editor.retouch.placeholder')"
         )
         small.charCounter {{ retouchInstruction.length }} / 200
+      p.editorError(v-if="retouchError" role="alert") {{ retouchError }}
       footer.panelAction
         span {{ t('common.estimatedCost') }} #[b {{ t('units.feed', { count: estimatedRetouchCost }) }}]
-        AppButton(:disabled="!canStartRetouch" @click="startRetouch") {{ t('editor.retouch.start') }}
+        AppButton(:disabled="!canStartRetouch || retouching" :loading="retouching" @click="startRetouch") {{ t('editor.retouch.start') }}
     section.resultPanel
       header.resultHead #[strong {{ t('editor.retouch.result') }}] #[span {{ retouchAppliedLabel }}]
       .compare
@@ -73,12 +74,17 @@
 
   template(v-else)
     aside.tools
-      button.tool(:class="{active: tool==='remove'}" :aria-pressed="tool === 'remove'" @click="tool='remove'")
+      button.tool(
+        :class="{active: tool==='remove'}"
+        :aria-pressed="tool === 'remove'"
+        :disabled="applyingTool === 'remove'"
+        @click="selectRemoveTool"
+      )
         IconAiSparkle
         span {{ t('editor.tools.remove') }}
-        small.tool__cost
+        small.tool__cost(v-if="removeToolCost")
           IconFeedBottleSmall
-          | 8
+          | {{ removeToolCost }}
       button.tool.tool--object(:class="{active: tool==='object'}" :aria-pressed="tool === 'object'" @click="openObjectPicker") #[IconAddObject] #[span {{ t('editor.tools.object') }}]
       button.tool(:class="{active: tool==='fade'}" :aria-pressed="tool === 'fade'" @click="tool='fade'") #[IconImagePlaceholder] #[span {{ t('editor.tools.fade') }}]
       button.tool(:class="{active: tool==='text'}" :aria-pressed="tool === 'text'" @click="insertTextLayer") #[IconTextDocument] #[span {{ t('editor.tools.text') }}]
@@ -247,18 +253,19 @@
           label.colorPicker(:aria-label="t('editor.textColor')" :style="{ '--selected-color': textColor }")
             input(v-model="textColor" type="color" :title="t('editor.textColor')")
         small.properties__settings {{ t('editor.textSettings') }}
-      .aiCost
+      p.editorError(v-if="toolError" role="alert") {{ toolError }}
+      .aiCost(v-if="usedTools.length")
         h3 {{ t('editor.aiToolsUsed') }}
-        p.aiCost__row
-          span {{ t('editor.tools.remove') }}
+        p.aiCost__row(v-for="item in usedTools" :key="item.tool")
+          span {{ t(`editor.tools.${item.tool}`) }}
           span.aiCost__amount.aiCost__amount--item
             IconFeedBottleSmall
-            b {{ t('units.feed', { count: 8 }) }}
+            b {{ t('units.feed', { count: item.cost }) }}
         p.aiCost__row.aiCost__row--total
           strong {{ t('editor.total') }}
           span.aiCost__amount.aiCost__amount--total
             IconFeedBottleSmall
-            b {{ t('units.feed', { count: 8 }) }}
+            b {{ t('units.feed', { count: usedToolsTotal }) }}
         small.aiCost__note {{ t('editor.costNote') }}
     aside.cropPanel(v-else)
       h3 {{ t('editor.tools.crop') }}
@@ -287,7 +294,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppButton from '@/components/AppButton.vue'
 import AppCheckbox from '@/components/AppCheckbox.vue'
@@ -306,10 +313,39 @@ import IconCheckCircle from '@/components/icons/IconCheckCircle.vue'
 import IconChevronDown from '@/components/icons/IconChevronDown.vue'
 import IconNext from '@/components/icons/IconNext.vue'
 import IconRefresh from '@/components/icons/IconRefresh.vue'
+import { api } from '@/api'
+import { useFeedStore } from '@/stores/feed'
+import { isInsufficientFeed } from '@/utils/error'
+import type { AppliedEditTool, EditorPricing, RetouchOptionKey } from '@/types/api'
 import type { Asset } from '@/types/asset'
 const props = defineProps<{ mode: string }>()
 const { t } = useI18n()
 const { saveEdited, folders, loadFolders } = useAssets()
+const feed = useFeedStore()
+
+// 價目表一律問後端，前端不寫死金額（CLAUDE.md：前端不得硬寫範例數字）
+const pricing = ref<EditorPricing | null>(null)
+const removeToolCost = computed(() => pricing.value?.tools.remove ?? 0)
+// 本次編輯已實際套用（並已扣款）的 AI 工具
+const usedTools = ref<AppliedEditTool[]>([])
+const usedToolsTotal = computed(() => usedTools.value.reduce((total, item) => total + item.cost, 0))
+const applyingTool = ref('')
+const toolError = ref('')
+const retouching = ref(false)
+const retouchError = ref('')
+onMounted(async () => {
+  if (!feed.loaded) feed.refresh()
+  try {
+    const next = await api.getEditorPricing()
+    pricing.value = next
+    retouchOptions.value.forEach((option) => {
+      option.cost = next.retouchOptions[option.key] ?? 0
+      option.free = option.cost === 0
+    })
+  } catch {
+    // 價目表載不到時維持 0，畫面不顯示金額，但不擋住其他操作
+  }
+})
 const tool = ref('remove'),
   ratio = ref('square')
 const editorPickerOpen = ref(false)
@@ -337,6 +373,9 @@ const selectEditorAsset = (asset: Asset) => {
   }
   selectedAssetName.value = asset.name
   savedAssetId.value = ''
+  // 換了來源素材＝重新開始，先前的扣款紀錄不再屬於這張圖
+  usedTools.value = []
+  toolError.value = ''
 }
 const suggestedAssetName = computed(() => {
   if (props.mode === 'retouch') return `${selectedAssetName.value}_${t('editor.saveDialog.suffixes.retouch')}`
@@ -468,7 +507,7 @@ const textObjectStyle = computed(() => ({
 }))
 const retouchSetupOpen = ref(false)
 const retouchMethod = ref<'quick' | 'command'>('quick')
-const commandRetouchBaseCost = 16
+const commandRetouchBaseCost = computed(() => pricing.value?.commandBase ?? 0)
 const retouchOptionsOpen = ref(true)
 const retouchInstruction = ref('')
 const lastRetouchCost = ref(16)
@@ -485,12 +524,44 @@ watch(
     retouchSetupOpen.value = false
   },
 )
-function startRetouch() {
-  if (!canStartRetouch.value) return
-  lastRetouchCost.value = estimatedRetouchCost.value
-  lastRetouchKeys.value = retouchOptions.value.filter((option) => option.on).map((option) => option.key)
-  lastRetouchMethod.value = retouchMethod.value
-  retouchSetupOpen.value = false
+// 送出修圖：扣款與最終金額都以後端為準，畫面上的預估只是預估。
+// 送出的項目取 retouchOptionsForMethod（而非全部），否則指令式修圖會把沒收費的快速項目也列進結果。
+async function startRetouch() {
+  if (!canStartRetouch.value || retouching.value) return
+  retouching.value = true
+  retouchError.value = ''
+  try {
+    const result = await api.retouchImage({
+      method: retouchMethod.value,
+      options: retouchOptionsForMethod.value.filter((option) => option.on).map((option) => option.key),
+      instruction: retouchInstruction.value.trim() || undefined,
+    })
+    lastRetouchCost.value = result.cost
+    lastRetouchKeys.value = result.options
+    lastRetouchMethod.value = result.method
+    retouchSetupOpen.value = false
+    await feed.refresh()
+  } catch (error) {
+    retouchError.value = isInsufficientFeed(error) ? t('errors.insufficientFeed') : t('errors.generationFailed')
+  } finally {
+    retouching.value = false
+  }
+}
+
+// 背景移除是「執行當下即扣」，同一張素材只扣一次；其餘工具不扣飼料。
+async function selectRemoveTool() {
+  tool.value = 'remove'
+  if (applyingTool.value || usedTools.value.some((item) => item.tool === 'remove')) return
+  applyingTool.value = 'remove'
+  toolError.value = ''
+  try {
+    usedTools.value.push(await api.applyEditTool('remove'))
+    await feed.refresh()
+  } catch (error) {
+    toolError.value = isInsufficientFeed(error) ? t('errors.insufficientFeed') : t('errors.generationFailed')
+  } finally {
+    applyingTool.value = ''
+  }
 }
 type EditorLayerType = 'text' | 'object' | 'fade' | 'original'
 type EditorLayer = {
@@ -619,14 +690,9 @@ const toggleOriginalLock = () => {
   originalLayer.value.locked = !originalLayer.value.locked
   if (originalLayer.value.locked) originalLayer.value.visible = true
 }
-const retouchOptions = ref(
-  ['removeObjects', 'repair', 'lighting', 'upscale'].map((key, index) => ({
-    key,
-    on: index < 2,
-    free: index === 2,
-    cost: index === 2 ? 0 : index === 3 ? 5 : 8,
-  })),
-)
+const RETOUCH_OPTION_KEYS: RetouchOptionKey[] = ['removeObjects', 'repair', 'lighting', 'upscale']
+// cost／free 由 getEditorPricing 填入，這裡只保留預設勾選狀態
+const retouchOptions = ref(RETOUCH_OPTION_KEYS.map((key, index) => ({ key, on: index < 2, free: true, cost: 0 })))
 const retouchOptionsForMethod = computed(() =>
   retouchMethod.value === 'command'
     ? retouchOptions.value.filter((option) => ['lighting', 'upscale'].includes(option.key))
@@ -646,7 +712,7 @@ function setRetouchMethod(method: 'quick' | 'command') {
 }
 const estimatedRetouchCost = computed(
   () =>
-    (retouchMethod.value === 'command' ? commandRetouchBaseCost : 0) +
+    (retouchMethod.value === 'command' ? commandRetouchBaseCost.value : 0) +
     retouchOptionsForMethod.value.reduce((total, option) => total + (option.on ? option.cost : 0), 0),
 )
 const canStartRetouch = computed(() => retouchMethod.value === 'quick' || retouchInstruction.value.trim().length > 0)
@@ -1539,6 +1605,12 @@ const previews = computed(() =>
   transform: rotate(180deg);
 }
 .properties,
+.editorError {
+  margin: 0;
+  color: #d93e28;
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
 .aiCost {
   border-top: 1px solid #d2d5dd;
   padding: 0 1rem 1rem;

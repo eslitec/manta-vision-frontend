@@ -60,6 +60,74 @@ describe('計費與扣點', () => {
   })
 })
 
+describe('圖片編輯與 AI 修圖的扣款（MV-09 / MV-09b）', () => {
+  it('價目表由後端提供，且回傳的是複本、改不到內部狀態', async () => {
+    const pricing = await api.getEditorPricing()
+    expect(pricing.tools.remove).toBe(8)
+    expect(pricing.retouchOptions).toEqual({ removeObjects: 8, repair: 8, lighting: 0, upscale: 5 })
+    expect(pricing.commandBase).toBe(16)
+    pricing.tools.remove = 999
+    expect((await api.getEditorPricing()).tools.remove).toBe(8)
+  })
+
+  it('applyEditTool 背景移除扣 8 顆，其餘工具不扣', async () => {
+    const before = (await api.getFeed()).balance
+    expect(await api.applyEditTool('remove')).toEqual({ tool: 'remove', cost: 8 })
+    expect((await api.getFeed()).balance).toBe(before - 8)
+
+    for (const tool of ['object', 'fade', 'text', 'crop'] as const) {
+      const mid = (await api.getFeed()).balance
+      expect((await api.applyEditTool(tool)).cost).toBe(0)
+      expect((await api.getFeed()).balance).toBe(mid)
+    }
+  })
+
+  it('retouchImage 依價目表加總後扣款，成本不採信前端', async () => {
+    const before = (await api.getFeed()).balance
+    const res = await api.retouchImage({ method: 'quick', options: ['removeObjects', 'repair', 'lighting'] })
+    expect(res.cost).toBe(16) // 8 + 8 + 0
+    expect((await api.getFeed()).balance).toBe(before - 16)
+  })
+
+  it('指令式修圖含基本費，且只認光線校正與放大兩個加購項', async () => {
+    const before = (await api.getFeed()).balance
+    const res = await api.retouchImage({
+      method: 'command',
+      options: ['removeObjects', 'repair', 'upscale'],
+      instruction: '把背景換成純白',
+    })
+    expect(res.options).toEqual(['upscale']) // 快速項目被濾掉
+    expect(res.cost).toBe(21) // 基本費 16 + 放大 5
+    expect((await api.getFeed()).balance).toBe(before - 21)
+  })
+
+  it('全部選免費項目時不扣款', async () => {
+    const before = (await api.getFeed()).balance
+    expect((await api.retouchImage({ method: 'quick', options: ['lighting'] })).cost).toBe(0)
+    expect((await api.getFeed()).balance).toBe(before)
+  })
+
+  it('另存編輯產物不扣飼料，且不覆寫原素材', async () => {
+    const beforeFeed = (await api.getFeed()).balance
+    const beforeCount = (await api.listImages()).length
+    const saved = await api.editImage('編輯後的圖', { keepLayers: true })
+    expect(saved.tag).toBe('edit')
+    expect(saved.editable).toBe(true)
+    expect((await api.getFeed()).balance).toBe(beforeFeed)
+    expect((await api.listImages()).length).toBe(beforeCount + 1)
+  })
+
+  it('餘額不足時擲出 INSUFFICIENT_FEED，且不扣款', async () => {
+    // 先把餘額燒到接近見底，再送一筆會超支的修圖
+    const { balance } = await api.getFeed()
+    const req: GenerateImageReq = { modelId: 'flux-1', prompt: 'x', count: Math.floor(balance / 8) }
+    await api.generateImages(req, 8)
+    const left = (await api.getFeed()).balance
+    await expect(api.retouchImage({ method: 'command', options: ['upscale'] })).rejects.toThrow('INSUFFICIENT_FEED')
+    expect((await api.getFeed()).balance).toBe(left)
+  })
+})
+
 describe('AI 輔助描述', () => {
   it('enhancePrompt 保留原文並補上結構化修飾詞', async () => {
     const out = await api.enhancePrompt('白T放桌上')

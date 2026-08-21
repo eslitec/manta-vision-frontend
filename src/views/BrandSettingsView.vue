@@ -332,7 +332,8 @@ function resetPalette() {
 }
 function applyDetected(colors: DominantColor[]) {
   detectedPalette.value = colors
-  selectedColor.value = colors[0]?.hex ?? ''
+  // 不預選：設計稿的預設狀態沒有「指派為…」那一列，點了色塊才會出現
+  selectedColor.value = ''
   if (!colors.length) paletteError.value = t('brandSettings.palette.noColors')
 }
 async function onLogo(e: Event) {
@@ -699,7 +700,7 @@ async function onSave() {
     color: $gray-100;
     font-size: 0.6875rem;
     font-weight: 500;
-    line-height: normal;
+    line-height: 0.8125rem;
   }
 
   &__item {
@@ -738,7 +739,7 @@ async function onSave() {
     color: $blue-dark-500;
     font-size: 0.8125rem;
     font-weight: 400;
-    line-height: normal;
+    line-height: 1rem; // 列高 7 + 16 + 7 = 30
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -758,7 +759,7 @@ async function onSave() {
     margin: 0;
     color: $gray-100;
     font-size: 0.8125rem;
-    line-height: normal;
+    line-height: 1rem;
   }
 
   // 漸層遮罩要放在捲動容器之外，否則會跟著內容一起捲走
@@ -778,7 +779,7 @@ async function onSave() {
     margin: 0;
     color: $gray-100;
     font-size: 0.6875rem;
-    line-height: normal;
+    line-height: 0.8125rem; // dd_foot 10 + 13 + 12 = 35
   }
 }
 
@@ -858,7 +859,7 @@ async function onSave() {
     color: $blue-dark-500;
     font-size: 0.8125rem;
     font-weight: 500;
-    line-height: normal;
+    line-height: 1rem; // Figma r1 文字框 16
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -871,7 +872,7 @@ async function onSave() {
     font-size: 0.6875rem;
     font-weight: 500;
     gap: 0.25rem;
-    line-height: normal;
+    line-height: 0.8125rem; // Figma ok 內文字框 13
   }
 
   &__okIcon {
@@ -884,7 +885,7 @@ async function onSave() {
     margin: 0;
     color: #606692;
     font-size: 0.6875rem;
-    line-height: normal;
+    line-height: 0.8125rem; // Figma 說明文字框 13
   }
 
   &__actions {
@@ -902,7 +903,7 @@ async function onSave() {
     font-family: inherit;
     font-size: 0.75rem;
     font-weight: 500;
-    line-height: normal;
+    line-height: 0.875rem; // Figma r2 文字框 14
 
     &--muted {
       color: $gray-100;
@@ -958,7 +959,7 @@ async function onSave() {
       color: #606692;
       font-size: 0.75rem;
       font-weight: 500;
-      line-height: normal;
+      line-height: 0.875rem; // row_sw_head 14
     }
   }
 
@@ -972,7 +973,7 @@ async function onSave() {
     font-family: inherit;
     font-size: 0.75rem;
     font-weight: 500;
-    line-height: normal;
+    line-height: 0.875rem;
 
     &:hover {
       text-decoration: underline;
@@ -1004,13 +1005,13 @@ async function onSave() {
     span:first-child {
       color: #606692;
       font-size: 0.6875rem;
-      line-height: normal;
+      line-height: 0.8125rem; // tip 27 = 13 + 2 + 12
     }
 
     span:last-child {
       color: $gray-100;
       font-size: 0.625rem;
-      line-height: normal;
+      line-height: 0.75rem;
     }
   }
 
@@ -1050,23 +1051,24 @@ async function onSave() {
     border-radius: 6px;
   }
 
+  // ext 項總高 90 = sw 40 + 5 + 12 + 5 + 12 + 5 + 11
   &__hex {
     color: $blue-dark-500;
     font-size: 0.625rem;
-    line-height: normal;
+    line-height: 0.75rem;
   }
 
   &__share {
     color: $gray-100;
     font-size: 0.625rem;
-    line-height: normal;
+    line-height: 0.75rem;
   }
 
   &__assigned {
     color: $green;
     font-size: 0.5625rem;
     font-weight: 500;
-    line-height: normal;
+    line-height: 0.6875rem;
     white-space: nowrap;
   }
 

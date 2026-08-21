@@ -47,8 +47,13 @@ export interface DominantColor {
 
 /**
  * 純函式：吃 RGBA 像素陣列，回傳前 N 個「品牌重點色」與各自的像素占比。
- * 略過透明像素與近白背景；量化到 8³ 桶；評分＝面積(開根號抑制)×飽和度權重×明度權重，
- * 讓鮮豔色優先於大面積淡色；相近色（距離 ≤ 48）併入已選中的代表色，占比才有意義。
+ *
+ * 「挑哪些色」與「怎麼排序」是兩件事，分開處理：
+ * - **挑選**用評分＝面積(開根號抑制)×飽和度權重×明度權重，讓小面積的鮮豔品牌色不會被
+ *   大面積的淡色背景擠掉；相近色（距離 ≤ 48）併入已選中的代表色，占比才有意義。
+ * - **排序**則單純依像素占比由大到小，對齊設計稿 MV-08b `tip`「偵測結果依 Logo 像素占比排序」。
+ *
+ * 略過透明像素與近白背景；量化到 8³ 桶。
  */
 export function dominantColorShares(data: Uint8ClampedArray | number[], max = 6): DominantColor[] {
   const buckets = new Map<number, RGB & { n: number }>()
@@ -93,7 +98,9 @@ export function dominantColorShares(data: Uint8ClampedArray | number[], max = 6)
     if (near) near.n += n
     else if (picked.length < max) picked.push({ c, n })
   }
-  return picked.map((p) => ({ hex: toHex(p.c), share: total ? p.n / total : 0 }))
+  return picked
+    .sort((a, b) => b.n - a.n) // 挑選看評分，呈現順序看占比
+    .map((p) => ({ hex: toHex(p.c), share: total ? p.n / total : 0 }))
 }
 
 /** 只要色碼時用這個；排序與挑選規則與 `dominantColorShares` 完全相同 */
