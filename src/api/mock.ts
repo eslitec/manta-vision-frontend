@@ -12,6 +12,7 @@ import type {
   Metrics,
   RetouchReq,
   RetouchResult,
+  Session,
   UsageSummary,
   VideoJob,
   VideoJobReq,
@@ -100,6 +101,7 @@ const db = {
     logoUrl: '',
   } as BrandProfile,
   consent: false,
+  session: null as Session | null,
   jobs: new Map<
     string,
     { req: VideoJobReq; created: number; cost: number; failed?: boolean; failedChecked?: boolean }
@@ -120,6 +122,9 @@ const POST_OUTPUT_TYPE_COST: Record<GeneratePostReq['outputType'], number> = {
   textOnly: 2,
   imageOnly: 3,
 }
+// demo-only credentials，mock 用；對齊 topbar 顯示的 Mavis／日安選物
+const DEMO_USERNAME = 'mavis'
+const DEMO_PASSWORD = 'mavis123'
 
 function deduct(cost: number) {
   if (db.feedBalance < cost) throw new Error('INSUFFICIENT_FEED')
@@ -422,5 +427,18 @@ export const mockApi = {
     if (!amount) throw new Error('INVALID_PACKAGE')
     db.feedBalance += amount
     return { balance: db.feedBalance }
+
+  // POST /auth/login
+  async login(username: string, password: string): Promise<Session> {
+    await delay(400)
+    if (username !== DEMO_USERNAME || password !== DEMO_PASSWORD) throw new Error('INVALID_CREDENTIALS')
+    const session: Session = { username, displayName: 'Mavis' }
+    db.session = session
+    return session
+  },
+  // POST /auth/logout
+  async logout(): Promise<void> {
+    await delay(150)
+    db.session = null
   },
 }

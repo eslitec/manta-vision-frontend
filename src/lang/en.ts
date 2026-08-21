@@ -8,6 +8,7 @@ export default {
     generateTryOn: 'AI Virtual Try-On',
     usage: 'Feed Usage and Performance',
     settings: 'Brand Settings',
+    login: 'Log In',
   },
   common: {
     add: 'Add',
@@ -40,6 +41,15 @@ export default {
     insufficientFeed: 'Not enough feed. Please top up first.',
     generationFailed: 'Generation failed. Please try again.',
     submitFailed: 'Submission failed. Please try again.',
+    invalidCredentials: 'Incorrect username or password. Please try again.',
+  },
+  auth: {
+    title: 'Log in to Manta Vision',
+    usernameLabel: 'Username',
+    usernamePlaceholder: 'Enter your username',
+    passwordLabel: 'Password',
+    passwordPlaceholder: 'Enter your password',
+    submit: 'Log in',
   },
   units: { feed: '{count} feed', feedShort: 'feed', feedPerVideo: '{count} feed/video', images: 'images' },
   brand: {
