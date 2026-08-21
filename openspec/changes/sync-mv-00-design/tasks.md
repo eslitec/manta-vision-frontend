@@ -1,6 +1,6 @@
 ## 1. 文案更新（僅 i18n 文字）
 
-- [x] 1.1 更新首頁副標題文字，對齊設計稿文案（已隨 `remove-i18n` 任務 1.1 一併完成，直接寫死在 `HomeView.vue` 樣板裡，不再是改 `zh-Hant.ts`）
+- [x] 1.1 對齊 Requirement「工作台標題傳達頁面用途」：更新首頁副標題文字，對齊設計稿文案（已隨 `remove-i18n` 任務 1.1 一併完成，直接寫死在 `HomeView.vue` 樣板裡，不再是改 `zh-Hant.ts`）
 - [x] 1.2 將卡片標題從「圖生影」改成「圖生影片」（已隨 `remove-i18n` 任務 1.1 一併完成，直接寫在 `genTools` 資料裡）
 - [x] 1.3 更新頂部工具列角色文字，顯示「擁有者」而不是「管理者」（i18n 已移除，直接改 `DefaultLayout.vue` 樣板字串，不再是改 key）
 - [x] 1.4 更新圖庫橫幅說明文字措辭，對齊設計稿
@@ -8,12 +8,12 @@
 
 ## 2. 側邊欄視覺更新
 
-- [x] 2.1 在 `DefaultLayout.vue` 幫 `.sidebar__item.is-active` 加上左側強調色條（CSS `::before`，不新增 DOM 節點）
+- [x] 2.1 對齊 Requirement「側邊欄標示目前所在區塊」：在 `DefaultLayout.vue` 幫 `.sidebar__item.is-active` 加上左側強調色條（CSS `::before`，不新增 DOM 節點）
 - [x] 2.2 把 `HomeView.vue` 裡品牌完成狀態的 `✓` 文字前綴，換成行內 SVG 打勾圖示，由既有的 `brandReady` computed 驅動
 
 ## 3. 側邊欄底部連結
 
-- [x] 3.1 在 `DefaultLayout.vue` 的 `.sidebar__nav` 下方加上「教學文件」「登出」兩個項目，做成視覺弱化／未啟用樣式（不用 `router-link`，先不加點擊行為）
+- [x] 3.1 對齊 Requirement「側邊欄提供功能性連結」：在 `DefaultLayout.vue` 的 `.sidebar__nav` 下方加上「教學文件」「登出」兩個項目，做成視覺弱化／未啟用樣式（不用 `router-link`，先不加點擊行為）
 
 ## 4. 頂部工具列調整
 
@@ -23,8 +23,8 @@
 
 ## 5. 生成工具卡片圖示
 
-- [x] 5.1 把 `HomeView.vue` 裡 `genTools` 資料的各卡不同底色，換成統一的淺藍色圖示底
-- [x] 5.2 在 `HomeView.vue` 的 `.card` 樣板裡固定加上消耗飼料徽章圖示（4 張卡片一致顯示，不用 per-card 旗標控制）
+- [x] 5.1 對齊 Requirement「生成工具卡片列出所有可用工具」：把 `HomeView.vue` 裡 `genTools` 資料的各卡不同底色，換成統一的淺藍色圖示底
+- [x] 5.2 對齊 Requirement「生成工具卡片標示會消耗飼料」：在 `HomeView.vue` 的 `.card` 樣板裡固定加上消耗飼料徽章圖示（4 張卡片一致顯示，不用 per-card 旗標控制）
 
 ## 6. 驗證
 
@@ -37,7 +37,7 @@
 - [x] 7.2 側邊欄導覽圖示（`AI 生成工作台`／`圖庫管理中心`／`飼料用量`／`設定`）同樣從 emoji 換成 `i.ti.ti-*`（後續在任務 8.4 被使用者提供的精確 SVG 素材取代）
 - [x] 7.3 消耗飼料徽章從純文字「AI」換成設計稿提供的實際 SVG 插圖（帶「AI」字樣的瓶子圖形）
 - [x] 7.4 側邊欄品牌區塊（「日安選物／Manta Vision」）加上跟使用中導覽項目一致的反白＋左側強調色條樣式
-- [x] 7.5 狀態列（`AI 飼料餘額`／`本月已生成`／`品牌設定`）之間的分隔線改用 `::before` 偽元素實作在 `.stats__item:not(:first-child)` 上，移除獨立的 `.stats__divider` DOM 節點，間距改用 flex `gap`
+- [x] 7.5 對齊 Requirement「狀態列顯示帳號與品牌狀態」：狀態列（`AI 飼料餘額`／`本月已生成`／`品牌設定`）之間的分隔線改用 `::before` 偽元素實作在 `.stats__item:not(:first-child)` 上，移除獨立的 `.stats__divider` DOM 節點，間距改用 flex `gap`
 - [x] 7.6 修正 `$blue-dark-300`（`_variables.scss`）色碼：原本是 `#171E52`，比對設計稿實際用色 `#2E3567` 後修正——這是全站基礎文字色（`body { color: $blue-dark-300 }`），只改變數定義本身，不用逐一改 14 個檔案的用法
 - [x] 7.7 修正 `.stats` 的間距寫法：`gap` 誤把「項目 3 → 儲值飼料按鈕」之間也算進去，擠壓項目寬度導致文字換行；改成只在 `.stats__item:not(:first-child)` 用 `margin-left: 48px`。同時確認畫面版面假設桌機寬螢幕（≥1440px），窄視窗換行是預期內、不特別做響應式
 - [x] 7.8 修正 `.sidebar` 寬度：`240px` → `200px`（用 Figma Inspect 量到的精確值）
@@ -59,7 +59,7 @@
 - [x] 8.12 確認 `FeedBadge.vue`（頂部「儲值」按鈕）也要套用同一份規格，改用 `TopupButton`（透過 `slot` 傳入不同文字：「＋ 儲值飼料」／「儲值」），移除各自原本寫死的 `&__topup` CSS，統一由元件管理樣式
 - [x] 8.13 `TopupButton` 補上 hover（`#FFB670`）與 active／按下（`#C97722`）兩個互動狀態的背景色，新增對應的 `$orange-light`／`$orange-dark` 變數；因為兩處使用都共用同一個元件，這次補上的互動效果自動套用到兩個按鈕，不用個別處理
 - [x] 8.14 `FeedBadge.vue`（頂部「1,240 顆」徽章）的圖示從 emoji `🪙` 換成使用者提供的 SVG——比對路徑後發現跟任務 8.4 已經建立的 `IconFeedBottleSmall` 幾乎完全一致（只有小數點幾位的四捨五入差異），直接重用既有元件，沒有新增檔案
-- [x] 8.15 「前往圖庫」按鈕元件化：新增 `OutlineButton.vue`（`src/components/`），套用 Figma 量到的精確規格（Hug 88×36、`padding: 9px 16px`、`border-radius: 18px`、1px 邊框、底色 `#FFFFFF`、邊框/文字色 `#2E3567`、陰影 `$btnBoxShadow`）；因為這顆按鈕包在 `router-link.card--wide`（整張卡片本身就是連結）裡面，做成固定 `<button>` 會變成「連結包按鈕」的不合法巢狀，所以元件加上 `tag` prop（預設 `'button'`），這裡改用 `OutlineButton(tag="span")` 渲染成 `<span>`；已用瀏覽器實際渲染確認輸出是合法的 `<span class="outline-btn">` 而不是巢狀 `<button>`
+- [x] 8.15 對齊 Requirement「圖庫橫幅連結到素材圖庫」：「前往圖庫」按鈕元件化：新增 `OutlineButton.vue`（`src/components/`），套用 Figma 量到的精確規格（Hug 88×36、`padding: 9px 16px`、`border-radius: 18px`、1px 邊框、底色 `#FFFFFF`、邊框/文字色 `#2E3567`、陰影 `$btnBoxShadow`）；因為這顆按鈕包在 `router-link.card--wide`（整張卡片本身就是連結）裡面，做成固定 `<button>` 會變成「連結包按鈕」的不合法巢狀，所以元件加上 `tag` prop（預設 `'button'`），這裡改用 `OutlineButton(tag="span")` 渲染成 `<span>`；已用瀏覽器實際渲染確認輸出是合法的 `<span class="outline-btn">` 而不是巢狀 `<button>`
 - [x] 8.16 `.stats` 區塊兩個圖示更新：「AI 飼料餘額」數字前補上瓶子圖示（重用任務 8.4／8.14 已建立的 `IconFeedBottleSmall`，SVG 路徑比對後確認一致，沒有新增檔案）；「品牌設定已完成」原本用 `currentColor` 描邊畫的打勾圖示，換成使用者提供的實心綠色圓底＋白色勾勾 SVG（顏色已內建在路徑的 `fill` 裡，不再需要 `currentColor`）
 - [x] 8.17 修正 `.stats__item` 分隔線：原本 `top:0;bottom:0` 貼滿整個項目的伸展高度（`.stats` 用 `align-items: stretch`，讓「本月已生成」「品牌設定已完成」這兩個內容較短的項目也被拉成跟「AI 飼料餘額」一樣高），分隔線因此比自己的文字內容長一截；改成 `top:50%; transform: translateY(-50%)` 置中，`height` 改成貼合各自文字區塊的實際量測高度（數字＋標籤兩行約 52px；「品牌設定已完成」／「品牌設定待完成」只有單行、無獨立標籤，約 23px，用 `:has(.is-ok, .is-muted)` 判斷套用較短的高度）
 - [x] 8.18 `HomeView.vue` 剩下的兩處行內 SVG（「品牌設定已完成」打勾圖示、卡片右上角消耗飼料徽章）改成獨立元件：新增 `IconCheckCircle.vue`、`IconFeedBottleBadge.vue`（`src/components/icons/`），樣板改用元件標籤，全站圖示統一走「獨立元件＋動態渲染／直接引用」的模式，不再有寫在畫面樣板裡的行內 `svg`／`path`
@@ -73,10 +73,10 @@
 
 以 Figma MCP 直接抓 `sidebar_l`／`nav_top` 元件實際規格逐一比對，修正無 MCP 時肉眼猜錯的值。
 
-- [x] 9.1 側邊欄底色 `$blue-dark-200`（#242A5C）→ `$blue-dark-500`（#2E3567）——對齊 `sidebar_l` shell 底色（整條側邊欄顏色原本都偏）
+- [x] 9.1 對齊 Requirement「共用外殼與工作台細節對齊設計稿」：側邊欄底色 `$blue-dark-200`（#242A5C）→ `$blue-dark-500`（#2E3567）——對齊 `sidebar_l` shell 底色（整條側邊欄顏色原本都偏）
 - [x] 9.2 Logo 字級 20 → 18px；導覽項目字級 15 → 16px、使用中文字色 `$blue-dark-300` → `$blue-dark-500`
 - [x] 9.3 品牌區塊：頭像 34 → 40px、只圓右側角（`0 10px 10px 0`）、gap 10 → 12px；左內距保留 16px 讓頭像避開 `::before` 金色強調條（否則被蓋住／裁切——使用者回報後修正）
-- [x] 9.4 頂欄高 60 → 53px（對齊 `nav_top`）；麵包屑色 `$blue-dark-300` → `$blue-dark-500`
+- [x] 9.4 對齊 Requirement「頂部工具列顯示目前情境與使用者身分」：頂欄高 60 → 53px（對齊 `nav_top`）；麵包屑色 `$blue-dark-300` → `$blue-dark-500`
 - [x] 9.5「任務」鈕圓角 999 → 18px、padding 12 → `9px 12px`、色 → `$blue-dark-500`
 - [x] 9.6 使用者頭像 26 → 28px、文字色 `$gray-400`（#606472）→ `#606692`
 - [x] 9.7 HomeView：卡片消耗飼料徽章 22 → 28px、位置對齊；卡片圖示-標題 gap 14 → 12px；狀態列內距 `22px 26px` → `20px`
