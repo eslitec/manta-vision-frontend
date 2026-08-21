@@ -1,18 +1,20 @@
 <template lang="pug">
 .post
+  h1.visuallyHidden {{ t('routeTitles.generatePost') }}
   section.panel.post__input
     .step
       .step__title {{ t('marketing.steps.image') }}
       .dropzone
-        i.ti.ti-photo.dropzone__icon
+        IconImagePlaceholder.dropzone__icon
         span.dropzone__name(v-if="productImage") {{ productImage.name }}
       .dropzone__actions
-        OutlineButton(@click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
+        AppButton(variant="outline" @click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
     .step
       .step__title {{ t('marketing.steps.intro') }}
       .field
-        textarea.field__input(v-model="intro" maxlength="200" rows="4" :placeholder="t('marketing.introPlaceholder')")
-        span.field__counter {{ intro.length }} / 200
+        label.visuallyHidden(for="marketing-intro") {{ t('marketing.steps.intro') }}
+        textarea#marketing-intro.field__input(v-model="intro" maxlength="200" rows="4" :aria-describedby="'marketing-intro-counter'" :placeholder="t('marketing.introPlaceholder')")
+        span#marketing-intro-counter.field__counter {{ intro.length }} / 200
       .insp
         button.insp__pill(@click="inspOpen = !inspOpen") {{ t('marketing.inspiration') }}
         span.insp__hint {{ t('marketing.inspirationHint') }}
@@ -24,28 +26,29 @@
     .step
       .step__title {{ t('marketing.steps.ratio') }}
       .ratios
-        button.ratiocard(v-for="r in ratios" :key="r.v" :class="{ 'isActive': ratio === r.v }" @click="ratio = r.v")
+        button.ratiocard(v-for="r in ratios" :key="r.v" :aria-pressed="ratio === r.v" :class="{ 'isActive': ratio === r.v }" @click="ratio = r.v")
           span.ratiocard__label {{ r.label }}
           span.ratiocard__desc {{ r.desc }}
-    p.err(v-if="errorMsg") {{ errorMsg }}
+    p.err(v-if="errorMsg" role="alert") {{ errorMsg }}
     .post__footer
       .cost
         .cost__label {{ t('common.estimatedCost') }}
         .cost__value
           IconFeedBottleSmall.cost__icon
           span {{ t('units.feed', { count: 5 }) }}
-      PrimaryButton(:disabled="generating" @click="generate")
-        i.ti(:class="generating ? 'ti-loader spin' : 'ti-plus'")
+      AppButton(:disabled="generating" @click="generate")
+        component(:is="generating ? IconLoader : IconAddObject" :class="{ spin: generating }")
         span {{ generating ? t('common.generating') : t('marketing.generate') }}
 
   section.panel.post__result
     h2.result__title {{ t('common.generationResult') }}
     .result__empty(v-if="!result") {{ t('marketing.emptyResult') }}
     template(v-else)
+      .visuallyHidden(role="status" aria-live="polite") {{ t('common.generationResult') }}
       .postresult
         .postresult__col
-          .poster(:style="{ aspectRatio: aspect }")
-            i.ti.ti-photo
+          .poster(:class="{ isPortrait: ratio === '9:16' }" :style="{ aspectRatio: aspect }")
+            IconImagePlaceholder
           .postresult__act
             button.linkbtn(@click="generate") {{ t('marketing.changeImage') }}
             button.linkbtn(@click="downloadPoster") {{ t('common.download') }}
@@ -54,12 +57,12 @@
             p.copy__text(v-for="(line, i) in copyLines" :key="i") {{ line }}
             p.copy__tags {{ result.hashtags.join(' ') }}
           .postresult__act
-            OutlineButton(@click="copyText")
-              i.ti.ti-copy
+            AppButton(variant="outline" @click="copyText")
+              IconCopy
               span {{ copied ? t('common.copied') : t('marketing.copyText') }}
             button.linkbtn(@click="generate") {{ t('marketing.rewrite') }}
       .postresult__note
-        i.ti.ti-alert-triangle.postresult__noteIcon
+        img.postresult__noteIcon(:src="postNextStepIconUrl" alt="")
         span {{ t('marketing.nextStep') }}
 
   ImagePickerDialog(v-model:open="pickerOpen" :title="t('marketing.pickerTitle')" @select="onPick")
@@ -70,10 +73,14 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
-import PrimaryButton from '@/components/PrimaryButton.vue'
-import OutlineButton from '@/components/OutlineButton.vue'
+import AppButton from '@/components/AppButton.vue'
 import BrandToggle from '@/components/BrandToggle.vue'
 import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
+import IconAddObject from '@/components/icons/IconAddObject.vue'
+import IconCopy from '@/components/icons/IconCopy.vue'
+import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
+import IconLoader from '@/components/icons/IconLoader.vue'
+import postNextStepIconUrl from '@/assets/images/marketing-next-step-alert.svg'
 import { useFeedStore } from '@/stores/feed'
 import { api } from '@/api'
 import { isInsufficientFeed } from '@/utils/error'
@@ -299,9 +306,11 @@ async function copyText() {
   }
 }
 .post__result {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  overflow: hidden;
 }
 .result__title {
   font-size: 1.125rem;
@@ -317,6 +326,13 @@ async function copyText() {
 }
 .postresult {
   @include flex(flex-start, flex-start, 1.25rem);
+
+  @media (min-width: $bp-lg) {
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
+  }
+
   @include below($bp-sm) {
     flex-direction: column;
   }
@@ -334,6 +350,18 @@ async function copyText() {
     min-width: 0;
     gap: 0.75rem;
   }
+  @media (min-width: $bp-lg) {
+    // Figma 12:90 基準為圖片欄 300、文字欄 318；
+    // 使用比例分配剩餘寬度，避免桌面版把圖片欄寫死為 300px。
+    &:first-child {
+      width: auto;
+      min-width: 0;
+      flex: 300 1 0;
+    }
+    &:last-child {
+      flex: 318 1 0;
+    }
+  }
   @include below($bp-sm) {
     &:first-child {
       width: 100%;
@@ -342,6 +370,7 @@ async function copyText() {
 }
 .postresult__act {
   @include flex(flex-start, center, 0.75rem);
+  flex-shrink: 0;
 }
 .postresult__note {
   @include flex(flex-start, center, 0.625rem);
@@ -352,10 +381,10 @@ async function copyText() {
   font-size: 0.875rem;
   font-weight: 500;
   color: $dark-blue-gray;
-  line-height: 1.5;
+  line-height: normal;
   &-icon {
-    color: $babyBlue;
-    font-size: 1.125rem;
+    width: 1.25rem;
+    height: 1.25rem;
     flex-shrink: 0;
   }
 }
@@ -366,6 +395,16 @@ async function copyText() {
   color: $babyBlue;
   font-size: 2.75rem;
   width: 100%;
+
+  @media (min-width: $bp-lg) {
+    &.isPortrait {
+      width: auto;
+      max-width: 100%;
+      height: calc(100% - 1.75rem);
+      max-height: calc(100% - 1.75rem);
+      align-self: center;
+    }
+  }
 }
 .copy {
   background: $blue-light;

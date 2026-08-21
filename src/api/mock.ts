@@ -1,12 +1,17 @@
 import type {
   AiModel,
+  AppliedEditTool,
   Asset,
   BrandProfile,
+  EditorPricing,
+  EditorToolKey,
   GeneratedImage,
   GeneratedPost,
   GenerateImageReq,
   GeneratePostReq,
   Metrics,
+  RetouchReq,
+  RetouchResult,
   UsageSummary,
   VideoJob,
   VideoJobReq,
@@ -34,46 +39,84 @@ const db = {
   generatedThisMonth: 128, // 本月已生成張數（首頁統計；產圖的模組才計入）
   folders: ['未分類', '春季企劃', '商品素材', '生成結果'],
   assets: [
-    { id: 'a1', name: '春季主視覺_01', source: '上傳', tag: 'upload', dim: '1024×758', folders: ['春季企劃'], referencedBy: 2 },
-    { id: 'a2', name: '商品_去背_白T', source: '物件素材', tag: 'object', dim: '1024×768', folders: ['商品素材'], referencedBy: 1 },
-    { id: 'a3', name: '生成_木質桌面情境', source: 'AI 生成', tag: 'ai', dim: '1024×768', folders: ['生成結果'] },
-    { id: 'a4', name: '春季主視覺_調色版', source: '編輯產物', tag: 'edit', dim: '1024×768', folders: ['春季企劃'] },
-    { id: 'a5', name: '門市外觀', source: '上傳', tag: 'upload', dim: '1024×768', folders: ['未分類'] },
-    { id: 'a6', name: '商品_去背_帆布袋', source: '物件素材', tag: 'object', dim: '1024×768', folders: ['商品素材'], referencedBy: 1 },
-    { id: 'a7', name: '生成_野餐情境', source: 'AI 生成', tag: 'ai', dim: '1024×768', folders: ['生成結果'] },
-    { id: 'a8', name: '夏季宣傳_短影片', source: '影片', tag: 'video', dim: '1080×1920', type: 'video', folders: ['生成結果'] },
+    {
+      id: 'a1',
+      name: '春季主視覺_01',
+      source: '上傳',
+      tag: 'upload',
+      dim: '1024×758',
+      folderId: '春季企劃',
+      referencedBy: 2,
+    },
+    {
+      id: 'a2',
+      name: '商品_去背_白T',
+      source: '物件素材',
+      tag: 'object',
+      dim: '1024×768',
+      folderId: '商品素材',
+      referencedBy: 1,
+    },
+    { id: 'a3', name: '生成_木質桌面情境', source: 'AI 生成', tag: 'ai', dim: '1024×768', folderId: '生成結果' },
+    { id: 'a4', name: '春季主視覺_調色版', source: '編輯產物', tag: 'edit', dim: '1024×768', folderId: '春季企劃' },
+    { id: 'a5', name: '門市外觀', source: '上傳', tag: 'upload', dim: '1024×768', folderId: '未分類' },
+    {
+      id: 'a6',
+      name: '商品_去背_帆布袋',
+      source: '物件素材',
+      tag: 'object',
+      dim: '1024×768',
+      folderId: '商品素材',
+      referencedBy: 1,
+    },
+    { id: 'a7', name: '生成_野餐情境', source: 'AI 生成', tag: 'ai', dim: '1024×768', folderId: '生成結果' },
+    {
+      id: 'a8',
+      name: '夏季宣傳_短影片',
+      source: '影片',
+      tag: 'video',
+      dim: '1080×1920',
+      type: 'video',
+      folderId: '生成結果',
+    },
   ] as Asset[],
   brand: {
     name: '日安選物',
-    positioning: '嚴選日常打扮與居品，讓生活有溫度',
-    website: '',
-    industry: '服飾・生活選物',
+    positioning: '嚴選日常質感選物，讓生活有溫度',
+    website: 'www.rihan-select.com',
+    industry: 'apparel',
     colors: [
       { label: '主色', hex: '#2E3567' },
       { label: '輔色', hex: '#A5C8E6' },
-      { label: '互補色', hex: '#F2DB00' },
+      { label: '點綴色', hex: '#F2BB00' },
     ],
-    tones: ['溫暖親切', '文青質感'],
-    hashtags: ['#日安選物', '#日常穿搭', '#質感生活', '#OOTD'],
+    tones: [],
+    hashtags: ['#日安選物', '#選物日常', '#質感生活', '#OOTD'],
     addressing: '你',
     avoidWords: '',
     logoName: '',
     logoUrl: '',
   } as BrandProfile,
   consent: false,
-  jobs: new Map<string, { req: VideoJobReq; created: number; cost: number; failed?: boolean; failedChecked?: boolean }>(),
+  jobs: new Map<
+    string,
+    { req: VideoJobReq; created: number; cost: number; failed?: boolean; failedChecked?: boolean }
+  >(),
 }
+
+// 編輯器價目表（對齊 MV-09 工具列與 MV-09b 修飾項目的設計稿標價）
+const EDITOR_PRICING: EditorPricing = {
+  tools: { remove: 8, object: 0, fade: 0, text: 0, crop: 0 },
+  retouchOptions: { removeObjects: 8, repair: 8, lighting: 0, upscale: 5 },
+  commandBase: 16,
+}
+const COMMAND_RETOUCH_OPTIONS = ['lighting', 'upscale']
 
 function deduct(cost: number) {
   if (db.feedBalance < cost) throw new Error('INSUFFICIENT_FEED')
   db.feedBalance -= cost
   db.monthlyUsed += cost
 }
-function refund(cost: number) {
-  db.feedBalance += cost
-  db.monthlyUsed = Math.max(0, db.monthlyUsed - cost)
-}
-
 export const mockApi = {
   // GET /models
   async listModels(): Promise<AiModel[]> {
@@ -114,22 +157,19 @@ export const mockApi = {
     return [...db.folders]
   },
 
-  // PATCH /images/folders（把既有素材加入資料夾；多重歸屬、去重，不影響原本歸屬）
-  async addToFolder(assetIds: string[], folder: string): Promise<void> {
+  // PATCH /images/folders（把選取素材移至資料夾；1:N＝直接替換 folderId，會離開原資料夾）
+  async moveToFolder(assetIds: string[], folder: string): Promise<void> {
     await delay(250)
     for (const a of db.assets) {
-      if (!assetIds.includes(a.id)) continue
-      a.folders = a.folders ?? []
-      if (!a.folders.includes(folder)) a.folders.push(folder)
+      if (assetIds.includes(a.id)) a.folderId = folder
     }
   },
 
-  // PATCH /images/folders/remove（把素材移出資料夾；素材本身與其他歸屬不受影響）
-  async removeFromFolder(assetIds: string[], folder: string): Promise<void> {
+  // PATCH /images/folders/remove（把選取素材移出目前資料夾；1:N＝folderId 設回未分類，素材仍保留在圖庫）
+  async removeFromFolder(assetIds: string[]): Promise<void> {
     await delay(250)
     for (const a of db.assets) {
-      if (!assetIds.includes(a.id)) continue
-      a.folders = (a.folders ?? []).filter((f) => f !== folder)
+      if (assetIds.includes(a.id)) a.folderId = UNFILED_FOLDER
     }
   },
 
@@ -149,16 +189,58 @@ export const mockApi = {
       source: '上傳',
       tag: 'upload',
       dim: '1024×768',
-      folders: [folder ?? UNFILED_FOLDER],
+      folderId: folder ?? UNFILED_FOLDER,
     }
     db.assets.unshift(a)
     return a
   },
 
-  // POST /images/edit（去背／修圖，非破壞→新素材）
-  async editImage(name: string): Promise<Asset> {
+  // GET /editor/pricing — 編輯器價目表（MV-09 工具列與 MV-09b 修飾項目共用同一份）
+  async getEditorPricing(): Promise<EditorPricing> {
+    await delay(120)
+    return {
+      tools: { ...EDITOR_PRICING.tools },
+      retouchOptions: { ...EDITOR_PRICING.retouchOptions },
+      commandBase: EDITOR_PRICING.commandBase,
+    }
+  },
+
+  // POST /images/edit/tool — 編輯畫布套用一次 AI 工具，在執行當下就扣款。
+  // 目前只有背景移除有價；加入物件／文字／淡化／裁切皆為 0，對齊設計稿的成本說明。
+  async applyEditTool(tool: EditorToolKey): Promise<AppliedEditTool> {
+    await delay(500)
+    const cost = EDITOR_PRICING.tools[tool] ?? 0
+    if (cost > 0) deduct(cost)
+    return { tool, cost }
+  },
+
+  // POST /images/retouch — AI 修圖。成本一律由這裡依價目表計算，不採用前端傳來的金額。
+  async retouchImage(req: RetouchReq): Promise<RetouchResult> {
+    await delay(900)
+    // 指令式修圖只開放光線校正與放大兩個加購項，其餘一律忽略
+    const allowed = req.method === 'command' ? COMMAND_RETOUCH_OPTIONS : Object.keys(EDITOR_PRICING.retouchOptions)
+    const options = req.options.filter((key) => allowed.includes(key))
+    const cost =
+      (req.method === 'command' ? EDITOR_PRICING.commandBase : 0) +
+      options.reduce((total, key) => total + (EDITOR_PRICING.retouchOptions[key] ?? 0), 0)
+    if (cost > 0) deduct(cost)
+    return { method: req.method, options, cost }
+  },
+
+  // POST /images/edit（另存編輯產物，非破壞→新素材）
+  // 另存本身不扣飼料——扣款發生在 applyEditTool／retouchImage 的執行當下。
+  // opts.folder：使用者選定的存放位置（我的資料夾）；opts.keepLayers：是否保留可再編輯的圖層資訊
+  async editImage(name: string, opts?: { folder?: string; keepLayers?: boolean }): Promise<Asset> {
     await delay(600)
-    const a: Asset = { id: uid('a'), name: name + '_去背', source: '編輯產物', tag: 'edit', dim: '1024×768' }
+    const a: Asset = {
+      id: uid('a'),
+      name,
+      source: '編輯產物',
+      tag: 'edit',
+      dim: '1024×768',
+      folderId: opts?.folder ?? UNFILED_FOLDER,
+      editable: opts?.keepLayers ?? false,
+    }
     db.assets.unshift(a)
     return a
   },
@@ -193,8 +275,7 @@ export const mockApi = {
     await delay(1000)
     const tags = req.applyBrand ? db.brand.hashtags.slice(0, 3) : ['#新品', '#日常']
     return {
-      copy:
-        '🌿 春天就是要換上最舒服的自己\n\n全新純棉系列，透氣不悶熱，五種溫柔色調任你搭配。現在下單享春夏限時 8 折，把好天氣穿在身上 ☀',
+      copy: '🌿 春天就是要換上最舒服的自己\n\n全新純棉系列，透氣不悶熱，五種溫柔色調任你搭配。現在下單享春夏限時 8 折，把好天氣穿在身上 ☀',
       hashtags: tags,
     }
   },
@@ -208,30 +289,37 @@ export const mockApi = {
     const id = uid('job')
     db.jobs.set(id, { req, created: Date.now(), cost })
     await delay(300)
-    return { id, status: 'queued', cost }
+    return { id, status: 'pending', progress: 0, cost }
   },
 
   // GET /generate/video/:id → 查任務狀態（demo 用短時間模擬 1–2 分鐘；processing 階段有小機率模擬模型逾時失敗，讓失敗／重試／退款流程可被實際觸發與測試）
   async getVideoJob(id: string): Promise<VideoJob> {
     await delay(200)
     const j = db.jobs.get(id)
-    if (!j) return { id, status: 'failed', cost: 0, error: 'NOT_FOUND' }
-    if (j.failed) return { id, status: 'failed', cost: j.cost, error: 'MODEL_TIMEOUT' }
+    if (!j) return { id, status: 'failed', progress: 0, cost: 0, error: 'NOT_FOUND' }
+    if (j.failed) return { id, status: 'failed', progress: 0, cost: j.cost, error: 'MODEL_TIMEOUT' }
     const elapsed = Date.now() - j.created
-    let status: VideoJob['status'] = 'queued'
-    if (elapsed > 5000) status = 'done'
-    else if (elapsed > 1500) {
+    let status: VideoJob['status'] = 'pending'
+    let progress = Math.min(10, Math.round((elapsed / 1500) * 10))
+    if (elapsed > 5000) {
+      status = 'succeeded'
+      progress = 100
+    } else if (elapsed > 1500) {
       status = 'processing'
+      progress = Math.min(99, 10 + Math.round(((elapsed - 1500) / 3500) * 90))
       if (!j.failedChecked) {
         j.failedChecked = true
         if (Math.random() < 0.12) {
           j.failed = true
-          return { id, status: 'failed', cost: j.cost, error: 'MODEL_TIMEOUT' }
+          return { id, status: 'failed', progress, cost: j.cost, error: 'MODEL_TIMEOUT' }
         }
       }
     }
-    if (status === 'done') { db.successGen += 1; return { id, status, cost: j.cost, resultUrl: 'mock://video' } }
-    return { id, status, cost: j.cost }
+    if (status === 'succeeded') {
+      db.successGen += 1
+      return { id, status, progress, cost: j.cost, resultUrl: 'mock://video' }
+    }
+    return { id, status, progress, cost: j.cost }
   },
 
   // POST /generate/tryon
@@ -247,7 +335,7 @@ export const mockApi = {
   // 存入圖庫（選用）→ 生成結果落地成 AI 生成素材，並記錄採用
   async saveGenerated(name: string): Promise<Asset> {
     await delay(300)
-    const a: Asset = { id: uid('a'), name, source: 'AI 生成', tag: 'ai', dim: '1024×768' }
+    const a: Asset = { id: uid('a'), name, source: 'AI 生成', tag: 'ai', dim: '1024×768', folderId: UNFILED_FOLDER }
     db.assets.unshift(a)
     return a
   },
@@ -309,6 +397,4 @@ export const mockApi = {
     await delay(300)
     db.consent = true
   },
-
-  refundFeed: refund,
 }

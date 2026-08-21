@@ -8,8 +8,8 @@ export const useBrandStore = defineStore('brand', () => {
   const profile = ref<BrandProfile | null>(null)
   const saving = ref(false)
 
-  async function load() {
-    if (profile.value) return
+  async function load(force = false) {
+    if (profile.value && !force) return
     profile.value = await api.getBrand()
   }
 

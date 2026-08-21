@@ -1,12 +1,22 @@
 <template lang="pug">
 .library
+  h1.visuallyHidden {{ t('routeTitles.library') }}
   p.library__note(v-if="activeTab === 'library'")
     span.library__noteDot
     span {{ noteText }}
-  .tabs
-    button.tabs__item(v-for="item in tabs" :key="item.value" :class="{ 'isActive': activeTab === item.value }" @click="activeTab = item.value") {{ item.label }}
+  .tabs(role="tablist" :aria-label="t('routeTitles.library')")
+    button.tabs__item(v-for="item in tabs" :key="item.value" role="tab" :aria-selected="activeTab === item.value" :class="{ 'isActive': activeTab === item.value }" @click="activeTab = item.value") {{ item.label }}
   .library__body(v-if="activeTab === 'library'")
-    aside.folders
+    button.mobileFolderToggle(
+      type="button"
+      :aria-expanded="foldersOpen"
+      aria-controls="library-folders"
+      @click="foldersOpen = !foldersOpen"
+    )
+      span.mobileFolderToggle__label {{ activeViewLabel }}
+      span.mobileFolderToggle__count {{ activeViewCount }}
+      IconChevronDown(:class="{ isUp: foldersOpen }")
+    aside#library-folders.folders(:class="{ 'isMobileOpen': foldersOpen }")
       button.folders__item(:class="{ 'isActive': activeView.kind === 'all' }" @click="setView({ kind: 'all' })")
         span {{ t('library.allAssets') }}
         span.folders__count {{ assets.length }}
@@ -16,16 +26,22 @@
         span.folders__count {{ categoryCounts.get(c.tag) ?? 0 }}
       .folders__section.folders__section--folders
         span {{ t('library.myFolders') }}
-        button.folders__addIcon(@click="startAddFolder" :aria-label="t('library.addFolder')") +
-      button.folders__item.folders__item--folder(v-for="f in folders" :key="f" :class="{ 'isActive': activeView.kind === 'folder' && activeView.name === f }" @click="setView({ kind: 'folder', name: f })")
-        i.ti.ti-folder.folders__itemIcon
-        span.folders__itemName {{ f }}
-        span.folders__count {{ folderCounts.get(f) ?? 0 }}
+        button.folders__addIcon(type="button" @click="startAddFolder" :aria-label="t('library.addFolder')")
+          span(aria-hidden="true") ＋
+      FolderRow(
+        v-for="f in folders"
+        :key="f"
+        :name="f"
+        :count="folderCounts.get(f) ?? 0"
+        :active="activeView.kind === 'folder' && activeView.name === f"
+        @click="setView({ kind: 'folder', name: f })"
+      )
       .folders__new(v-if="addingFolder")
         input.folders__input(
           ref="folderInput"
           v-model="newFolderName"
           type="text"
+          :aria-label="t('library.folderName')"
           :placeholder="t('library.folderName')"
           @keyup.enter="confirmAddFolder"
           @keyup.esc="cancelAddFolder"
@@ -34,20 +50,15 @@
       p.folders__hint {{ t('library.folderHint') }}
     section.assets
       .assets__toolbar
-        .search
-          i.ti.ti-search.search__icon
-          input.search__input(v-model="keyword" type="text" :placeholder="t('imagePicker.searchPlaceholder')")
+        AppSearchbar.assets__search(v-model="keyword" :label="t('imagePicker.searchPlaceholder')" :placeholder="t('imagePicker.searchPlaceholder')")
         .sources
           span.sources__label {{ t('library.source') }}
-          button.chip(v-for="s in sources" :key="s.label" :class="{ 'isActive': activeSource === s.value }" @click="activeSource = s.value") {{ s.label }}
+          button.chip(v-for="s in sources" :key="s.label" :aria-pressed="activeSource === s.value" :class="{ 'isActive': activeSource === s.value }" @click="activeSource = s.value") {{ s.label }}
         .assets__actions
-          DialogButton(variant="primary" v-if="activeView.kind === 'folder'" @click="pickerOpen = true")
-            i.ti.ti-library-photo
-            span {{ t('library.addFromLibrary') }}
-          label.upload
-            i.ti.ti-upload
+          AppButton(variant="primary" icon @click="uploadInput?.click()")
+            IconUpload
             span {{ t('library.uploadImages') }}
-            input.upload__input(type="file" accept="image/*" multiple @change="onUpload")
+          input.upload__input(ref="uploadInput" type="file" accept="image/*" multiple @change="onUpload")
 
       .batchbar(v-if="selectedIds.size")
         .batchbar__selection
@@ -56,11 +67,11 @@
           button.batchbar__link(@click="selectAllOnPage") {{ t('library.selectPage', { count: paged.length }) }}
           button.batchbar__link(@click="clearSelection") {{ t('common.clear') }}
         .batchbar__actions
-          button.batchbar__action(@click="openMoveDialog") {{ t('library.moveToFolder') }}
-          button.batchbar__action(v-if="activeView.kind === 'folder'" @click="removeSelectedFromFolder") {{ t('library.removeFromFolder') }}
-          button.batchbar__action(@click="downloadSelected") {{ t('common.download') }}
-          OutlineButton(variant="danger" @click="openDeleteDialog")
-            i.ti.ti-trash
+          AppButton.batchbar__action.batchbar__action--moveToFolder(variant="primary" @click="openMoveDialog") {{ t('library.moveToFolder') }}
+          AppButton.batchbar__action.batchbar__action--removeFromFolder(variant="outline" v-if="activeView.kind === 'folder'" @click="removeSelectedFromFolder") {{ t('library.removeFromFolder') }}
+          AppButton.batchbar__action(variant="ghost" @click="downloadSelected") {{ t('common.download') }}
+          AppButton(variant="alert" @click="openDeleteDialog")
+            IconDelete
             | {{ t('common.delete') }}
 
       .assets__empty(v-if="!filtered.length && !pendingTasks.length") {{ t('library.empty') }}
@@ -68,87 +79,78 @@
         .asset.asset--pending(v-for="t in pendingTasks" :key="t.id")
           .pending
             span.pending__play
-              svg(viewBox="0 0 24 24" width="13" height="13")
-                path(d="M8 5v14l11-7z" fill="white")
-            span.pending__pct {{ t.status === 'queued' ? $t('taskCenter.queued') : $t('library.generatingProgress', { progress: t.progress }) }}
+              IconPlayTriangle
+            span.pending__pct {{ t.status === 'pending' ? `${$t('taskCenter.pending')} ${t.progress}%` : $t('library.generatingProgress', { progress: t.progress }) }}
             .pending__bar
               .pending__barFill(:style="{ width: t.progress + '%' }")
-            span.pending__eta(v-if="t.status !== 'queued'") {{ etaText(t.progress) }}
+            span.pending__eta(v-if="t.status !== 'pending'") {{ etaText(t.progress) }}
           .asset__name {{ t.name }}
           .asset__pmeta {{ $t('library.pendingVideoMeta', { ratio: t.videoReq?.ratio || '9:16' }) }}
-        .asset(v-for="a in paged" :key="a.id" :class="{ 'isSelected': selectedIds.has(a.id) }")
-          label.asset__check
-            input(type="checkbox" :checked="selectedIds.has(a.id)" @change="toggleSelect(a.id)")
-            span.asset__checkBox
-              i.ti.ti-check(v-if="selectedIds.has(a.id)")
-          .asset__thumb
-            i.ti(:class="a.type === 'video' ? 'ti-player-play' : 'ti-photo'")
-          .asset__name {{ a.name }}
-          .asset__meta
-            span.tag(:class="'tag--' + a.tag") {{ $t(`sources.${a.tag}`) }}
-            span.asset__dim {{ a.dim }}
+        AssetCard(
+          v-for="a in paged"
+          :key="a.id"
+          :name="a.name"
+          :tag="a.tag"
+          :tag-label="$t(`sources.${a.tag}`)"
+          :dimensions="a.dim"
+          :type="a.type"
+          :selected="selectedIds.has(a.id)"
+          @toggle="toggleSelect(a.id)"
+        )
 
       .pagination(v-if="filtered.length")
         span.pagination__total {{ t('library.totalAssets', { count: filtered.length }) }}
         .pagination__pages
-          button.pagination__nav(:disabled="page === 1" @click="page = page - 1") ‹
+          button.pagination__nav(:aria-label="t('library.previousPage')" :disabled="page === 1" @click="page = page - 1") ‹
           template(v-for="(p, i) in pageItems" :key="i")
             span.pagination__ellipsis(v-if="p === '…'") …
-            button.pagination__page(v-else :class="{ 'isActive': p === page }" :disabled="p === page" @click="page = p") {{ p }}
-          button.pagination__nav(:disabled="page === totalPages" @click="page = page + 1") ›
+            button.pagination__page(v-else :aria-current="p === page ? 'page' : undefined" :aria-label="t('library.pageNumber', { page: p })" :class="{ 'isActive': p === page }" :disabled="p === page" @click="page = p") {{ p }}
+          button.pagination__nav(:aria-label="t('library.nextPage')" :disabled="page === totalPages" @click="page = page + 1") ›
 
   ImageEditorWorkspace(v-else :mode="activeTab")
 
-  ImagePickerDialog(
-    v-model:open="pickerOpen"
-    :multiple="true"
-    :title="t('library.pickerTitle', { folder: activeFolderName })"
-    @select-many="onAddFromLibrary"
-  )
-
   Teleport(to="body")
     .modal(v-if="moveDialogOpen" @click.self="moveDialogOpen = false")
-      .modal__box
+      .modal__box(ref="moveDialogRef" role="dialog" aria-modal="true" aria-labelledby="move-dialog-title" tabindex="-1")
         header.modal__head
-          h3.modal__title {{ t('library.moveToFolder') }}
-          button.modal__close(@click="moveDialogOpen = false" :aria-label="t('common.close')")
-            i.ti.ti-x
+          h3#move-dialog-title.modal__title {{ t('library.moveToFolder') }}
+          button.modal__close(data-dialog-initial-focus @click="moveDialogOpen = false" :aria-label="t('common.close')")
+            IconClose
         p.modal__desc {{ t('library.moveDescription', { count: selectedIds.size }) }}
         ul.modal__list
-          li.modal__listItem(v-for="f in folders" :key="f" :class="{ 'isActive': moveTargetFolder === f }" @click="moveTargetFolder = f")
-            i.ti.ti-folder
-            span.modal__listName {{ f }}
-            span.modal__listCount {{ folderCounts.get(f) ?? 0 }}
+          li(v-for="f in folders" :key="f")
+            button.modal__listItem(type="button" :aria-pressed="moveTargetFolder === f" :class="{ 'isActive': moveTargetFolder === f }" @click="moveTargetFolder = f")
+              IconFolder
+              span.modal__listName {{ f }}
+              span.modal__listCount {{ folderCounts.get(f) ?? 0 }}
         .modal__create
-          input.modal__createInput(v-model="moveNewFolderName" type="text" :placeholder="t('library.createFolderPlaceholder')" @keyup.enter="createFolderForMove")
-          button.modal__createBtn(@click="createFolderForMove") {{ t('common.create') }}
+          input.modal__createInput(v-model="moveNewFolderName" type="text" :aria-label="t('library.createFolderPlaceholder')" :placeholder="t('library.createFolderPlaceholder')" @keyup.enter="createFolderForMove")
+          AppButton.modal__createBtn(variant="ghost" size="compact" @click="createFolderForMove") {{ t('common.create') }}
         footer.modal__foot
-          DialogButton(@click="moveDialogOpen = false") {{ t('common.cancel') }}
-          DialogButton(variant="primary" :disabled="!moveTargetFolder" @click="confirmMoveToFolder") {{ t('library.moveInto', { folder: moveTargetFolder }) }}
+          AppButton(variant="outline" @click="moveDialogOpen = false") {{ t('common.cancel') }}
+          AppButton(variant="primary" :disabled="!moveTargetFolder" @click="confirmMoveToFolder") {{ t('library.moveInto', { folder: moveTargetFolder }) }}
 
   Teleport(to="body")
     .modal(v-if="deleteDialogOpen" @click.self="deleteDialogOpen = false")
-      .modal__box
+      .modal__box(ref="deleteDialogRef" role="alertdialog" aria-modal="true" aria-labelledby="delete-dialog-title" tabindex="-1")
         header.modal__head
-          h3.modal__title {{ t('library.deleteTitle', { count: selectedIds.size }) }}
-          button.modal__close(@click="deleteDialogOpen = false" :aria-label="t('common.close')")
-            i.ti.ti-x
+          h3#delete-dialog-title.modal__title {{ t('library.deleteTitle', { count: selectedIds.size }) }}
+          button.modal__close(data-dialog-initial-focus @click="deleteDialogOpen = false" :aria-label="t('common.close')")
+            IconClose
         .modal__preview
           .modal__previewItem(v-for="a in selectedAssets" :key="a.id")
             .modal__previewThumb
-              i.ti(:class="a.type === 'video' ? 'ti-player-play' : 'ti-photo'")
+              component(:is="a.type === 'video' ? IconMovie : IconImagePlaceholder")
             span.modal__previewName {{ a.name }}
         .modal__warn(v-if="referencedCount > 0")
           IconAlertTriangleFilled.modal__warnIcon
           .modal__warnText
             strong {{ t('library.referencedWarning', { count: referencedCount }) }}
             span {{ t('library.deleteWarning') }}
-        label.modal__checkline
-          input(type="checkbox" v-model="deleteConfirmed")
-          span {{ t('library.deleteConfirm') }}
+        AppCheckbox.modal__checkline(v-model="deleteConfirmed") {{ t('library.deleteConfirm') }}
         footer.modal__foot
-          button.modal__textbtn(@click="deleteDialogOpen = false") {{ t('common.cancel') }}
-          button.modal__textbtn.modal__textbtn--danger(:disabled="!deleteConfirmed" @click="confirmDelete") {{ t('library.deletePermanently', { count: selectedIds.size }) }}
+          AppButton(variant="ghost" @click="deleteDialogOpen = false") {{ t('common.cancel') }}
+          AppButton(variant="alert" :disabled="!deleteConfirmed" @click="confirmDelete") {{ t('library.deletePermanently', { count: selectedIds.size }) }}
 </template>
 
 <script setup lang="ts">
@@ -157,16 +159,30 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useAssets } from '@/composables/useAssets'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
-import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
-import OutlineButton from '@/components/OutlineButton.vue'
-import DialogButton from '@/components/DialogButton.vue'
+import AppButton from '@/components/AppButton.vue'
+import AppCheckbox from '@/components/AppCheckbox.vue'
+import AppSearchbar from '@/components/AppSearchbar.vue'
+import AssetCard from '@/components/AssetCard.vue'
+import FolderRow from '@/components/FolderRow.vue'
 import IconAlertTriangleFilled from '@/components/icons/IconAlertTriangleFilled.vue'
+import IconChevronDown from '@/components/icons/IconChevronDown.vue'
+import IconClose from '@/components/icons/IconClose.vue'
+import IconDelete from '@/components/icons/IconDelete.vue'
+import IconFolder from '@/components/icons/IconFolder.vue'
+import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
+import IconMovie from '@/components/icons/IconMovie.vue'
+import IconPlayTriangle from '@/components/icons/IconPlayTriangle.vue'
+import IconUpload from '@/components/icons/IconUpload.vue'
 import ImageEditorWorkspace from '@/components/ImageEditorWorkspace.vue'
-import { CATEGORY_TAGS, type Asset, type AssetTag } from '@/types/asset'
+import { CATEGORY_TAGS, UNFILED_FOLDER, type Asset, type AssetTag } from '@/types/asset'
+import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 
-const { assets, folders, load, loadFolders, addFolder, addToFolder, removeFromFolder, deleteAssets, upload } =
+const { assets, folders, load, loadFolders, addFolder, moveToFolder, removeFromFolder, deleteAssets, upload } =
   useAssets()
 const { t } = useI18n()
+const moveDialogRef = ref<HTMLElement | null>(null)
+const deleteDialogRef = ref<HTMLElement | null>(null)
+const uploadInput = ref<HTMLInputElement | null>(null)
 
 // 非同步生成中的項目（目前只有圖生影會用到；圖片生成是同步完成，不會有機會停在「生成中」狀態）
 // 跟頂部工具列「任務」徽章共用同一份 generationTasks store，只在「全部素材」第一頁顯示，
@@ -174,7 +190,7 @@ const { t } = useI18n()
 const { tasks: generationTasks } = storeToRefs(useGenerationTasksStore())
 const pendingTasks = computed(() =>
   activeView.value.kind === 'all' && page.value === 1
-    ? generationTasks.value.filter((t) => t.kind === 'video' && (t.status === 'queued' || t.status === 'processing'))
+    ? generationTasks.value.filter((t) => t.kind === 'video' && (t.status === 'pending' || t.status === 'processing'))
     : [],
 )
 
@@ -193,10 +209,11 @@ function etaText(progress: number) {
 // 左側主要篩選：全部素材／系統分類（依 tag）／我的資料夾（使用者自訂），三者互斥、單選
 type ActiveView = { kind: 'all' } | { kind: 'category'; tag: AssetTag } | { kind: 'folder'; name: string }
 const activeView = ref<ActiveView>({ kind: 'all' })
+const foldersOpen = ref(false)
 function setView(v: ActiveView) {
   activeView.value = v
+  foldersOpen.value = false
 }
-const activeFolderName = computed(() => (activeView.value.kind === 'folder' ? activeView.value.name : ''))
 
 const tabs = computed(() =>
   ['library', 'edit', 'retouch'].map((value) => ({ value, label: t(`library.tabs.${value}`) })),
@@ -230,8 +247,20 @@ const categoryCounts = computed(() => {
 })
 const folderCounts = computed(() => {
   const map = new Map<string, number>()
-  for (const f of folders.value) map.set(f, assets.value.filter((a) => a.folders?.includes(f)).length)
+  for (const f of folders.value) map.set(f, assets.value.filter((a) => (a.folderId ?? UNFILED_FOLDER) === f).length)
   return map
+})
+const activeViewLabel = computed(() => {
+  const view = activeView.value
+  return view.kind === 'all' ? t('library.allAssets') : view.kind === 'category' ? t(`sources.${view.tag}`) : view.name
+})
+const activeViewCount = computed(() => {
+  const view = activeView.value
+  return view.kind === 'all'
+    ? assets.value.length
+    : view.kind === 'category'
+      ? (categoryCounts.value.get(view.tag) ?? 0)
+      : (folderCounts.value.get(view.name) ?? 0)
 })
 
 // 資料夾／系統分類（左）與來源（右上）、關鍵字是不同維度，可疊加過濾
@@ -239,7 +268,7 @@ const filtered = computed(() =>
   assets.value.filter((a) => {
     const v = activeView.value
     const byView =
-      v.kind === 'all' ? true : v.kind === 'category' ? a.tag === v.tag : (a.folders?.includes(v.name) ?? false)
+      v.kind === 'all' ? true : v.kind === 'category' ? a.tag === v.tag : (a.folderId ?? UNFILED_FOLDER) === v.name
     const bySource = activeSource.value === 'all' || a.tag === activeSource.value
     const byKeyword = !keyword.value || a.name.includes(keyword.value)
     return byView && bySource && byKeyword
@@ -311,20 +340,22 @@ async function createFolderForMove() {
 }
 async function confirmMoveToFolder() {
   if (!moveTargetFolder.value) return
-  await addToFolder([...selectedIds.value], moveTargetFolder.value)
+  await moveToFolder([...selectedIds.value], moveTargetFolder.value)
   moveDialogOpen.value = false
   clearSelection()
 }
 
 async function removeSelectedFromFolder() {
   if (activeView.value.kind !== 'folder') return
-  await removeFromFolder([...selectedIds.value], activeView.value.name)
+  await removeFromFolder([...selectedIds.value])
   clearSelection()
 }
 
 // 刪除確認：完整彈窗（縮圖預覽＋勾選「我了解此操作無法復原」才能刪除）
 const deleteDialogOpen = ref(false)
 const deleteConfirmed = ref(false)
+useAccessibleDialog(moveDialogOpen, moveDialogRef, () => (moveDialogOpen.value = false))
+useAccessibleDialog(deleteDialogOpen, deleteDialogRef, () => (deleteDialogOpen.value = false))
 const selectedAssets = computed(() => assets.value.filter((a) => selectedIds.value.has(a.id)))
 // 被生成結果引用（作為來源／參考圖）的選取素材數；刪除會斷開這些生成紀錄的來源鏈
 const referencedCount = computed(() => selectedAssets.value.filter((a) => (a.referencedBy ?? 0) > 0).length)
@@ -340,16 +371,6 @@ async function confirmDelete() {
 
 function downloadSelected() {
   // 目前素材沒有實際檔案 URL，先做畫面呈現；等後端提供真實檔案來源後再接上真正的下載行為
-}
-
-// 從圖庫（遠端資料庫）挑既有素材加入目前資料夾
-const pickerOpen = ref(false)
-async function onAddFromLibrary(picked: Asset[]) {
-  if (activeView.value.kind !== 'folder') return
-  await addToFolder(
-    picked.map((a) => a.id),
-    activeView.value.name,
-  )
 }
 
 // 新增資料夾（行內輸入）
@@ -393,12 +414,13 @@ async function onUpload(e: Event) {
   height: 100%;
   min-height: 100%;
   display: flex;
+
   flex-direction: column;
   &__note {
     @include flex(flex-start, center, 0.5rem);
     color: $gray-400;
     font-size: 0.875rem;
-    margin-bottom: 0.5rem;
+    padding: 0.75rem 0.875rem;
   }
   &__noteDot {
     width: 0.5rem;
@@ -420,14 +442,14 @@ async function onUpload(e: Event) {
 }
 .tabs {
   @include flex(flex-start, center, 0.5rem);
-  margin-bottom: 0.625rem;
+  margin-bottom: 1rem;
 }
 .tabs__item {
   @include flex(center, center);
   height: 1.375rem;
-  padding: 0 1rem;
+  padding: 0 0.75rem;
   border-radius: 999px;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   color: #606692;
   background: $white;
   border: 1px solid $gray;
@@ -436,6 +458,9 @@ async function onUpload(e: Event) {
     color: $white;
     border-color: $blue-dark-500;
   }
+}
+.mobileFolderToggle {
+  display: none;
 }
 .folders {
   width: 13.75rem;
@@ -455,18 +480,28 @@ async function onUpload(e: Event) {
     font-size: 0.75rem;
     color: $gray-100;
     margin: 0.875rem 0 0.375rem;
-    padding: 0 0.75rem;
+    padding: 0 0 0 0.75rem;
   }
   &__addIcon {
-    width: 1.125rem;
-    height: 1.125rem;
-    border-radius: 4px;
+    display: grid;
+    width: 1.5rem;
+    height: 1.5rem;
+    flex-shrink: 0;
+    place-items: center;
+    margin: -0.25rem;
+    padding: 0;
     color: $blue-dark-500;
-    font-size: 0.875rem;
-    line-height: 1;
-    &:hover {
-      background: $blue-light;
-      color: $blue-dark-500;
+
+    span {
+      font-size: 0.875rem;
+      font-weight: 500;
+      line-height: normal;
+      white-space: nowrap;
+    }
+
+    &:focus-visible {
+      outline: 2px solid $yellow;
+      outline-offset: 2px;
     }
   }
   &__item {
@@ -537,17 +572,22 @@ async function onUpload(e: Event) {
   background: $white;
   border-radius: 10px;
   box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2);
-  padding: 1rem 1.5rem;
+  padding: 1.5rem 1.5rem;
   display: flex;
   flex-direction: column;
 }
 .assets__toolbar {
   @include flex(flex-start, center, 0.75rem);
+  padding-right: 4.4375rem;
   margin-bottom: 1rem;
+  @include below($bp-lg) {
+    padding-right: 0;
+  }
   @include below($bp-md) {
     flex-wrap: wrap;
-    .search {
+    .assets__search {
       flex: 1 0 100%;
+      width: 100%;
       max-width: none;
     }
     .assets__actions {
@@ -556,78 +596,131 @@ async function onUpload(e: Event) {
     .assets__actions > * {
       flex: 1;
     }
-    .upload {
-      width: 100%;
-    }
   }
 }
 .assets__actions {
   @include flex(flex-start, center, 0.75rem);
   margin-left: auto;
 }
-.search {
-  position: relative;
+.assets__search {
   flex: 0 1 17.5rem;
-  max-width: 17.5rem;
-  &__icon {
-    position: absolute;
-    left: 0.75rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: $gray-100;
-    font-size: 1rem;
-  }
-  &__input {
-    width: 100%;
-    height: 2rem;
-    border: 1px solid $gray;
-    border-radius: 18px;
-    padding: 0 0.875rem 0 2.125rem;
-    font-size: 0.875rem;
-    color: $blue-dark-500;
-    outline: none;
-    &:focus {
-      border-color: $blue;
-    }
-  }
 }
 .sources {
   @include flex(flex-start, center, 0.5rem);
   flex-shrink: 0;
   &__label {
     font-size: 0.875rem;
+    line-height: 1.25rem;
     color: #606692;
     margin-right: 0.125rem;
     white-space: nowrap;
   }
 }
 .chip {
-  padding: 0.1875rem 0.75rem;
+  @include flex(center, center);
+  height: 1.375rem;
+  padding: 0 0.75rem;
   border-radius: 16px;
   font-size: 0.8125rem;
-  color: #606692;
+  line-height: 1;
+  color: $dark-blue-gray;
   border: 1px solid $gray;
   background: $white;
   white-space: nowrap;
   flex-shrink: 0;
   &.isActive {
-    background: $blue-dark-500;
-    color: $white;
-    border-color: $blue-dark-500;
+    background: $white;
+    color: $blue-dark-500;
+    border-color: #606692;
+    font-weight: 500;
   }
 }
-.upload {
-  @include flex(center, center, 0.375rem);
-  background: $blue-dark-500;
-  color: $white;
-  font-weight: 500;
-  padding: 0.5625rem 0.875rem;
-  border-radius: 16px;
-  font-size: 0.875rem;
-  white-space: nowrap;
-  cursor: pointer;
-  &__input {
+.upload__input {
+  display: none;
+}
+
+@include below($bp-lg) {
+  .mobileFolderToggle {
+    @include flex(flex-start, center, 0.5rem);
+    width: 100%;
+    min-height: 2.75rem;
+    padding: 0.625rem 0.875rem;
+    border: 1px solid $blue-dark-500;
+    border-radius: 10px;
+    background: $white;
+    color: $blue-dark-500;
+    text-align: left;
+    box-shadow: $boxShadowDark;
+
+    &__label {
+      flex: 1;
+      font-size: 0.875rem;
+      font-weight: 700;
+    }
+
+    &__count {
+      color: #606692;
+      font-size: 0.75rem;
+    }
+
+    svg {
+      font-size: 1rem;
+    }
+  }
+
+  .folders {
     display: none;
+
+    &.isMobileOpen {
+      display: flex;
+    }
+  }
+}
+
+@include below($bp-sm) {
+  .library {
+    height: auto;
+    min-height: 0;
+    &__body {
+      flex: none;
+    }
+  }
+  .assets {
+    flex: none;
+    padding: 1rem;
+  }
+  .assets__toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    .assets__search,
+    .assets__actions {
+      flex: 0 0 auto;
+    }
+
+    .assets__search {
+      width: 100%;
+    }
+  }
+  .sources {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    padding-bottom: 0.25rem;
+  }
+  .assets__actions {
+    width: 100%;
+    margin-left: 0;
+  }
+  .assets__grid {
+    flex: none;
+    overflow-y: visible;
+  }
+  .batchbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.75rem;
   }
 }
 
@@ -636,8 +729,8 @@ async function onUpload(e: Event) {
   background: $blue-dark-500;
   color: $white;
   border-radius: 10px;
-  padding: 0.75rem 1rem;
-  margin-bottom: 0.875rem;
+  padding: 0.875rem 1rem;
+  margin-bottom: 1rem;
   &__selection {
     @include flex(flex-start, center, 0.875rem);
   }
@@ -645,7 +738,6 @@ async function onUpload(e: Event) {
     width: 1rem;
     height: 1rem;
     border-radius: 50%;
-    background: rgba($white, 0.2);
     flex-shrink: 0;
     position: relative;
     &::before {
@@ -660,9 +752,8 @@ async function onUpload(e: Event) {
     }
   }
   &__link {
-    color: rgba($white, 0.85);
+    color: rgba(#a5c8e6, 0.85);
     font-size: 0.875rem;
-    text-decoration: underline;
     &:hover {
       color: $white;
     }
@@ -671,10 +762,31 @@ async function onUpload(e: Event) {
     @include flex(flex-start, center, 1.25rem);
   }
   &__action {
-    font-size: 0.875rem;
-    color: $white;
-    &:hover {
-      color: rgba($white, 0.8);
+    min-width: 6.375rem;
+
+    &:not(.batchbar__action--removeFromFolder) {
+      color: $white;
+    }
+  }
+}
+
+// Mobile overrides follow the desktop batch bar so its fixed button sizing does not win the cascade.
+@include below($bp-sm) {
+  .batchbar {
+    padding-inline: 0.625rem;
+    &__selection,
+    &__actions {
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      overflow: visible;
+      padding-bottom: 0;
+    }
+    &__action {
+      min-width: 0;
+      padding-inline: 0.5rem;
+    }
+    &__actions > :deep(.appButton) {
+      padding-inline: 0.625rem;
     }
   }
 }
@@ -688,17 +800,23 @@ async function onUpload(e: Event) {
 }
 .assets__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 15.25rem));
-  gap: 0.5rem 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 15.75rem));
+  column-gap: 1rem;
+  row-gap: 1rem;
+  @include below($bp-lg) {
+    justify-content: center;
+  }
   flex: 1; // 佔滿面板剩餘高度，讓分頁列貼齊底部
   align-content: flex-start; // 素材列靠上排列，不因多餘空間被拉開
   overflow-y: auto;
 }
 .asset {
   position: relative;
-  &.isSelected .asset__thumb {
-    outline: 2px solid $blue-dark-500;
-    outline-offset: 2px;
+  padding: 0.25rem;
+  border-radius: 10px;
+  &.isSelected {
+    background: $blue-light;
+    box-shadow: inset 0 0 0 2px $blue-dark-500;
   }
   &__check {
     position: absolute;
@@ -799,6 +917,9 @@ async function onUpload(e: Event) {
 .spin {
   animation: spin 1s linear infinite;
 }
+.isUp {
+  transform: rotate(180deg);
+}
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -822,13 +943,22 @@ async function onUpload(e: Event) {
 
 .pagination {
   @include flex(space-between, center);
-  margin-top: 0.75rem;
+  margin-top: 1rem;
+  @include below($bp-lg) {
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.5rem;
+  }
   &__total {
     font-size: 0.875rem;
     color: #606692;
+    text-align: center;
   }
   &__pages {
     @include flex(flex-start, center, 0.25rem);
+    @include below($bp-lg) {
+      justify-content: center;
+    }
   }
   &__nav,
   &__page {
@@ -906,6 +1036,7 @@ async function onUpload(e: Event) {
   margin-bottom: 0.625rem;
 }
 .modal__listItem {
+  width: 100%;
   @include flex(flex-start, center, 0.5rem);
   padding: 0.625rem 0.75rem;
   border-radius: 8px;
