@@ -30,11 +30,9 @@
 
 - [x] 9.1 對齊 Requirement「圖生影頁面呈現對齊設計稿」：系統版面：面板 380 → 400px、gap 20 → 16px、內距 22 → 24px、模板格 gap 10 → 12px
 - [x] 9.2 新增「套用品牌設定」開關（共用 `BrandToggle`）
-  - 歷史註記：此項已由第 10 節的 2026-08-10 規格校正取代，MV-04 主畫面不應顯示品牌設定開關。
 - [x] 9.3 生成中狀態實作完整進度區塊：狀態列「生成中（步驟 N/4：階段）」+ 圓角狀態點（#606692）、進度條（軌 `#EFF2FA`／填 `#2E3567`、6px）、百分比 + 剩餘時間、說明文字、「取消任務」鈕
 - [x] 9.4「取消任務」接既有的 `tasksStore.cancelTask()`（取消並退還飼料）
 - [x] 9.5 `generationTasks` store 的 processing 進度改為平滑遞增（原本固定 55%，進度條不會動）
-- 決策：步驟（步驟 2/4：算圖）與剩餘時間由 `progress` 推算（mock 估算），後端就緒後把 `statusLabel`／`etaText` 換成真實資料（程式碼註解已標明）
 - [x] 9.6 build 通過
 
 ## 10. 2026-08-10 規格校正：移除主畫面品牌設定
@@ -47,8 +45,8 @@
 
 ## 11. 2026-08-21 設定面板 sticky footer（版面結構）
 
-- [ ] 11.1 `GenerateVideoView.vue` 左欄改為固定高兩段式結構：外層 `panel_config` 撐滿可用高度（圓角 10、陰影 `0 4px 7px rgba(96,100,114,.2)`），內部拆成可捲動的 `scroll_area` 與 `flex-shrink: 0` 的 `footer_sticky`；驗證：1366x940 下整頁無垂直捲軸，捲動只發生在設定面板內部
-- [ ] 11.2 `footer_sticky` 依設計稿實作：高 78、上緣 `1px solid #d2d5dd`、內距 `14px 24px 24px`；左側「預估消耗」（12px `#b4b9c4`）＋飼料圖示 16px＋金額（16px Bold `#ea903a`），右側生成按鈕靠右；驗證：捲動 `scroll_area` 時該區塊固定不動
-- [ ] 11.3 補上 `scroll_fade`（高 28、白色由透明漸層，貼齊 `scroll_area` 底緣）與 `scrollbar_hint`（寬 4、`#b4b9c4` 50% 透明、圓角 2、距右緣 8）；注意漸層需放在捲動容器之外，否則會跟著內容捲走（同 MV-09 字型選單的處理方式）
-- [ ] 11.4 取得 MV-04 初始狀態的 Figma 節點，確認警示列「影片生成 飼料消耗較高，生成前會再次確認」屬於 `scroll_area` 或 `footer_sticky`，並比對其間距
+- [ ] 11.1 `GenerateVideoView.vue` 左欄改為固定高兩段式結構：`.panel`／`.video__input` 補上高度與 `min-height: 0` 約束（參考 `sync-mv-01-design` 任務 10.1 對共用內容容器的處理），步驟 1～4 包進 `flex: 1; overflow-y: auto; min-height: 0` 的捲動容器，`.video__sticky` 加 `flex-shrink: 0`。根因：`.video__sticky` 的 `margin-top: auto` 已存在且寫法正確，但 `.panel` 沒有高度上限、被內容一路撐高，`auto` 沒有剩餘空間可推，才導致整頁捲動。驗證：1366x940 下整頁無垂直捲軸，捲動只發生在設定面板內部
+- [ ] 11.2 `footer_sticky` 高度隨警示列存在與否切換：初始狀態含 `row_warn` 為 133，送出生成後警示列消失、收合為 78；上緣 `1px solid #d2d5dd`、內距 `14px 24px 24px`、警示列與 `row_cta` 間距 11px；左側「預估消耗」（12px `#b4b9c4`）＋飼料圖示 16px＋金額（16px Bold `#ea903a`），右側生成按鈕靠右。驗證：捲動時該區塊固定不動，且兩種高度切換時捲動區與遮罩位置跟著改變
+- [ ] 11.3 補上 `scroll_fade`（高 28、白色由透明漸層，貼齊捲動區底緣，初始狀態 top 662／其餘 717）與 `scrollbar_hint`（寬 4、`#b4b9c4` 50% 透明、圓角 2、距右緣 8，初始狀態高 552／其餘 644）；注意漸層需放在捲動容器之外，否則會跟著內容捲走（同 MV-09 字型選單的處理方式）
+- [x] 11.4 取得 MV-04 初始狀態的 Figma 節點，確認警示列歸屬：已由 node `13:2` 確認 `row_warn`（`275:3079`，352x44）位於 `footer_sticky` 內，與 `row_cta` 同屬釘底區，目前實作放在 `.video__sticky` 是正確的；並記錄五個狀態的 footer 高度差異（初始 133／其餘 78），見 design.md 同日決策
 - [ ] 11.5 `npm run build`、`npm test -- --run` 通過，並以 1366x940 重新截圖比對
