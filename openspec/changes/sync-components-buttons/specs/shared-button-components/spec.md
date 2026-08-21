@@ -34,7 +34,7 @@
 
 ### Requirement: 共用按鈕 SHALL 使用一致尺寸
 
-一般按鈕 SHALL 為 36px 高、14px Medium 文字、18px 圓角；緊湊或帶圖示版本 MAY 使用 16px 圓角。
+一般按鈕 SHALL 為 36px 高、14px Medium 文字、18px 圓角；緊湊或帶圖示版本 SHALL 使用 16px 圓角。
 
 #### Scenario: 顯示一般按鈕
 
