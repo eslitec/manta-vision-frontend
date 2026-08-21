@@ -42,5 +42,13 @@
 - [x] 10.1 實作 Requirement「主畫面不呈現品牌設定」：從 MV-04 主畫面移除 `BrandToggle`，確認其他頁面的共用品牌設定開關不受影響
 - [x] 10.2 保留「4. 生成模型」與標準／進階／專業三種選項，維持 `modelTier` 型別與倍率計費
 - [x] 10.3 確認 MV-04b 視窗顯示主畫面已選模型、倍率與對應消耗
-- [ ] 10.4 以 1366×940 比對 MV-04 主框，確認移除品牌設定後的間距、警示列與底部操作對齊設計稿
+- [ ] 10.4 以 1366×940 比對 MV-04 主框，確認移除品牌設定後的間距、警示列與底部操作對齊設計稿：已於 2026-08-21 用實機截圖對照 Figma `panel_config`（node `491:9015`）完成「間距」與「底部操作」兩項，結論是設定面板缺少 `footer_sticky` 結構（見 design.md 同日決策），另立第 11 節處理；「警示列」尚未比對，需要 MV-04 初始狀態的 Figma 節點才能確認其位置與間距
 - [x] 10.5 執行 `npm run build`、`npm test -- --run`、`spectra validate sync-mv-04-design --strict`、`spectra analyze sync-mv-04-design`
+
+## 11. 2026-08-21 設定面板 sticky footer（版面結構）
+
+- [ ] 11.1 `GenerateVideoView.vue` 左欄改為固定高兩段式結構：外層 `panel_config` 撐滿可用高度（圓角 10、陰影 `0 4px 7px rgba(96,100,114,.2)`），內部拆成可捲動的 `scroll_area` 與 `flex-shrink: 0` 的 `footer_sticky`；驗證：1366x940 下整頁無垂直捲軸，捲動只發生在設定面板內部
+- [ ] 11.2 `footer_sticky` 依設計稿實作：高 78、上緣 `1px solid #d2d5dd`、內距 `14px 24px 24px`；左側「預估消耗」（12px `#b4b9c4`）＋飼料圖示 16px＋金額（16px Bold `#ea903a`），右側生成按鈕靠右；驗證：捲動 `scroll_area` 時該區塊固定不動
+- [ ] 11.3 補上 `scroll_fade`（高 28、白色由透明漸層，貼齊 `scroll_area` 底緣）與 `scrollbar_hint`（寬 4、`#b4b9c4` 50% 透明、圓角 2、距右緣 8）；注意漸層需放在捲動容器之外，否則會跟著內容捲走（同 MV-09 字型選單的處理方式）
+- [ ] 11.4 取得 MV-04 初始狀態的 Figma 節點，確認警示列「影片生成 飼料消耗較高，生成前會再次確認」屬於 `scroll_area` 或 `footer_sticky`，並比對其間距
+- [ ] 11.5 `npm run build`、`npm test -- --run` 通過，並以 1366x940 重新截圖比對

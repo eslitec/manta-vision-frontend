@@ -13,9 +13,11 @@ MantaGO 的 Figma 設計稿在 MV-04（圖生影，`GenerateVideoView.vue`）也
 ## Capabilities
 
 ### New Capabilities
+
 - `generate-video-ui`：圖生影頁面（MV-04）——使用者選擇來源圖片、動態模板、輸出比例，確認後送出生成請求；生成為非同步流程，需要背景任務呈現、完成通知、任務中心面板管理進行中與已完成的任務。
 
 ### Modified Capabilities
+
 （無）
 
 ## Impact
