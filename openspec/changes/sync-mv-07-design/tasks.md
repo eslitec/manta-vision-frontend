@@ -13,3 +13,4 @@
 
 - [x] 3.1 措辭／副標／間距／字級依 Figma Inspect 對齊
 - [x] 3.2 `npm run build` 通過、視覺比對
+- [x] 3.3 對齊 Requirement「呈現四項 AI 表現指標」：修正 `usage.metrics.comparedLastMonth` 只存在於 `zh-Hant.ts` 的缺漏——`UsageView.vue` 有使用該 key，英文介面會直接顯示原始 key 字串。已於 `en.ts` 補上 `'{delta} vs last month'`。驗證：兩份語系檔 key 數量由 548 / 549 對齊為 549 / 549，差集為空
