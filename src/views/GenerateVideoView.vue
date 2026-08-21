@@ -280,7 +280,7 @@ function goLibrary() {
     display: block;
     position: absolute;
     top: 1rem;
-    right: 0.5rem;
+    right: 0.25rem;
     width: 0.25rem;
     height: 34.5rem; // 552px：初始狀態（含警示列，footer 133px）
     border-radius: 2px;
