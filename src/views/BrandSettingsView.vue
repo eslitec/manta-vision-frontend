@@ -88,30 +88,55 @@
       p.card__sub {{ t('brandSettings.visualSubtitle') }}
     .field
       label {{ t('brandSettings.fields.logo') }}
-      label.logo(for="brand-logo-upload")
-        input#brand-logo-upload(type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" @change="onLogo")
-        IconImagePlaceholder
-        .logo__copy
-          strong {{ profile.logoName || t('brandSettings.logoUpload') }}
-          span {{ t('brandSettings.logoUsage') }}
+      //- 對齊 Figma upload_logo（node 18:79）的 detect_col：檔名＋偵測成功標示、自動萃取說明、三個文字動作
+      .logoUpload
+        input#brand-logo-upload(
+          ref="logoInput"
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+          @change="onLogo"
+        )
+        label.logoUpload__drop(v-if="!profile.logoName" for="brand-logo-upload")
+          IconImagePlaceholder
+          .logoUpload__col
+            strong.logoUpload__name {{ t('brandSettings.logoUpload') }}
+            p.logoUpload__hint {{ t('brandSettings.logoUsage') }}
+        template(v-else)
+          IconImagePlaceholder
+          .logoUpload__col
+            .logoUpload__row
+              strong.logoUpload__name {{ profile.logoName }}
+              span.logoUpload__ok(v-if="detectedPalette.length && !analyzing && !paletteError")
+                IconCheckCircle.logoUpload__okIcon
+                span {{ t('brandSettings.logoDetected') }}
+            p.logoUpload__hint {{ t('brandSettings.logoAutoExtract') }}
+            .logoUpload__actions
+              button.logoUpload__action(type="button" :disabled="analyzing" @click="redetectLogo") {{ t('brandSettings.logoRedetect') }}
+              button.logoUpload__action(type="button" @click="openLogoPicker") {{ t('brandSettings.logoReplace') }}
+              button.logoUpload__action.logoUpload__action--muted(type="button" @click="removeLogo") {{ t('brandSettings.logoRemove') }}
       p.paletteStatus(v-if="analyzing" role="status" aria-live="polite") {{ t('brandSettings.palette.analyzing') }}
       p.paletteStatus.paletteStatus--error(v-else-if="paletteError" role="alert") {{ paletteError }}
-      .detectedPalette(v-else-if="detectedColors.length" aria-labelledby="detected-palette-title")
+      .detectedPalette(v-else-if="detectedPalette.length" aria-labelledby="detected-palette-title")
         .detectedPalette__head
           strong#detected-palette-title {{ t('brandSettings.palette.title') }}
-          span {{ t('brandSettings.palette.hint') }}
-        .detectedPalette__colors
-          button.detectedColor(
-            v-for="color in detectedColors"
-            :key="color"
+          button.detectedPalette__applyAll(type="button" @click="applyAllColors") {{ t('brandSettings.palette.applyAll') }}
+        .detectedPalette__row
+          button.extColor(
+            v-for="item in detectedPalette"
+            :key="item.hex"
             type="button"
-            :class="{ 'isSelected': selectedColor === color }"
-            :aria-pressed="selectedColor === color"
-            :aria-label="t('brandSettings.palette.select', { color })"
-            @click="selectedColor = color"
+            :class="{ 'isSelected': selectedColor === item.hex }"
+            :aria-pressed="selectedColor === item.hex"
+            :aria-label="t('brandSettings.palette.select', { color: item.hex })"
+            @click="selectedColor = item.hex"
           )
-            span.detectedColor__sample(:style="{ backgroundColor: color }" aria-hidden="true")
-            span {{ color }}
+            span.extColor__sample(:style="{ backgroundColor: item.hex }" aria-hidden="true")
+            span.extColor__hex {{ item.hex }}
+            span.extColor__share {{ formatShare(item.share) }}
+            span.extColor__assigned(v-if="assignedRole(item.hex)") {{ t('brandSettings.palette.assignedAs', { role: assignedRole(item.hex) }) }}
+          .detectedPalette__tip
+            span {{ t('brandSettings.palette.tipAssign') }}
+            span {{ t('brandSettings.palette.tipOrder') }}
         .detectedPalette__assign(v-if="selectedColor")
           span {{ t('brandSettings.palette.assign', { color: selectedColor }) }}
           .detectedPalette__actions
@@ -190,7 +215,7 @@ import IconAlertTriangleFilled from '@/components/icons/IconAlertTriangleFilled.
 import IconCheckCircle from '@/components/icons/IconCheckCircle.vue'
 import IconChevronDown from '@/components/icons/IconChevronDown.vue'
 import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
-import { extractColors } from '@/utils/colors'
+import { extractColors, type DominantColor } from '@/utils/colors'
 const store = useBrandStore()
 const { profile, saving } = storeToRefs(store)
 const { t } = useI18n()
@@ -265,10 +290,11 @@ const addressingOptions = computed(() =>
 )
 const portraitConsent = ref(t('brandSettings.defaults.portraitConsent'))
 const imageLicense = ref(t('brandSettings.defaults.imageLicense'))
-const detectedColors = ref<string[]>([])
+const detectedPalette = ref<DominantColor[]>([])
 const selectedColor = ref('')
 const analyzing = ref(false)
 const paletteError = ref('')
+const logoInput = ref<HTMLInputElement | null>(null)
 const addingTag = ref(false),
   newTag = ref(''),
   tagInput = ref<HTMLInputElement | null>(null)
@@ -299,25 +325,77 @@ function confirmAddTag() {
 function addColor() {
   profile.value?.colors.push({ label: t('brandSettings.color.new'), hex: '#ffffff' })
 }
+function resetPalette() {
+  paletteError.value = ''
+  detectedPalette.value = []
+  selectedColor.value = ''
+}
+function applyDetected(colors: DominantColor[]) {
+  detectedPalette.value = colors
+  selectedColor.value = colors[0]?.hex ?? ''
+  if (!colors.length) paletteError.value = t('brandSettings.palette.noColors')
+}
 async function onLogo(e: Event) {
-  const f = (e.target as HTMLInputElement).files?.[0]
+  const input = e.target as HTMLInputElement
+  const f = input.files?.[0]
   if (!f || !profile.value) return
   analyzing.value = true
-  paletteError.value = ''
-  detectedColors.value = []
-  selectedColor.value = ''
+  resetPalette()
   profile.value.logoName = f.name
   try {
     const [logoUrl, colors] = await Promise.all([fileToDataUrl(f), extractColors(f, 8)])
     profile.value.logoUrl = logoUrl
-    detectedColors.value = colors
-    selectedColor.value = colors[0] ?? ''
-    if (!colors.length) paletteError.value = t('brandSettings.palette.noColors')
+    applyDetected(colors)
+  } catch {
+    paletteError.value = t('brandSettings.palette.failed')
+  } finally {
+    analyzing.value = false
+    // 清空才能重複選同一個檔案（否則 change 不會再觸發）
+    input.value = ''
+  }
+}
+function openLogoPicker() {
+  logoInput.value?.click()
+}
+// 重新偵測不必再叫使用者選檔：已存的 logoUrl 是 data URL，轉回 blob 就能重跑一次萃取
+async function redetectLogo() {
+  const logoUrl = profile.value?.logoUrl
+  if (!logoUrl) return
+  analyzing.value = true
+  resetPalette()
+  try {
+    applyDetected(await extractColors(await (await fetch(logoUrl)).blob(), 8))
   } catch {
     paletteError.value = t('brandSettings.palette.failed')
   } finally {
     analyzing.value = false
   }
+}
+function removeLogo() {
+  if (!profile.value) return
+  profile.value.logoName = ''
+  profile.value.logoUrl = ''
+  resetPalette()
+  if (logoInput.value) logoInput.value.value = ''
+}
+function formatShare(share: number) {
+  return `${Math.round(share * 100)}%`
+}
+// 萃取色如果已經被指派成主色／輔色／點綴色，就在色塊下方標出來（對齊設計稿的「已設為主色」）
+function assignedRole(hex: string) {
+  const index = profile.value?.colors.findIndex((color) => color.hex.toUpperCase() === hex.toUpperCase()) ?? -1
+  if (index < 0) return ''
+  return colorLabels.value[index] ?? profile.value?.colors[index]?.label ?? ''
+}
+function applyAllColors() {
+  const current = profile.value
+  if (!current || !detectedPalette.value.length) return
+  detectedPalette.value.slice(0, colorLabels.value.length).forEach((item, index) => {
+    while (current.colors.length <= index) {
+      current.colors.push({ label: colorLabels.value[current.colors.length] ?? '', hex: '#FFFFFF' })
+    }
+    current.colors[index].hex = item.hex
+  })
 }
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -447,7 +525,7 @@ async function onSave() {
   gap: 0.5rem;
   overflow: hidden;
 
-  > label:not(.logo) {
+  > label {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -729,43 +807,119 @@ async function onSave() {
   }
 }
 
-.logo {
-  display: flex !important;
+// 對齊 Figma upload_logo（node 18:79）：白底虛線框、內距 16、gap 12、圖示 28
+.logoUpload {
+  display: flex;
   align-items: center;
-  justify-content: flex-start !important;
-  gap: 0.75rem;
-  padding: 0.9375rem 1rem;
-  border: 1px dashed #d2d5dd;
+  padding: 1rem;
+  border: 1px dashed $gray;
   border-radius: 8px;
-  cursor: pointer;
+  background: $white;
+  gap: 0.75rem;
 
-  input {
+  input[type='file'] {
     display: none;
   }
 
-  > svg {
-    flex-shrink: 0;
+  > svg,
+  &__drop > svg {
     width: 1.75rem;
     height: 1.75rem;
+    flex-shrink: 0;
   }
 
-  &__copy {
+  // 還沒上傳時整塊都可點；有 Logo 後改由「更換 Logo」觸發，避免點到動作也開檔案選擇器
+  &__drop {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    min-width: 0;
+    cursor: pointer;
+    gap: 0.75rem;
+  }
+
+  &__col {
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: 0.125rem;
     min-width: 0;
+    gap: 0.25rem;
+  }
 
-    strong {
-      color: $blue-dark-500;
-      font-size: 0.875rem;
-      line-height: 1.25rem;
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  &__name {
+    overflow: hidden;
+    color: $blue-dark-500;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__ok {
+    display: flex;
+    flex: none;
+    align-items: center;
+    color: $green;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    gap: 0.25rem;
+    line-height: normal;
+  }
+
+  &__okIcon {
+    width: 0.875rem;
+    height: 0.875rem;
+    flex: none;
+  }
+
+  &__hint {
+    margin: 0;
+    color: #606692;
+    font-size: 0.6875rem;
+    line-height: normal;
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+  }
+
+  &__action {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: $blue-dark-500;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: normal;
+
+    &--muted {
+      color: $gray-100;
+      font-weight: 400;
     }
 
-    span {
-      color: $gray-100;
-      font-size: 0.75rem;
-      line-height: 1rem;
+    &:hover:not(:disabled) {
+      text-decoration: underline;
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.5;
+    }
+
+    &:focus-visible {
+      outline: 2px solid $yellow;
+      outline-offset: 2px;
     }
   }
 }
@@ -787,33 +941,78 @@ async function onSave() {
   }
 }
 
+// 對齊 Figma fg_品牌色票（row_sw_head / row_extracted，node 1146:584、1146:588）
 .detectedPalette {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 0.875rem 1rem;
-  border-radius: 8px;
-  background: $blue-light;
+  gap: 0.5rem;
 
   &__head {
     display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
+    align-items: center;
+    gap: 0.5rem;
 
     strong {
-      color: $blue-dark-500;
-      font-size: 0.875rem;
-      line-height: 1.25rem;
-    }
-
-    span {
+      flex: 1;
       color: #606692;
       font-size: 0.75rem;
-      line-height: 1rem;
+      font-weight: 500;
+      line-height: normal;
     }
   }
 
-  &__colors,
+  &__applyAll {
+    flex: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: $blue-dark-500;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: normal;
+
+    &:hover {
+      text-decoration: underline;
+    }
+
+    &:focus-visible {
+      outline: 2px solid $yellow;
+      outline-offset: 2px;
+    }
+  }
+
+  &__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    padding: 0.625rem 0.75rem;
+    border-radius: 8px;
+    background: $blue-light;
+    gap: 0.625rem;
+  }
+
+  &__tip {
+    display: flex;
+    flex-direction: column;
+    margin-left: auto;
+    gap: 0.125rem;
+    text-align: right;
+
+    span:first-child {
+      color: #606692;
+      font-size: 0.6875rem;
+      line-height: normal;
+    }
+
+    span:last-child {
+      color: $gray-100;
+      font-size: 0.625rem;
+      line-height: normal;
+    }
+  }
+
   &__actions {
     display: flex;
     flex-wrap: wrap;
@@ -823,37 +1022,56 @@ async function onSave() {
   &__assign {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
     color: #606692;
     font-size: 0.75rem;
+    gap: 0.5rem;
     line-height: 1rem;
   }
 }
 
-.detectedColor {
+// 單一萃取色：色塊 52x40、色碼、占比，已指派的另標「已設為X」
+.extColor {
   display: flex;
+  flex: none;
+  flex-direction: column;
   align-items: center;
-  gap: 0.375rem;
-  min-height: 2.75rem;
-  padding: 0.375rem 0.625rem;
-  border: 1px solid #d2d5dd;
-  border-radius: 8px;
-  background: $white;
-  color: #606692;
-  font-size: 0.75rem;
-  line-height: 1rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  gap: 0.3125rem;
 
   &__sample {
-    width: 1.75rem;
-    height: 1.75rem;
-    flex-shrink: 0;
-    border: 1px solid #d2d5dd;
+    width: 3.25rem;
+    height: 2.5rem;
+    border: 1px solid $gray;
     border-radius: 6px;
   }
 
-  &.isSelected {
-    border-color: $blue-dark-500;
-    box-shadow: 0 0 0 1px $blue-dark-500;
+  &__hex {
+    color: $blue-dark-500;
+    font-size: 0.625rem;
+    line-height: normal;
+  }
+
+  &__share {
+    color: $gray-100;
+    font-size: 0.625rem;
+    line-height: normal;
+  }
+
+  &__assigned {
+    color: $green;
+    font-size: 0.5625rem;
+    font-weight: 500;
+    line-height: normal;
+    white-space: nowrap;
+  }
+
+  // 設計稿沒有畫選取狀態，這是為了兩段式指派（先選色、再選角色）而補的
+  &.isSelected &__sample {
+    box-shadow: 0 0 0 2px $blue-dark-500;
   }
 
   &:focus-visible {
@@ -1046,8 +1264,13 @@ async function onSave() {
     width: 100%;
   }
 
-  .logo__copy {
+  .logoUpload__name {
     white-space: normal;
+  }
+
+  .detectedPalette__tip {
+    margin-left: 0;
+    text-align: left;
   }
 }
 </style>
