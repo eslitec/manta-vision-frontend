@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dominantColors } from './colors'
+import { dominantColorShares, dominantColors } from './colors'
 
 // 用合成像素（RGBA）測純函式，不需要 DOM／Canvas。
 function pixels(colors: [number, number, number, number][]): number[] {
@@ -60,5 +60,36 @@ describe('dominantColors', () => {
       [255, 255, 0, 255],
     ])
     expect(dominantColors(data, 2)).toHaveLength(2)
+  })
+})
+
+describe('dominantColorShares', () => {
+  it('占比對應像素數，且加總為 1', () => {
+    const data = pixels([
+      ...Array<[number, number, number, number]>(6).fill([255, 0, 0, 255]),
+      ...Array<[number, number, number, number]>(4).fill([0, 0, 255, 255]),
+    ])
+    const out = dominantColorShares(data, 6)
+    expect(out.find((c) => c.hex === '#FF0000')?.share).toBeCloseTo(0.6)
+    expect(out.find((c) => c.hex === '#0000FF')?.share).toBeCloseTo(0.4)
+    expect(out.reduce((sum, c) => sum + c.share, 0)).toBeCloseTo(1)
+  })
+
+  it('相近色併入代表色，不另外拆成一項，否則占比會失真', () => {
+    const data = pixels([
+      ...Array<[number, number, number, number]>(5).fill([255, 0, 0, 255]),
+      ...Array<[number, number, number, number]>(5).fill([220, 20, 20, 255]), // 與上者距離 45（≤ 48）
+    ])
+    const out = dominantColorShares(data, 6)
+    expect(out).toHaveLength(1)
+    expect(out[0].share).toBeCloseTo(1)
+  })
+
+  it('dominantColors 與 dominantColorShares 的色碼順序一致', () => {
+    const data = pixels([
+      ...Array<[number, number, number, number]>(6).fill([255, 0, 0, 255]),
+      ...Array<[number, number, number, number]>(4).fill([0, 0, 255, 255]),
+    ])
+    expect(dominantColors(data, 6)).toEqual(dominantColorShares(data, 6).map((c) => c.hex))
   })
 })
