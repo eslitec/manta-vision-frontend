@@ -297,6 +297,27 @@ describe('肖像同意', () => {
   })
 })
 
+describe('登入／登出', () => {
+  it('正確帳密回傳 session', async () => {
+    const session = await api.login('mavis', 'mavis123')
+    expect(session).toEqual({ username: 'mavis', displayName: 'Mavis' })
+  })
+
+  it('密碼錯誤時擲出 INVALID_CREDENTIALS', async () => {
+    await expect(api.login('mavis', 'wrongpass')).rejects.toThrow('INVALID_CREDENTIALS')
+  })
+
+  it('帳號錯誤時擲出 INVALID_CREDENTIALS', async () => {
+    await expect(api.login('wronguser', 'mavis123')).rejects.toThrow('INVALID_CREDENTIALS')
+  })
+
+  it('logout 不論是否已登入都不拋錯', async () => {
+    await expect(api.logout()).resolves.toBeUndefined()
+    await api.login('mavis', 'mavis123')
+    await expect(api.logout()).resolves.toBeUndefined()
+  })
+})
+
 describe('模型清單', () => {
   it('listModels 回傳 6 個模型且都帶單價', async () => {
     const models = await api.listModels()

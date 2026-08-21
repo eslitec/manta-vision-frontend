@@ -152,4 +152,14 @@ export interface RetouchResult {
 
 export type AdoptionKind = 'download' | 'save'
 
+// ── 登入／帳號 ──
+export interface LoginReq {
+  username: string
+  password: string
+}
+export interface Session {
+  username: string
+  displayName: string
+}
+
 export type { Asset }

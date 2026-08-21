@@ -21,7 +21,7 @@
         span {{ item.label }}
     .sidebar__footer
       span.sidebar__footerLink {{ t('layout.documentation') }}
-      span.sidebar__footerLink {{ t('layout.logout') }}
+      button.sidebar__footerLink(type="button" @click="handleLogout") {{ t('layout.logout') }}
   .layout__overlay(v-if="sidebarOpen" @click="sidebarOpen = false")
   .main
     header.topbar
@@ -41,7 +41,7 @@
         FeedBadge
         .topbar__user
           span.topbar__userDot
-          span {{ t('layout.owner', { name: 'Mavis' }) }}
+          span {{ t('layout.owner', { name: session.session?.displayName ?? '' }) }}
     main.content
       .content__inner
         router-view
@@ -52,7 +52,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import FeedBadge from '@/components/FeedBadge.vue'
 import TaskCenterPanel from '@/components/TaskCenterPanel.vue'
@@ -64,9 +64,12 @@ import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
 import IconSettings from '@/components/icons/IconSettings.vue'
 import IconMenu from '@/components/icons/IconMenu.vue'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
+import { useSessionStore } from '@/stores/session'
 
 const route = useRoute()
+const router = useRouter()
 const { t } = useI18n()
+const session = useSessionStore()
 const taskPanelOpen = ref(false)
 const sidebarOpen = ref(false)
 watch(
@@ -81,6 +84,10 @@ const navItems = computed(() => [
   { label: t('nav.usage'), icon: IconFeedBottleSmall, to: '/usage' },
   { label: t('nav.settings'), icon: IconSettings, to: '/settings' },
 ])
+async function handleLogout() {
+  await session.logout()
+  router.push({ name: 'login' })
+}
 </script>
 
 <style scoped lang="scss">
@@ -209,7 +216,12 @@ const navItems = computed(() => [
     height: 3rem;
     margin: 0 -1rem;
     padding: 0 1rem;
+    border: none;
+    background: none;
     color: #606692;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
     font-size: 0.875rem;
     font-weight: 500;
     line-height: 1.125rem;
