@@ -11,10 +11,12 @@
 ## Goals / Non-Goals
 
 **Goals:**
+
 - 讓 `GenerateVideoView.vue` 首頁的視覺呈現對齊設計稿（已完成第一輪）。
 - 補齊非同步生成的完整體驗：確認彈窗、背景任務、完成通知、任務中心面板——目前只有輪詢更新頁面內文字這種最小雛型，跟真正的「背景任務」（離開頁面仍持續追蹤）不是同一件事。
 
 **Non-Goals:**
+
 - 圖生圖（MV-02）目前的生成是同步等待（mock API 立即回傳結果），這次不刻意讓它「看起來」變成非同步（不加假延遲、不加確認彈窗）——只是讓它的任務紀錄／通知走同一套 store，UI 呈現維持原樣。
 
 ## Decisions
@@ -32,6 +34,31 @@
 - [任務中心面板涉及共用外殼 `DefaultLayout.vue`] → 只改 `.topbar` 相關的按鈕與新增的 `TaskCenterPanel`／`GenerationToast` 掛載點，不動 `.sidebar` 區塊——使用者自己在 `DefaultLayout.vue` 有一份尚未提交的 sidebar 樣式實驗，刻意避開衝突。
 - [`getVideoJob` 新增的隨機失敗機率，如果之後有人寫模擬「每秒真實輪詢」的測試（例如用 fake timers 逐秒推進），可能因為隨機性造成測試不穩定] → 目前 `mock.spec.ts` 沒有這樣的測試，暫不處理；之後如果真的需要，用 `vi.spyOn(Math, 'random')` 固定回傳值即可讓測試決定性。
 - [Playwright MCP 工具這次驗證時斷線，無法用瀏覽器實際點擊完整流程（生成→確認彈窗→任務中心→完成通知）] → 已完成 `npm run build`、`vitest run`（48 個測試全過）、dev server 主要路由 HTTP 200 驗證；完整互動流程的瀏覽器驗證待 Playwright 恢復連線後補做，或請使用者自行操作回報問題。
+
+## 2026-08-21 版面結構落差：設定面板缺少 sticky footer
+
+比對 Figma `panel_config`（node `491:9015`，取自 MV-04c `491:9008`）後發現，目前 `GenerateVideoView.vue` 的左欄是「整欄一路往下長」，而設計稿是**兩段式固定高結構**：
+
+```
+panel_config      400 x 823   白底、圓角 10、陰影 0 4px 7px rgba(96,100,114,.2)
+├── scroll_area   400 x 745   overflow-y: auto，內距 24/24/12，項目間距 16
+├── footer_sticky 400 x 78    flex-shrink: 0，上緣 1px #d2d5dd
+│                             內距 pt 14 / px 24 / pb 24
+│                             左：預估消耗（12px #b4b9c4）+ 飼料圖示 16px
+│                                 + 金額（16px Bold #ea903a）
+│                             右：生成影片按鈕
+├── scroll_fade   400 x 28    絕對定位 top 717，白色由透明漸層
+└── scrollbar_hint  4 x 644   絕對定位 left 392 top 16，#b4b9c4 50%，圓角 2
+```
+
+**設計稿一開始就預期設定面板需要捲動**（所以才有漸層遮罩與捲軸提示），但「預估消耗」與「生成影片」按鈕放在 `footer_sticky` 裡，**不隨內容捲動、永遠可見**。
+
+目前實作沒有這層結構，在 1366x940 下警示列被截斷、生成按鈕完全落在視窗外。這不是間距誤差，是版面結構未實作，因此另立第 11 節處理。
+
+補充兩點：
+
+- 設計稿的 `scroll_area` 內仍含 `brand_toggle`（`491:9047`，352x53），但主畫面移除品牌設定是第 10 節已定案的決策，以實作為準；移除後 `scroll_area` 內容減少約 69px，仍會超出可視高度。
+- 「4. 生成模型」的標題在設計稿即為 14px Medium（`491:9040`），與步驟 1～3 的 16px Bold 不同，是為了與右側「倍率以標準模型 45 顆／支 為基準」（11px `#b4b9c4`）並排。目前實作的 `.step__head .step__title` 已正確對應，非缺陷。
 
 ## Open Questions
 
