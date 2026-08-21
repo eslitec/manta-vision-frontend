@@ -442,10 +442,11 @@ async function onSave() {
   }
 
   &__subtitle {
-    margin-top: 0.125rem;
+    // Figma page_head（node 238:1715）：標題 29 + gap 4 + 副標 17 = 50
+    margin-top: 0.25rem;
     color: #606692;
     font-size: 0.875rem;
-    line-height: 1.1875rem;
+    line-height: 1.0625rem;
   }
 
   &__foot {
@@ -996,9 +997,9 @@ async function onSave() {
   &__tip {
     display: flex;
     flex-direction: column;
+    // 靠右推到底，但兩行文字本身在設計稿裡是靠左對齊（tip 內兩個 text 的 x 都是 0）
     margin-left: auto;
     gap: 0.125rem;
-    text-align: right;
 
     span:first-child {
       color: #606692;
@@ -1270,7 +1271,6 @@ async function onSave() {
 
   .detectedPalette__tip {
     margin-left: 0;
-    text-align: left;
   }
 }
 </style>
