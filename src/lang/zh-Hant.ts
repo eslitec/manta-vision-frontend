@@ -8,6 +8,7 @@ export default {
     generateTryOn: 'AI 試穿',
     usage: '飼料用量與成效',
     settings: '品牌設定',
+    login: '登入',
   },
   common: {
     add: '新增',
@@ -40,6 +41,15 @@ export default {
     insufficientFeed: '飼料不足，請先儲值。',
     generationFailed: '生成失敗，請再試一次。',
     submitFailed: '送出失敗，請再試一次。',
+    invalidCredentials: '帳號或密碼錯誤，請再試一次。',
+  },
+  auth: {
+    title: '登入 Manta Vision',
+    usernameLabel: '帳號',
+    usernamePlaceholder: '請輸入帳號',
+    passwordLabel: '密碼',
+    passwordPlaceholder: '請輸入密碼',
+    submit: '登入',
   },
   units: {
     feed: '{count} 顆飼料',

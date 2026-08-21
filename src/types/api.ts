@@ -155,6 +155,16 @@ export interface RetouchResult {
 
 export type AdoptionKind = 'download' | 'save'
 
+// ── 登入／帳號 ──
+export interface LoginReq {
+  username: string
+  password: string
+}
+export interface Session {
+  username: string
+  displayName: string
+}
+
 export type { Asset }
 
 // ── 飼料儲值（MV「儲值」彈窗，mock-only）──

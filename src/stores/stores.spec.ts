@@ -8,6 +8,8 @@ const saveBrand = vi.fn()
 const getConsent = vi.fn()
 const giveConsent = vi.fn()
 const listModels = vi.fn()
+const login = vi.fn()
+const logout = vi.fn()
 
 vi.mock('@/api', () => ({
   api: {
@@ -17,6 +19,8 @@ vi.mock('@/api', () => ({
     getConsent: () => getConsent(),
     giveConsent: () => giveConsent(),
     listModels: () => listModels(),
+    login: (u: string, p: string) => login(u, p),
+    logout: () => logout(),
   },
 }))
 
@@ -24,10 +28,27 @@ import { useFeedStore } from './feed'
 import { useBrandStore } from './brand'
 import { useConsentStore } from './consent'
 import { useModelsStore } from './models'
+import { useSessionStore } from './session'
+
+// environment: 'node' 沒有原生 localStorage，用記憶體 Map 塞一個最小 shim
+function createLocalStorageStub() {
+  const store = new Map<string, string>()
+  return {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, value)
+    },
+    removeItem: (key: string) => {
+      store.delete(key)
+    },
+    clear: () => store.clear(),
+  }
+}
 
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
+  vi.stubGlobal('localStorage', createLocalStorageStub())
 })
 
 describe('feed store', () => {
@@ -107,5 +128,42 @@ describe('models store', () => {
     await models.load()
     await models.load()
     expect(listModels).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('session store', () => {
+  it('登入成功寫入 session 與 localStorage', async () => {
+    login.mockResolvedValue({ username: 'mavis', displayName: 'Mavis' })
+    const session = useSessionStore()
+    await session.login('mavis', 'mavis123')
+    expect(session.session).toEqual({ username: 'mavis', displayName: 'Mavis' })
+    expect(session.isAuthenticated).toBe(true)
+    expect(localStorage.getItem('mv_session')).toBe(JSON.stringify({ username: 'mavis', displayName: 'Mavis' }))
+  })
+
+  it('帳密錯誤時 session 維持 null 且呼叫端會 reject', async () => {
+    login.mockRejectedValue(new Error('INVALID_CREDENTIALS'))
+    const session = useSessionStore()
+    await expect(session.login('mavis', 'wrong')).rejects.toThrow('INVALID_CREDENTIALS')
+    expect(session.session).toBeNull()
+    expect(session.isAuthenticated).toBe(false)
+  })
+
+  it('restore 從預先塞好的 localStorage 值還原 session', () => {
+    localStorage.setItem('mv_session', JSON.stringify({ username: 'mavis', displayName: 'Mavis' }))
+    const session = useSessionStore()
+    session.restore()
+    expect(session.session).toEqual({ username: 'mavis', displayName: 'Mavis' })
+    expect(session.isAuthenticated).toBe(true)
+  })
+
+  it('logout 清空 session 與 localStorage', async () => {
+    login.mockResolvedValue({ username: 'mavis', displayName: 'Mavis' })
+    logout.mockResolvedValue(undefined)
+    const session = useSessionStore()
+    await session.login('mavis', 'mavis123')
+    await session.logout()
+    expect(session.session).toBeNull()
+    expect(localStorage.getItem('mv_session')).toBeNull()
   })
 })
