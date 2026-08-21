@@ -15,8 +15,8 @@ Teleport(to="body")
       .picker__grid
         button.pick(v-for="a in filtered" :key="a.id" :aria-pressed="selectedIds.includes(a.id)" :class="{ 'isSelected': selectedIds.includes(a.id) }" @click="toggle(a.id)")
           .pick__thumb
-            span.pick__check(v-if="selectedIds.includes(a.id)")
-              IconCheckCircle
+            span.pick__check(:class="{ isOn: selectedIds.includes(a.id) }" aria-hidden="true")
+              IconCheck(v-if="selectedIds.includes(a.id)")
             IconMovie(v-if="a.type === 'video'")
             IconImagePlaceholder(v-else)
           .pick__meta
@@ -35,7 +35,7 @@ import { useI18n } from 'vue-i18n'
 import { useAssets } from '@/composables/useAssets'
 import AppButton from '@/components/AppButton.vue'
 import AppSearchbar from '@/components/AppSearchbar.vue'
-import IconCheckCircle from '@/components/icons/IconCheckCircle.vue'
+import IconCheck from '@/components/icons/IconCheck.vue'
 import IconClose from '@/components/icons/IconClose.vue'
 import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
 import IconMovie from '@/components/icons/IconMovie.vue'
@@ -60,11 +60,12 @@ const { t } = useI18n()
 
 const keyword = ref('')
 const resolvedTitle = computed(() => props.title ?? t('imagePicker.defaultTitle'))
+// 設計稿 dlg_filter（node 125:579）只有三個篩選 pill；編輯產物沒有獨立篩選，
+// 但仍會出現在「全部」的清單裡（設計稿的 dlg_grid 就有一張標「編輯產物」）。
 const sources = computed(() => [
   { label: t('sources.all'), value: 'all' },
   { label: t('sources.upload'), value: 'upload' },
   { label: t('sources.ai'), value: 'ai' },
-  { label: t('sources.edit'), value: 'edit' },
 ])
 const activeSource = ref('all')
 const selectedIds = ref<string[]>([])
@@ -115,116 +116,146 @@ const confirm = () => {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: rgba(23, 30, 82, 0.45);
+  background: rgba(0, 0, 0, 0.45);
   @include flex(center, center);
   padding: 1.5rem;
 }
+// 對齊 Figma overlay_picker / dialog_picker（node 125:570、125:571）
 .picker__modal {
   width: 45rem;
   max-width: 100%;
   max-height: 88vh;
   background: $white;
-  border-radius: 16px;
-  padding: 1.375rem 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 0.75rem 2rem rgba(26, 28, 51, 0.3);
+  padding: 1.5rem;
   display: flex;
   flex-direction: column;
+  gap: 1.25rem;
 }
 .picker__head {
-  @include flex(space-between, flex-start);
-  margin-bottom: 1rem;
+  @include flex(space-between, center);
 }
 .picker__title {
   font-size: 1.125rem;
   font-weight: 700;
-  color: $blue-dark-300;
+  line-height: 1.5rem;
+  color: $blue-dark-500;
 }
 .picker__sub {
   font-size: 0.75rem;
+  line-height: 1rem;
   color: $gray-100;
   margin-top: 0.125rem;
 }
 .picker__close {
+  @include flex(center, center);
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
   color: $gray-400;
-  font-size: 1.25rem;
+
+  svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
 }
 .picker__toolbar {
-  @include flex(space-between, center, 0.75rem);
-  margin-bottom: 1rem;
+  @include flex(space-between, center, 0.5rem);
 }
 .picker__search {
   flex: 1;
   width: auto;
 }
 .sources {
-  @include flex(flex-start, center, 0.375rem);
+  @include flex(flex-start, center, 0.5rem);
 }
 .chip {
-  min-width: 1.5rem;
-  min-height: 1.5rem;
-  padding: 0.3125rem 0.75rem;
-  border-radius: 999px;
+  padding: 0.1875rem 0.75rem;
+  border-radius: 16px;
   font-size: 0.8125rem;
-  color: $gray-400;
+  line-height: 1.25rem;
+  color: #606692;
   border: 1px solid $gray;
   background: $white;
   white-space: nowrap;
+  // 設計稿只畫了 default 狀態，選中樣式為實作補上
   &.isActive {
-    background: $blue-dark-300;
+    background: $blue-dark-500;
     color: $white;
-    border-color: $blue-dark-300;
+    border-color: $blue-dark-500;
   }
 }
+// dlg_grid：4 欄（159 寬）、列距 16、欄距 12
 .picker__grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 0.875rem;
+  column-gap: 0.75rem;
+  row-gap: 1rem;
   overflow-y: auto;
-  padding: 0.125rem;
 }
 .pick {
+  @include flex(flex-start, stretch, 0.375rem);
+  flex-direction: column;
   text-align: left;
-  background: $white;
-  border-radius: 10px;
-  padding: 0.25rem;
-  border: 2px solid transparent;
-  &.isSelected {
-    border-color: $blue;
-  }
+  background: transparent;
+  border: 0;
+  padding: 0;
+
   &__thumb {
     @include flex(center, center);
     position: relative;
-    aspect-ratio: 1 / 1;
-    background: $blue-light;
+    // thumb 159 x 104
+    aspect-ratio: 159 / 104;
+    background: #eef1f7;
+    border: 2px solid transparent;
     border-radius: 8px;
     color: $babyBlue;
-    font-size: 1.625rem;
-    margin-bottom: 0.375rem;
+
+    svg {
+      width: 2.75rem;
+      height: 2.75rem;
+    }
   }
+  &.isSelected &__thumb {
+    border-color: $blue-dark-500;
+  }
+  // sel_check 22 x 22，未選取時也在，只是空的白圈
   &__check {
     position: absolute;
     top: 0.375rem;
     right: 0.375rem;
     width: 1.375rem;
     height: 1.375rem;
-    border-radius: 50%;
-    background: $blue-dark-500;
+    border: 1px solid $gray;
+    border-radius: 11px;
+    opacity: 0.9;
+    background: $white;
     @include flex(center, center);
+
+    // 選中：深藍底 + 白色勾（設計稿 sel_check 的 ic_ok 是白色描邊勾，不是綠色圓形打勾）
+    &.isOn {
+      border-color: $blue-dark-500;
+      opacity: 1;
+      background: $blue-dark-500;
+      color: $white;
+    }
 
     svg {
       display: block;
-      width: 1.25rem;
-      height: 1.25rem;
+      width: 0.8125rem;
+      height: 0.8125rem;
     }
   }
   &__meta {
     @include flex(space-between, center, 0.375rem);
-    padding: 0 0.125rem 0.25rem;
   }
   &__name {
     flex: 1;
     min-width: 0;
-    font-size: 0.8125rem;
-    color: $blue-dark-300;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    color: $dark-blue-gray;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -232,24 +263,22 @@ const confirm = () => {
 }
 .tag {
   flex-shrink: 0;
-  font-size: 0.6875rem;
-  padding: 0.125rem 0.4375rem;
-  border-radius: 6px;
-  font-weight: 500;
-  background: #faeeda;
-  color: #854f0b;
+  padding: 0.1875rem 0.75rem;
+  border-radius: 16px;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  background: #f6eac1;
+  color: $dark-blue-gray;
 }
 .picker__foot {
   @include flex(space-between, center);
-  margin-top: 1.125rem;
-  border-top: 1px solid $lightGray;
-  padding-top: 1rem;
 }
 .picker__count {
-  font-size: 0.8125rem;
-  color: $gray-400;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #606692;
 }
 .picker__actions {
-  @include flex(flex-start, center, 0.625rem);
+  @include flex(flex-start, center, 0.75rem);
 }
 </style>

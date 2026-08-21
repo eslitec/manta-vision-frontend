@@ -515,7 +515,6 @@ export default {
     folderName: 'Folder name',
     folderHint: 'Drag assets into a folder or use batch selection to move them',
     source: 'Source',
-    addFromLibrary: 'Add from library',
     uploadImages: 'Upload images',
     selectedCount: '{count} selected',
     selectPage: 'Select {count} on this page',
@@ -528,7 +527,6 @@ export default {
     previousPage: 'Previous page',
     nextPage: 'Next page',
     pageNumber: 'Page {page}',
-    pickerTitle: 'Add from library to “{folder}”',
     moveDescription:
       'Move {count} selected assets to a folder. Each asset belongs to one folder and will leave its current folder.',
     createFolderPlaceholder: 'Or create a new folder…',
