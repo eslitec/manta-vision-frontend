@@ -129,6 +129,31 @@ Spectra 也支援 `spx/<change-name>` 分支隔離，以及 `spectra park <name>
 5. 完成後跑 `npm run build`、`npm test`、`spectra validate <change> --strict`
 6. **PR 合併並確認不再修改之後**才 `spectra archive <change>`
 
+### 歸檔前務必清空工作目錄（已實測）
+
+**跑 `spectra archive` 之前先確認 `git status` 乾淨**（該提交的提交、該 stash 的 stash）。
+
+`spectra archive` 會在合併後的主 spec 裡注入 `<!-- @trace -->` 區塊，而它的 `code:` 清單**取自歸檔當下 git 工作目錄的髒檔案**，不是 change 自身的文件。2026-08-21 的 A/B 實測：
+
+| 歸檔時工作目錄                   | 產出                                                                               |
+| -------------------------------- | ---------------------------------------------------------------------------------- |
+| 有一個無關的 `BACKEND.md` 未提交 | 3 個 Requirement 各被注入 `code: - BACKEND.md`，但該 change 文件完全沒提過這個檔案 |
+| 乾淨                             | 完全不注入 `@trace`                                                                |
+
+兩者都不理想，但「沒有連結」遠好過「錯誤的連結」。正確的 `@trace` 資料來源尚未查明：`.spectra/touched/` 目錄不存在，12 個 spectra skill 裡只有 `spectra-archive` 提到 `@trace`，`spectra-apply` 完全沒提。
+
+另外注意：**CLI 沒有 `unarchive` 子指令**。`spectra archive` 輸出的「Snapshot created for unarchive support」指的是桌面 App 的功能。用 CLI archive 錯了只能靠 `git revert`，所以動手前確認狀態比較省事。
+
+### 歸檔後要補 Purpose
+
+`spectra archive` 建立新的主 spec 時，`## Purpose` 會留下佔位字串：
+
+```
+TBD - created by archiving change '<name>'. Update Purpose after archive.
+```
+
+這是工具明示要人工補寫的，歸檔後請一併處理，不要讓 TBD 留在正式規格裡。
+
 ### 指令使用備註
 
 - `spectra validate` 吃 `--all`，但 **`analyze` 與 `drift` 不吃**，必須逐一指定 change 名稱，否則會回 `Error: Multiple changes found`。要一次掃全部可以用：
