@@ -40,13 +40,13 @@
 - [x] 10.1 實作 Requirement「主畫面不呈現品牌設定」：從 MV-04 主畫面移除 `BrandToggle`，確認其他頁面的共用品牌設定開關不受影響
 - [x] 10.2 保留「4. 生成模型」與標準／進階／專業三種選項，維持 `modelTier` 型別與倍率計費
 - [x] 10.3 確認 MV-04b 視窗顯示主畫面已選模型、倍率與對應消耗
-- [ ] 10.4 以 1366×940 比對 MV-04 主框，確認移除品牌設定後的間距、警示列與底部操作對齊設計稿：已於 2026-08-21 用實機截圖對照 Figma `panel_config`（node `491:9015`）完成「間距」與「底部操作」兩項，結論是設定面板缺少 `footer_sticky` 結構（見 design.md 同日決策），另立第 11 節處理；「警示列」尚未比對，需要 MV-04 初始狀態的 Figma 節點才能確認其位置與間距
+- [x] 10.4 以 1366×940 比對 MV-04 主框，確認移除品牌設定後的間距、警示列與底部操作對齊設計稿：第 11 節完成 `footer_sticky` 結構後，以 Playwright 在 1366×940 重新截圖並量測 DOM，確認整頁無垂直捲軸（`document.documentElement.scrollHeight === window.innerHeight === 940`）、`.video`／`.video__input` 皆為 823px（對齊 `panel_config` node `491:9015`）、`scrollbar_hint` 兩種狀態的位置與高度（top 16px／552px、644px）精確對齊 design.md 記錄的數值；捲動區與 sticky footer 的實際切分（688/135、743/80）與設計稿（690/133、745/78）各差 2px，屬真實文案／圖示撐開的合理誤差，兩者總和仍精準對齊 823px
 - [x] 10.5 執行 `npm run build`、`npm test -- --run`、`spectra validate sync-mv-04-design --strict`、`spectra analyze sync-mv-04-design`
 
 ## 11. 2026-08-21 設定面板 sticky footer（版面結構）
 
-- [ ] 11.1 `GenerateVideoView.vue` 左欄改為固定高兩段式結構：`.panel`／`.video__input` 補上高度與 `min-height: 0` 約束（參考 `sync-mv-01-design` 任務 10.1 對共用內容容器的處理），步驟 1～4 包進 `flex: 1; overflow-y: auto; min-height: 0` 的捲動容器，`.video__sticky` 加 `flex-shrink: 0`。根因：`.video__sticky` 的 `margin-top: auto` 已存在且寫法正確，但 `.panel` 沒有高度上限、被內容一路撐高，`auto` 沒有剩餘空間可推，才導致整頁捲動。驗證：1366x940 下整頁無垂直捲軸，捲動只發生在設定面板內部
-- [ ] 11.2 `footer_sticky` 高度隨警示列存在與否切換：初始狀態含 `row_warn` 為 133，送出生成後警示列消失、收合為 78；上緣 `1px solid #d2d5dd`、內距 `14px 24px 24px`、警示列與 `row_cta` 間距 11px；左側「預估消耗」（12px `#b4b9c4`）＋飼料圖示 16px＋金額（16px Bold `#ea903a`），右側生成按鈕靠右。驗證：捲動時該區塊固定不動，且兩種高度切換時捲動區與遮罩位置跟著改變
-- [ ] 11.3 補上 `scroll_fade`（高 28、白色由透明漸層，貼齊捲動區底緣，初始狀態 top 662／其餘 717）與 `scrollbar_hint`（寬 4、`#b4b9c4` 50% 透明、圓角 2、距右緣 8，初始狀態高 552／其餘 644）；注意漸層需放在捲動容器之外，否則會跟著內容捲走（同 MV-09 字型選單的處理方式）
+- [x] 11.1 `GenerateVideoView.vue` 左欄改為固定高兩段式結構：`.panel`／`.video__input` 補上高度與 `min-height: 0` 約束（參考 `sync-mv-01-design` 任務 10.1 對共用內容容器的處理），步驟 1～4 包進 `flex: 1; overflow-y: auto; min-height: 0` 的捲動容器，`.video__sticky` 加 `flex-shrink: 0`。根因：`.video__sticky` 的 `margin-top: auto` 已存在且寫法正確，但 `.panel` 沒有高度上限、被內容一路撐高，`auto` 沒有剩餘空間可推，才導致整頁捲動。驗證：1366x940 下整頁無垂直捲軸，捲動只發生在設定面板內部
+- [x] 11.2 `footer_sticky` 高度隨警示列存在與否切換：初始狀態含 `row_warn` 為 133，送出生成後警示列消失、收合為 78；上緣 `1px solid #d2d5dd`、內距 `14px 24px 24px`、警示列與 `row_cta` 間距 11px；左側「預估消耗」（12px `#b4b9c4`）＋飼料圖示 16px＋金額（16px Bold `#ea903a`），右側生成按鈕靠右。驗證：捲動時該區塊固定不動，且兩種高度切換時捲動區與遮罩位置跟著改變
+- [x] 11.3 補上 `scroll_fade`（高 28、白色由透明漸層，貼齊捲動區底緣，初始狀態 top 662／其餘 717）與 `scrollbar_hint`（寬 4、`#b4b9c4` 50% 透明、圓角 2、距右緣 8，初始狀態高 552／其餘 644）；注意漸層需放在捲動容器之外，否則會跟著內容捲走（同 MV-09 字型選單的處理方式）
 - [x] 11.4 取得 MV-04 初始狀態的 Figma 節點，確認警示列歸屬：已由 node `13:2` 確認 `row_warn`（`275:3079`，352x44）位於 `footer_sticky` 內，與 `row_cta` 同屬釘底區，目前實作放在 `.video__sticky` 是正確的；並記錄五個狀態的 footer 高度差異（初始 133／其餘 78），見 design.md 同日決策
-- [ ] 11.5 `npm run build`、`npm test -- --run` 通過，並以 1366x940 重新截圖比對
+- [x] 11.5 `npm run build`、`npm test -- --run` 通過，並以 1366x940 重新截圖比對
