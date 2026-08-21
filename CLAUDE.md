@@ -133,14 +133,23 @@ Spectra 也支援 `spx/<change-name>` 分支隔離，以及 `spectra park <name>
 
 **跑 `spectra archive` 之前先確認 `git status` 乾淨**（該提交的提交、該 stash 的 stash）。
 
-`spectra archive` 會在合併後的主 spec 裡注入 `<!-- @trace -->` 區塊，而它的 `code:` 清單**取自歸檔當下 git 工作目錄的髒檔案**，不是 change 自身的文件。2026-08-21 的 A/B 實測：
+`spectra archive` 會在合併後的主 spec 裡注入 `<!-- @trace -->` 區塊，而它的 `code:` 清單**取自歸檔前後 git 上「最近異動過的非 openspec 檔案」**，跟 change 自身的文件無關。2026-08-21 連續三次歸檔的實測：
 
-| 歸檔時工作目錄                   | 產出                                                                               |
-| -------------------------------- | ---------------------------------------------------------------------------------- |
-| 有一個無關的 `BACKEND.md` 未提交 | 3 個 Requirement 各被注入 `code: - BACKEND.md`，但該 change 文件完全沒提過這個檔案 |
-| 乾淨                             | 完全不注入 `@trace`                                                                |
+| 歸檔時 git 狀態                                | 產出                                |
+| ---------------------------------------------- | ----------------------------------- |
+| 工作目錄有一個無關的 `BACKEND.md` 未提交       | 3 段 `@trace`，`code: - BACKEND.md` |
+| 工作目錄乾淨，前一個 commit 只動 `openspec/**` | **完全不注入 `@trace`**             |
+| 工作目錄乾淨，前一個 commit 動過 `CLAUDE.md`   | 5 段 `@trace`，`code: - CLAUDE.md`  |
 
-兩者都不理想，但「沒有連結」遠好過「錯誤的連結」。正確的 `@trace` 資料來源尚未查明：`.spectra/touched/` 目錄不存在，12 個 spectra skill 裡只有 `spectra-archive` 提到 `@trace`，`spectra-apply` 完全沒提。
+三次都不是該 change 實際實作的檔案。**清空工作目錄可以避免最糟的情況，但只要最近的 commit 碰過非 openspec 檔案，還是會被寫進去** —— 所以歸檔後仍要檢查一次：
+
+```powershell
+Select-String -Path openspec\specs\<capability>\spec.md -Pattern "@trace","TBD"
+```
+
+有錯誤的 `@trace` 就整段刪掉。「沒有連結」遠好過「錯誤的連結」。
+
+正確的 `@trace` 資料來源尚未查明：`.spectra/touched/`（`spectra-archive` 的 SKILL.md 第 5 步稱之為 implementation tracking data）在本專案不存在，12 個 spectra skill 裡只有 `spectra-archive` 提到 `@trace`，`spectra-apply` 完全沒提。推測要透過桌面 App 或 `/spectra-apply` 實際實作任務才會產生，這 14 個 change 都是在 Spectra 接上之前手工完成的，所以沒有這份資料。
 
 另外注意：**CLI 沒有 `unarchive` 子指令**。`spectra archive` 輸出的「Snapshot created for unarchive support」指的是桌面 App 的功能。用 CLI archive 錯了只能靠 `git revert`，所以動手前確認狀態比較省事。
 
