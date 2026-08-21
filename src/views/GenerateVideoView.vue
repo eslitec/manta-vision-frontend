@@ -2,40 +2,44 @@
 .video
   h1.visuallyHidden {{ t('routeTitles.generateVideo') }}
   section.panel.video__input
-    .step
-      .step__title {{ t('video.steps.source') }}
-      .dropzone
-        IconImagePlaceholder.dropzone__icon
-        span.dropzone__name(v-if="sourceImage") {{ sourceImage.name }}
-      AppButton.dropzone__pick(variant="outline" @click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
-    .step
-      .step__title {{ t('video.steps.template') }}
-      .templates
-        button.tpl(v-for="item in templates" :key="item.key" :aria-pressed="template === item.key" :class="{ 'isActive': template === item.key }" @click="template = item.key")
-          .tpl__thumb
-            IconMovie
-          span.tpl__label {{ item.name }}
-    .step
-      .step__title {{ t('video.steps.ratio') }}
-      .ratios
-        button.ratio(v-for="r in ratios" :key="r" :aria-pressed="ratio === r" :class="{ 'isActive': ratio === r }" @click="ratio = r") {{ r }}
-    .step
-      .step__head
-        span.step__title {{ t('video.steps.model') }}
-        span.step__hint {{ t('video.modelHint') }}
-      .models
-        ModelOption(
-          v-for="tier in modelTiers"
-          :key="tier.key"
-          :name="$t(`modelTiers.${tier.key}.label`)"
-          :multiplier="tier.multiplier"
-          :cost="$t('units.feedPerVideo', { count: 45 * tier.multiplier })"
-          :description="$t(`video.modelDescriptions.${tier.key}`)"
-          :selected="modelTier === tier.key"
-          @click="modelTier = tier.key"
-        )
+    .video__scroll
+      .video__steps
+        .step
+          .step__title {{ t('video.steps.source') }}
+          .dropzone
+            IconImagePlaceholder.dropzone__icon
+            span.dropzone__name(v-if="sourceImage") {{ sourceImage.name }}
+          AppButton.dropzone__pick(variant="outline" @click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
+        .step
+          .step__title {{ t('video.steps.template') }}
+          .templates
+            button.tpl(v-for="item in templates" :key="item.key" :aria-pressed="template === item.key" :class="{ 'isActive': template === item.key }" @click="template = item.key")
+              .tpl__thumb
+                IconMovie
+              span.tpl__label {{ item.name }}
+        .step
+          .step__title {{ t('video.steps.ratio') }}
+          .ratios
+            button.ratio(v-for="r in ratios" :key="r" :aria-pressed="ratio === r" :class="{ 'isActive': ratio === r }" @click="ratio = r") {{ r }}
+        .step
+          .step__head
+            span.step__title {{ t('video.steps.model') }}
+            span.step__hint {{ t('video.modelHint') }}
+          .models
+            ModelOption(
+              v-for="tier in modelTiers"
+              :key="tier.key"
+              :name="$t(`modelTiers.${tier.key}.label`)"
+              :multiplier="tier.multiplier"
+              :cost="$t('units.feedPerVideo', { count: 45 * tier.multiplier })"
+              :description="$t(`video.modelDescriptions.${tier.key}`)"
+              :selected="modelTier === tier.key"
+              @click="modelTier = tier.key"
+            )
+      span.video__fade(aria-hidden="true")
+      span.video__scrollbarHint(:class="{ isCompact: !!myTask }" aria-hidden="true")
     .video__sticky
-      p.warn
+      p.warn(v-if="!myTask")
         IconAlertTriangleFilled
         span {{ t('video.highCostWarning') }}
       p.err(v-if="errorMsg" role="alert") {{ errorMsg }}
@@ -220,6 +224,13 @@ function goLibrary() {
   @include below($bp-lg) {
     grid-template-columns: 1fr;
   }
+  // 設定面板（.video__input）在大螢幕是固定高兩段式結構（捲動區＋sticky footer），
+  // 需要 .video 本身有確定高度才能讓內部捲動生效，否則 .content 的 overflow-y: auto
+  // 會把整頁一起往下捲，而不是只捲動面板內部（見 design.md 2026-08-21 決策）。
+  @media (min-width: $bp-lg) {
+    height: 100%;
+    min-height: 0;
+  }
 }
 .panel {
   background: $white;
@@ -230,6 +241,55 @@ function goLibrary() {
 .video__input {
   display: flex;
   flex-direction: column;
+  @media (min-width: $bp-lg) {
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+  }
+}
+.video__scroll {
+  @media (min-width: $bp-lg) {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+  }
+}
+.video__steps {
+  @media (min-width: $bp-lg) {
+    height: 100%;
+    overflow-y: auto;
+    padding: 1.5rem 1.5rem 0.75rem;
+  }
+}
+.video__fade {
+  display: none;
+  @media (min-width: $bp-lg) {
+    display: block;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 1.75rem;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0), $white);
+    pointer-events: none;
+  }
+}
+.video__scrollbarHint {
+  display: none;
+  @media (min-width: $bp-lg) {
+    display: block;
+    position: absolute;
+    top: 1rem;
+    right: 0.5rem;
+    width: 0.25rem;
+    height: 34.5rem; // 552px：初始狀態（含警示列，footer 133px）
+    border-radius: 2px;
+    background: rgba(180, 185, 196, 0.5);
+    pointer-events: none;
+    &.isCompact {
+      height: 40.25rem; // 644px：送出生成後警示列收合（footer 78px）
+    }
+  }
 }
 .video__preview {
   display: flex;
@@ -373,6 +433,12 @@ function goLibrary() {
   display: flex;
   flex-direction: column;
   gap: 0.6875rem;
+  // 大螢幕：.video__input 改成 padding: 0（見上），.video__scroll 用 flex: 1 頂開，
+  // 不再需要負 margin 抵銷面板留白，footer_sticky 固定高不隨內容捲動
+  @media (min-width: $bp-lg) {
+    margin: 0;
+    flex-shrink: 0;
+  }
 }
 .video__footer {
   @include flex(space-between, flex-end);
