@@ -27,4 +27,4 @@
 
 - [ ] 4.1 擴充 `api.editImage`／扣款（`stores/feed`）與另存（`useAssets`）
 - [x] 4.2 `npm run build` 通過、與設計稿視覺比對
-- [ ] 4.3 為 `ImageEditorWorkspace.vue` 的字型選單、圖層面板、AI 修圖、裁切四個區塊各補一個 anchor，讓 `spectra drift` 對這四塊的改動有覆蓋；驗證：`spectra drift sync-mv-09-design` 顯示 anchor 數由 6 增加到至少 10，且四個區塊各自可個別偵測結構變動
+- [ ] 4.3 為 `ImageEditorWorkspace.vue` 的字型選單、圖層面板、AI 修圖、裁切四個區塊各補 anchor，讓 `spectra drift` 對這四塊的改動有覆蓋：已在 design.md 新增「實作對照」章節，逐塊列出實際存在的程式符號（`fontOptions`／`layers`／`retouchOptions`／`cropRect` 等）與跨檔依賴；驗證：`spectra drift sync-mv-09-design` 顯示 anchor 數由 6 明顯增加，且四個區塊各自可個別偵測結構變動
