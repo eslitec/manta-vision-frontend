@@ -1,0 +1,210 @@
+# home-workbench-ui Specification
+
+## Purpose
+
+TBD - created by archiving change 'sync-mv-00-design'. Update Purpose after archive.
+
+## Requirements
+
+### Requirement: 工作台標題傳達頁面用途
+
+首頁 SHALL 顯示標題與副標題，且副標題要說明生成的素材與結果會自動存回圖庫。
+
+#### Scenario: 使用者進入工作台
+
+- **WHEN** 使用者導覽到工作台頁面（`/`）
+- **THEN** 頁面顯示標題「AI 視覺內容工作台」，副標題說明素材與結果會自動存回圖庫
+
+<!-- @trace
+source: sync-mv-00-design
+updated: 2026-08-21
+code:
+  - src/views/HomeView.vue
+  - src/layouts/DefaultLayout.vue
+  - src/components/FeedBadge.vue
+  - src/lang/zh-Hant.ts
+  - src/lang/en.ts
+-->
+
+---
+
+### Requirement: 狀態列顯示帳號與品牌狀態
+
+狀態列 SHALL 顯示使用者的 AI 飼料餘額（含可再生成數量的估算）、本月已生成的數量，以及品牌設定是否完成，三者各自以獨立的視覺區塊呈現。
+
+#### Scenario: 品牌設定已完成
+
+- **WHEN** 使用者的品牌檔案已填寫名稱、定位，且至少有一組色票
+- **THEN** 狀態列用一個獨立的成功狀態圖示（而非文字符號前綴）搭配「品牌設定已完成」文字，呈現完成狀態
+
+#### Scenario: 品牌設定尚未完成
+
+- **WHEN** 使用者的品牌檔案缺少名稱、定位或色票
+- **THEN** 狀態列顯示未完成狀態，並提示使用者前往補齊品牌設定
+
+<!-- @trace
+source: sync-mv-00-design
+updated: 2026-08-21
+code:
+  - src/views/HomeView.vue
+  - src/layouts/DefaultLayout.vue
+  - src/components/FeedBadge.vue
+  - src/lang/zh-Hant.ts
+  - src/lang/en.ts
+-->
+
+---
+
+### Requirement: 生成工具卡片列出所有可用工具
+
+工作台 SHALL 為每一個生成工具（圖生圖、AI 產生行銷 PO 文、圖生影片、AI 試穿衣服）顯示一張卡片，每張卡片包含圖示、標題與簡短說明，且點擊後要能連到該工具的頁面。
+
+#### Scenario: 使用者點開某個生成工具
+
+- **WHEN** 使用者點擊某張生成工具卡片
+- **THEN** App 導覽到該工具對應的頁面
+
+<!-- @trace
+source: sync-mv-00-design
+updated: 2026-08-21
+code:
+  - src/views/HomeView.vue
+  - src/layouts/DefaultLayout.vue
+  - src/components/FeedBadge.vue
+  - src/lang/zh-Hant.ts
+  - src/lang/en.ts
+-->
+
+---
+
+### Requirement: 生成工具卡片標示會消耗飼料
+
+每一張生成工具卡片 SHALL 顯示一個消耗飼料的徽章圖示，讓使用者在點擊前就知道使用這個工具會消耗 AI 飼料。
+
+#### Scenario: 使用者檢視生成工具卡片
+
+- **WHEN** 使用者檢視工作台上的任一張生成工具卡片
+- **THEN** 卡片右上角顯示消耗飼料的徽章圖示
+
+<!-- @trace
+source: sync-mv-00-design
+updated: 2026-08-21
+code:
+  - src/views/HomeView.vue
+  - src/layouts/DefaultLayout.vue
+  - src/components/FeedBadge.vue
+  - src/lang/zh-Hant.ts
+  - src/lang/en.ts
+-->
+
+---
+
+### Requirement: 圖庫橫幅連結到素材圖庫
+
+工作台 SHALL 顯示一個橫幅，說明圖庫是所有素材與生成結果的單一來源，並附上前往圖庫頁面的連結。
+
+#### Scenario: 使用者從橫幅前往圖庫
+
+- **WHEN** 使用者點擊圖庫橫幅上的動作按鈕
+- **THEN** App 導覽到圖庫頁面
+
+<!-- @trace
+source: sync-mv-00-design
+updated: 2026-08-21
+code:
+  - src/views/HomeView.vue
+  - src/layouts/DefaultLayout.vue
+  - src/components/FeedBadge.vue
+  - src/lang/zh-Hant.ts
+  - src/lang/en.ts
+-->
+
+---
+
+### Requirement: 側邊欄標示目前所在區塊
+
+側邊欄導覽 SHALL 用底色變化和左側強調色條，同時標示出跟目前路由對應的項目，使其與其他項目有明顯區別。
+
+#### Scenario: 使用者位於工作台頁面
+
+- **WHEN** 目前路由是工作台（`/`）
+- **THEN** 側邊欄的「AI 生成工作台」項目顯示使用中的底色與左側強調色條，且沒有其他項目同時顯示這個狀態
+
+<!-- @trace
+source: sync-mv-00-design
+updated: 2026-08-21
+code:
+  - src/views/HomeView.vue
+  - src/layouts/DefaultLayout.vue
+  - src/components/FeedBadge.vue
+  - src/lang/zh-Hant.ts
+  - src/lang/en.ts
+-->
+
+---
+
+### Requirement: 側邊欄提供功能性連結
+
+側邊欄 SHALL 在導覽清單下方顯示「教學文件」與「登出」連結，在對應的目的地實際做出來之前，先以視覺上明顯弱化（未啟用／預留）的樣式呈現。
+
+#### Scenario: 功能性連結尚未串接
+
+- **WHEN** 某個功能性連結對應的目的地還沒實作
+- **THEN** 該連結以視覺弱化的樣式呈現，且點擊後不會導覽到任何地方
+
+<!-- @trace
+source: sync-mv-00-design
+updated: 2026-08-21
+code:
+  - src/views/HomeView.vue
+  - src/layouts/DefaultLayout.vue
+  - src/components/FeedBadge.vue
+  - src/lang/zh-Hant.ts
+  - src/lang/en.ts
+-->
+
+---
+
+### Requirement: 頂部工具列顯示目前情境與使用者身分
+
+頂部工具列 SHALL 顯示目前品牌情境的麵包屑、「任務」入口、使用者的飼料餘額，以及登入者的姓名與角色。
+
+#### Scenario: 使用者檢視頂部工具列
+
+- **WHEN** 顯示任何已登入頁面
+- **THEN** 頂部工具列顯示麵包屑、「任務」按鈕、飼料餘額徽章，以及目前使用者的姓名與角色文字（帳號擁有者顯示「擁有者」）
+
+<!-- @trace
+source: sync-mv-00-design
+updated: 2026-08-21
+code:
+  - src/views/HomeView.vue
+  - src/layouts/DefaultLayout.vue
+  - src/components/FeedBadge.vue
+  - src/lang/zh-Hant.ts
+  - src/lang/en.ts
+-->
+
+---
+
+### Requirement: 共用外殼與工作台細節對齊設計稿
+
+系統 SHALL 使用 `#606692` 呈現側邊欄品牌頭像與頂欄使用者頭像，並讓統計卡分隔線位於相鄰項目的間距中央。工作台主要內容的垂直位置 SHALL 與 MV-00 設計稿保持一致。
+
+#### Scenario: 使用者以桌面尺寸開啟工作台
+
+- **WHEN** 使用者在桌面視窗開啟 MV-00
+- **THEN** 兩個頭像使用相同的 `#606692`
+- **AND** 統計卡分隔線置中於 48px 項目間距
+- **AND** 統計卡相較標題區維持 16px 上方間距
+
+<!-- @trace
+source: sync-mv-00-design
+updated: 2026-08-21
+code:
+  - src/views/HomeView.vue
+  - src/layouts/DefaultLayout.vue
+  - src/components/FeedBadge.vue
+  - src/lang/zh-Hant.ts
+  - src/lang/en.ts
+-->

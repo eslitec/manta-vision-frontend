@@ -133,7 +133,9 @@ Spectra 也支援 `spx/<change-name>` 分支隔離，以及 `spectra park <name>
 
 **跑 `spectra archive` 之前先確認 `git status` 乾淨**（該提交的提交、該 stash 的 stash）。
 
-`spectra archive` 會在合併後的主 spec 裡注入 `<!-- @trace -->` 區塊，而它的 `code:` 清單**取自歸檔前後 git 上「最近異動過的非 openspec 檔案」**，跟 change 自身的文件無關。2026-08-21 連續三次歸檔的實測：
+`spectra archive` 會在合併後的主 spec 裡注入 `<!-- @trace -->` 區塊，而它的 `code:` 清單**與 change 自身的文件完全無關**。2026-08-21 前後兩輪實測：
+
+**第一輪（單獨歸檔三次）**
 
 | 歸檔時 git 狀態                                | 產出                                |
 | ---------------------------------------------- | ----------------------------------- |
@@ -141,15 +143,23 @@ Spectra 也支援 `spx/<change-name>` 分支隔離，以及 `spectra park <name>
 | 工作目錄乾淨，前一個 commit 只動 `openspec/**` | **完全不注入 `@trace`**             |
 | 工作目錄乾淨，前一個 commit 動過 `CLAUDE.md`   | 5 段 `@trace`，`code: - CLAUDE.md`  |
 
-三次都不是該 change 實際實作的檔案。**清空工作目錄可以避免最糟的情況，但只要最近的 commit 碰過非 openspec 檔案，還是會被寫進去** —— 所以歸檔後仍要檢查一次：
+**第二輪（工作目錄乾淨，一次連續歸檔 11 個 change）**
+
+結果比第一輪更糟：11 個 capability、**58 段 `@trace` 全部拿到同一份 99 個檔案的清單**——等於整個 `src/` 加上 `package.json`、`tsconfig.json`、`index.html`、`design-qa.md`，甚至包含早就被刪掉的 `src/components/PrimaryButton.vue`。飼料用量統計（`usage-stats-ui`）被標上 `ImagePickerDialog.vue`，圖片編輯器被標上 `usage-legend-daily.svg`，諸如此類。
+
+**`.spectra/touched/` 不是資料來源。** 之前記載「本專案不存在這個目錄」，這點要更正：跑過 `/spectra-apply` 之後它確實會生成（本專案有 `sync-mv-04-design.json`）。但第二輪歸檔時 `sync-mv-04-design` 有這份 touched 檔，拿到的 `@trace` 仍舊是那份 99 檔清單，跟其他 10 個一模一樣——**所以 CLI 根本沒讀它**。
+
+**結論：`@trace` 的自動注入目前不可用，一律當成需要人工覆寫的欄位。**
+
+歸檔後必做，先檢查：
 
 ```powershell
-Select-String -Path openspec\specs\<capability>\spec.md -Pattern "@trace","TBD"
+Select-String -Path openspec\specs\*\spec.md -Pattern "@trace","TBD"
 ```
 
-有錯誤的 `@trace` 就整段刪掉。「沒有連結」遠好過「錯誤的連結」。
+再逐一覆寫。可靠的來源是**該 change 自己 `proposal.md` 的 `## Impact` 章節**——那是當初寫下的實際影響範圍。做法：從歸檔後的 `openspec/changes/archive/<date>-<name>/proposal.md` 取出 Impact 列出的檔案路徑，去掉已不存在的（例如被整併掉的舊元件），再視情況補上該 capability 明顯相關但 Impact 漏寫的檔案，然後把該 spec 內所有 `@trace` 的 `code:` 換成這份清單。同一個 capability 內共用一份清單即可，不必逐 Requirement 細分。
 
-正確的 `@trace` 資料來源尚未查明：`.spectra/touched/`（`spectra-archive` 的 SKILL.md 第 5 步稱之為 implementation tracking data）在本專案不存在，12 個 spectra skill 裡只有 `spectra-archive` 提到 `@trace`，`spectra-apply` 完全沒提。推測要透過桌面 App 或 `/spectra-apply` 實際實作任務才會產生，這 14 個 change 都是在 Spectra 接上之前手工完成的，所以沒有這份資料。
+「沒有連結」遠好過「錯誤的連結」——真的整理不出來就整段刪掉。
 
 另外注意：**CLI 沒有 `unarchive` 子指令**。`spectra archive` 輸出的「Snapshot created for unarchive support」指的是桌面 App 的功能。用 CLI archive 錯了只能靠 `git revert`，所以動手前確認狀態比較省事。
 
