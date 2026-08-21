@@ -35,3 +35,4 @@
 - [x] 5.11 修好共用元件 `AppSearchbar.vue` 自建立起就漏掉的 `IconSearch` 元素（`import` 與 `.appSearchbar__icon` 樣式都在、`input` 也保留 `padding-left: 2.5rem` 的空位，但 template 沒有渲染圖示）。驗證：`LibraryView` 與 `ImagePickerDialog` 的搜尋框同步出現放大鏡，且左內距不再是空白
 - [x] 5.12 `colors.spec.ts` 補三個測試涵蓋新的占比契約：占比對應像素數且加總為 1、相近色併入代表色不另立一項、`dominantColors` 與 `dominantColorShares` 的色碼順序一致。驗證：既有 5 個測試全部不動也全部通過
 - [ ] 5.13 向設計師確認 `tip` 第二行「偵測結果依 Logo 像素占比排序」的措辭：實作的排序是「面積開根號 x 飽和度權重 x 明度權重」的評分，面積是主項但不是唯一依據（既有測試「飽和度加權：小面積的鮮豔色勝過大面積的淡色背景」明確鎖住這個行為）。要嘛微調文案、要嘛改成純占比排序並調整該測試，兩者都不該由前端單方面決定
+- [x] 5.14 以 Figma `get_metadata` 取得四個分頁每個節點的實際座標與尺寸，逐格驗算間距後修正兩處：`page_head` 標題與副標的間距 2px 應為 4px、副標行高 19px 應為 17px（29 + 4 + 17 = 50，與設計稿的 1102x50 相符）；萃取色右側 `tip` 兩行文字誤設 `text-align: right`，設計稿中兩個 text 的 x 皆為 0，應靠左。驗證：Logo 區 83px、`row_extracted` 110px、`row_swatch` 92px、色票區 260px、視覺識別整段 489px、合規與授權整段 339px、文案風格整段 440px 皆與設計稿逐項相符
