@@ -122,7 +122,7 @@ Spectra 也支援 `spx/<change-name>` 分支隔離，以及 `spectra park <name>
 
 ### 每個 change 的檢查順序
 
-1. `spectra status <change>` — 確認 artifact 是否齊全
+1. `spectra status --change <change>` — 確認 artifact 是否齊全（注意 `status` 吃 `--change`，不是位置參數）
 2. `spectra analyze <change>` — 先處理矛盾、缺口、沒有對應 task 的 requirement
 3. `spectra drift <change>` — 確認程式檔案與 anchor 沒有失效
 4. 需求中途變動就更新同一個 change（ingest），**不要只改程式、也不要把舊 task 硬留成完成**
@@ -172,6 +172,17 @@ TBD - created by archiving change '<name>'. Update Purpose after archive.
     Where-Object Name -ne 'archive' |
     ForEach-Object { Write-Host "`n=== $($_.Name) ==="; spectra analyze $_.Name; spectra drift $_.Name }
   ```
+
+- 參數形式不一致，容易踩到：`status` 與 `instructions` 用 `--change <name>`，`analyze`／`drift`／`validate`／`archive` 用位置參數 `<name>`。寫錯會回 `error: unexpected argument`。
+
+| 指令                   | 形式                            |
+| ---------------------- | ------------------------------- |
+| `spectra status`       | `--change <name>`               |
+| `spectra instructions` | `<artifact-id> --change <name>` |
+| `spectra analyze`      | `<name>`                        |
+| `spectra drift`        | `<name>`                        |
+| `spectra validate`     | `<name>` 或 `--all`             |
+| `spectra archive`      | `<name>`                        |
 
 - `tools:` 目前只填 `claude`。實測填 `codex` / `gemini` 會被無聲忽略（`spectra update` 只回報 claude，也沒產生 `AGENTS.md` / `GEMINI.md`）。
 
