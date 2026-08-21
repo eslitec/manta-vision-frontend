@@ -55,9 +55,6 @@
           span.sources__label {{ t('library.source') }}
           button.chip(v-for="s in sources" :key="s.label" :aria-pressed="activeSource === s.value" :class="{ 'isActive': activeSource === s.value }" @click="activeSource = s.value") {{ s.label }}
         .assets__actions
-          AppButton(variant="primary" icon v-if="activeView.kind === 'folder'" @click="pickerOpen = true")
-            IconImagePlaceholder.assets__libraryIcon
-            span {{ t('library.addFromLibrary') }}
           AppButton(variant="primary" icon @click="uploadInput?.click()")
             IconUpload
             span {{ t('library.uploadImages') }}
@@ -112,13 +109,6 @@
 
   ImageEditorWorkspace(v-else :mode="activeTab")
 
-  ImagePickerDialog(
-    v-model:open="pickerOpen"
-    :multiple="true"
-    :title="t('library.pickerTitle', { folder: activeFolderName })"
-    @select-many="onAddFromLibrary"
-  )
-
   Teleport(to="body")
     .modal(v-if="moveDialogOpen" @click.self="moveDialogOpen = false")
       .modal__box(ref="moveDialogRef" role="dialog" aria-modal="true" aria-labelledby="move-dialog-title" tabindex="-1")
@@ -169,7 +159,6 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useAssets } from '@/composables/useAssets'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
-import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import AppButton from '@/components/AppButton.vue'
 import AppCheckbox from '@/components/AppCheckbox.vue'
 import AppSearchbar from '@/components/AppSearchbar.vue'
@@ -225,7 +214,6 @@ function setView(v: ActiveView) {
   activeView.value = v
   foldersOpen.value = false
 }
-const activeFolderName = computed(() => (activeView.value.kind === 'folder' ? activeView.value.name : ''))
 
 const tabs = computed(() =>
   ['library', 'edit', 'retouch'].map((value) => ({ value, label: t(`library.tabs.${value}`) })),
@@ -383,16 +371,6 @@ async function confirmDelete() {
 
 function downloadSelected() {
   // 目前素材沒有實際檔案 URL，先做畫面呈現；等後端提供真實檔案來源後再接上真正的下載行為
-}
-
-// 從圖庫（遠端資料庫）挑既有素材加入目前資料夾
-const pickerOpen = ref(false)
-async function onAddFromLibrary(picked: Asset[]) {
-  if (activeView.value.kind !== 'folder') return
-  await moveToFolder(
-    picked.map((a) => a.id),
-    activeView.value.name,
-  )
 }
 
 // 新增資料夾（行內輸入）
@@ -623,10 +601,6 @@ async function onUpload(e: Event) {
 .assets__actions {
   @include flex(flex-start, center, 0.75rem);
   margin-left: auto;
-}
-.assets__libraryIcon {
-  width: 1.25rem;
-  height: 1.25rem;
 }
 .assets__search {
   flex: 0 1 17.5rem;
