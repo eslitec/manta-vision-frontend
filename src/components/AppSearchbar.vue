@@ -1,6 +1,6 @@
 <template lang="pug">
 label.appSearchbar
-
+  IconSearch.appSearchbar__icon
   input.appSearchbar__input(
     v-model="model"
     type="search"

@@ -17,20 +17,70 @@
     .card__head
       h2 {{ t('brandSettings.tabs.basic') }}
     .field
-      label(for="brand-name") {{ t('brandSettings.fields.name') }} #[small {{ profile.name.length }} / 20]
+      label(for="brand-name")
+        span.field__labelWrap
+          span {{ t('brandSettings.fields.name') }}
+          span.field__required(aria-hidden="true") *
+          span.visuallyHidden {{ t('brandSettings.required') }}
+        small {{ profile.name.length }} / 20
       input#brand-name(v-model="profile.name" maxlength="20" :placeholder="t('brand.name')")
     .field
-      label(for="brand-positioning") {{ t('brandSettings.fields.positioning') }} #[small {{ profile.positioning.length }} / 30]
+      label(for="brand-positioning")
+        span.field__labelWrap
+          span {{ t('brandSettings.fields.positioning') }}
+          span.field__required(aria-hidden="true") *
+          span.visuallyHidden {{ t('brandSettings.required') }}
+        small {{ profile.positioning.length }} / 30
       input#brand-positioning(v-model="profile.positioning" maxlength="30" :placeholder="t('brandSettings.placeholders.positioning')")
     .field
-      label(for="brand-website") {{ t('brandSettings.fields.website') }}
+      label(for="brand-website")
+        span.field__labelWrap
+          span {{ t('brandSettings.fields.website') }}
+          span.field__optional {{ t('brandSettings.optional') }}
       input#brand-website(v-model="profile.website" inputmode="url" placeholder="www.rihan-select.com")
-    .field
-      label(for="brand-industry") {{ t('brandSettings.fields.industry') }}
-      .selectWrap
-        select#brand-industry(v-model="profile.industry")
-          option(v-for="item in industries" :key="item.value" :value="item.value") {{ item.label }}
-        IconChevronDown
+    .field.field--industry
+      label(for="brand-industry")
+        span.field__labelWrap
+          span {{ t('brandSettings.fields.industry') }}
+          span.field__required(aria-hidden="true") *
+          span.visuallyHidden {{ t('brandSettings.required') }}
+      //- 設計稿 dropdown_產業別（node 1139:716）有搜尋框、分組標頭、選中打勾與底部提示，
+      //- 原生 select 的 option 由作業系統繪製做不出來，因此與字型選單一樣自訂 listbox。
+      .industrySelect(ref="industrySelectEl")
+        button#brand-industry.industrySelect__trigger(
+          type="button"
+          aria-haspopup="listbox"
+          :aria-expanded="industryMenuOpen"
+          :class="{ isOpen: industryMenuOpen }"
+          @click="toggleIndustryMenu"
+        )
+          span.industrySelect__value {{ selectedIndustryLabel }}
+          IconChevronDown(:class="{ isUp: industryMenuOpen }")
+        .industryMenu(v-if="industryMenuOpen")
+          .industryMenu__search
+            AppSearchbar.industryMenu__searchbar(
+              v-model="industryQuery"
+              :label="t('brandSettings.industrySearchLabel')"
+              :placeholder="t('brandSettings.industrySearch')"
+            )
+          .industryMenu__scroll
+            .industryMenu__list(role="listbox" :aria-label="t('brandSettings.fields.industry')")
+              template(v-for="group in filteredIndustryGroups" :key="group.id")
+                .industryMenu__group {{ t(`brandSettings.industryGroups.${group.id}`) }}
+                button.industryMenu__item(
+                  v-for="option in group.options"
+                  :key="option"
+                  type="button"
+                  role="option"
+                  :aria-selected="option === profile.industry"
+                  :class="{ isSelected: option === profile.industry }"
+                  @click="selectIndustry(option)"
+                )
+                  span.industryMenu__name {{ t(`brandSettings.industries.${option}`) }}
+                  IconCheckCircle.industryMenu__check(v-if="option === profile.industry")
+              p.industryMenu__empty(v-if="!filteredIndustryGroups.length") {{ t('brandSettings.industryEmpty') }}
+            span.industryMenu__fade(aria-hidden="true")
+          p.industryMenu__foot {{ t('brandSettings.industryFoot') }}
 
   section#brand-panel-visual.card.card--visual(v-else-if="tab === 'visual'" role="tabpanel" aria-labelledby="brand-tab-visual")
     .card__head
@@ -129,13 +179,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useBrandStore } from '@/stores/brand'
 import AppButton from '@/components/AppButton.vue'
+import AppSearchbar from '@/components/AppSearchbar.vue'
 import AppTab from '@/components/AppTab.vue'
 import IconAlertTriangleFilled from '@/components/icons/IconAlertTriangleFilled.vue'
+import IconCheckCircle from '@/components/icons/IconCheckCircle.vue'
 import IconChevronDown from '@/components/icons/IconChevronDown.vue'
 import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
 import { extractColors } from '@/utils/colors'
@@ -151,12 +203,63 @@ const toneOptions = computed(() =>
   ['warm', 'literary', 'professional', 'playful', 'minimal', 'luxury'].map((key) => t(`brandSettings.tones.${key}`)),
 )
 const colorLabels = computed(() => ['primary', 'secondary', 'accent'].map((key) => t(`brandSettings.color.${key}`)))
-const industries = computed(() =>
-  ['服飾 · 生活選物', '美妝保養', '食品餐飲', '其他'].map((value, index) => ({
-    value,
-    label: t(`brandSettings.industries.${index}`),
-  })),
-)
+// 22 個產業別分五組，逐項對齊 Figma dropdown_產業別（node 1139:716）。
+// 存進 BrandProfile.industry 的是這裡的英文 id，不是翻譯後的標籤，避免語系切換改變資料。
+const industryGroups = [
+  {
+    id: 'retail',
+    options: ['apparel', 'beauty', 'lifestyle', 'electronics', 'jewelry', 'baby', 'sports', 'pet'],
+  },
+  { id: 'food', options: ['restaurant', 'groceryGift', 'beverage'] },
+  { id: 'health', options: ['medicalAesthetics', 'pharmacy', 'fitness'] },
+  { id: 'service', options: ['travel', 'education', 'salon', 'professional', 'realEstate'] },
+  { id: 'other', options: ['manufacturing', 'nonprofit', 'other'] },
+] as const
+const industryIds = industryGroups.flatMap((group) => group.options as readonly string[])
+const industryMenuOpen = ref(false)
+const industryQuery = ref('')
+const industrySelectEl = ref<HTMLElement | null>(null)
+const selectedIndustryLabel = computed(() => {
+  const current = profile.value?.industry ?? ''
+  // 舊資料可能存的是中文標籤而非 id，找不到對應 key 時直接顯示原值，不要吐出 i18n key
+  return industryIds.includes(current) ? t(`brandSettings.industries.${current}`) : current
+})
+const filteredIndustryGroups = computed(() => {
+  const keyword = industryQuery.value.trim().toLowerCase()
+  return industryGroups
+    .map((group) => ({
+      id: group.id,
+      options: (group.options as readonly string[]).filter(
+        (option) => !keyword || t(`brandSettings.industries.${option}`).toLowerCase().includes(keyword),
+      ),
+    }))
+    .filter((group) => group.options.length > 0)
+})
+async function toggleIndustryMenu() {
+  industryMenuOpen.value = !industryMenuOpen.value
+  if (!industryMenuOpen.value) return
+  industryQuery.value = ''
+  await nextTick()
+  industrySelectEl.value?.querySelector<HTMLInputElement>('input[type="search"]')?.focus()
+}
+function selectIndustry(id: string) {
+  if (profile.value) profile.value.industry = id
+  industryMenuOpen.value = false
+}
+function onIndustryPointerDown(event: MouseEvent) {
+  if (!industryMenuOpen.value) return
+  if (industrySelectEl.value?.contains(event.target as Node)) return
+  industryMenuOpen.value = false
+}
+function onIndustryKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && industryMenuOpen.value) industryMenuOpen.value = false
+}
+document.addEventListener('pointerdown', onIndustryPointerDown)
+document.addEventListener('keydown', onIndustryKeydown)
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onIndustryPointerDown)
+  document.removeEventListener('keydown', onIndustryKeydown)
+})
 const addressingOptions = computed(() =>
   ['你', '您', '親愛的顧客'].map((value, index) => ({ value, label: t(`brandSettings.addressing.${index}`) })),
 )
@@ -359,6 +462,27 @@ async function onSave() {
       font-weight: 400;
       line-height: normal;
     }
+
+    // 必填星號與「選填」標記（對齊 Figma sec_品牌基本資料，node 239:2775 的 label_wrap）
+    .field__labelWrap {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .field__required {
+      color: #ff6148;
+      font-size: 0.875rem;
+      font-weight: 500;
+      line-height: normal;
+    }
+
+    .field__optional {
+      color: $gray-100;
+      font-size: 0.6875rem;
+      font-weight: 500;
+      line-height: normal;
+    }
   }
 
   input:not([type='color']):not([type='file']),
@@ -395,6 +519,187 @@ async function onSave() {
     color: $dark-blue-gray;
     line-height: 1.25rem;
     resize: none;
+  }
+}
+
+// 產業別下拉面板要溢出卡片，因此這條路徑上的 overflow 不能是 hidden
+.card--basic {
+  overflow: visible;
+}
+
+.field--industry {
+  overflow: visible;
+}
+
+// 對齊 Figma dropdown_產業別（node 1139:716，420 × 325）
+.industrySelect {
+  position: relative;
+
+  &__trigger {
+    display: flex;
+    width: 100%;
+    height: 2.75rem;
+    align-items: center;
+    padding: 0 0.75rem;
+    border: 0;
+    border-radius: 8px;
+    background: $blue-light;
+    color: $dark-blue-gray;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 400;
+    gap: 0.5rem;
+    line-height: 1.25rem;
+    text-align: left;
+
+    svg {
+      width: 1.25rem;
+      height: 1.25rem;
+      flex: none;
+      color: $dark-blue-gray;
+      pointer-events: none;
+      transition: transform 0.15s ease;
+    }
+
+    svg.isUp {
+      transform: rotate(180deg);
+    }
+
+    &:focus-visible {
+      outline: 2px solid $yellow;
+      outline-offset: 2px;
+    }
+  }
+
+  &__value {
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.industryMenu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  width: 26.25rem;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid $gray;
+  border-radius: 0.625rem;
+  background: $white;
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.16);
+
+  &__search {
+    padding: 0.75rem 0.875rem 0.625rem;
+  }
+
+  &__searchbar {
+    width: 100%;
+  }
+
+  &__scroll {
+    position: relative;
+  }
+
+  &__list {
+    display: flex;
+    height: 14.75rem;
+    flex-direction: column;
+    padding: 0 0.5rem 0.5rem;
+    gap: 0.125rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  &__group {
+    color: $gray-100;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: normal;
+  }
+
+  &__item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    padding: 0.4375rem 0.625rem;
+    border: 0;
+    border-radius: 0.375rem;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+    font-family: inherit;
+    gap: 0.5rem;
+    text-align: left;
+
+    &.isSelected {
+      background: $blue-light;
+    }
+
+    // 設計稿沒有畫 hover 狀態，這是實作補的
+    &:hover:not(.isSelected) {
+      background: #f7f8fc;
+    }
+
+    &:focus-visible {
+      outline: 2px solid $yellow;
+      outline-offset: -2px;
+    }
+  }
+
+  &__name {
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
+    color: $blue-dark-500;
+    font-size: 0.8125rem;
+    font-weight: 400;
+    line-height: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__item.isSelected &__name {
+    font-weight: 500;
+  }
+
+  &__check {
+    width: 0.9375rem;
+    height: 0.9375rem;
+    flex: none;
+  }
+
+  &__empty {
+    padding: 0.4375rem 0.625rem;
+    margin: 0;
+    color: $gray-100;
+    font-size: 0.8125rem;
+    line-height: normal;
+  }
+
+  // 漸層遮罩要放在捲動容器之外，否則會跟著內容一起捲走
+  &__fade {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 1.375rem;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0), $white);
+    pointer-events: none;
+  }
+
+  &__foot {
+    padding: 0.625rem 0.875rem 0.75rem;
+    border-top: 1px solid $gray;
+    margin: 0;
+    color: $gray-100;
+    font-size: 0.6875rem;
+    line-height: normal;
   }
 }
 

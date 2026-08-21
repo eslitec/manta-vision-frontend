@@ -79,7 +79,7 @@ const db = {
     name: '日安選物',
     positioning: '嚴選日常質感選物，讓生活有溫度',
     website: 'www.rihan-select.com',
-    industry: '服飾 · 生活選物',
+    industry: 'apparel',
     colors: [
       { label: '主色', hex: '#2E3567' },
       { label: '輔色', hex: '#A5C8E6' },

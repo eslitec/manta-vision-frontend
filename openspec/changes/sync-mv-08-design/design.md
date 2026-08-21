@@ -61,6 +61,37 @@ dropdown_產業別    420 x 325
 
 指派主色／輔色／點綴色的互動，設計稿是 `tip` 文字說明，實作用按鈕達成；功能等價，**維持實作現況不改**。
 
-### textarea 寬度存疑，暫不依設計稿實作
+### textarea 寬度：原判定有誤，實作早已相符（2026-08-21 更正）
 
-「避免使用的字詞」（200x80）與「肖像權同意條款模板」（200x88）在設計稿都只有 200px 寬，但容器為 1054，且同頁其他 `input` 皆為滿版。判斷為設計稿未調整元件寬度，非實作錯誤，**維持 `width: 100%`**，待與設計師確認後再定案。
+初次比對時記為「實作是 `width: 100%`，與設計稿的 200px 不符」，**此判定錯誤**。實際查核 `BrandSettingsView.vue` 的樣式：
+
+```scss
+.field textarea {
+  width: 12.5rem;
+  max-width: 100%;
+} // 12.5rem = 200px
+.card--copy textarea {
+  height: 5rem;
+} // 80px
+.card--compliance textarea {
+  height: 5.5rem;
+} // 88px
+```
+
+兩個 textarea 已經是 200x80 與 200x88，與設計稿完全一致；`@media (max-width: $bp-md)` 下才改為 `width: 100%`，屬於手機版的合理處理。**不需要任何改動，也不需要向設計師確認。** 此段保留錯誤紀錄，避免日後有人再依錯誤結論去「修正」成滿版。
+
+## 2026-08-21 產業別下拉：實作決策
+
+依 `dropdown_產業別`（node `1139:716`）實作為自訂 listbox 後的取捨，逐項記錄：
+
+- **面板寬度取設計稿的 420px（`26.25rem`）並加 `max-width: 100%`。** 設計稿的下拉是獨立元件、寬 420，而欄位本身在 1102 寬的卡片裡是滿版；不把面板拉成滿版，因為 22 個短選項在 1054 寬的面板裡會非常空。`max-width: 100%` 讓手機版自動收斂。
+- **`BrandProfile.industry` 改存英文 id（`apparel` / `beauty` …），不存翻譯後的中文標籤。** 舊值是中文字面量，切換語系時資料語意會漂移；改 id 後同時符合 `ui-localization` 的 Requirement「Translated labels do not control behavior」。`mock.ts` 的預設值一併由 `'服飾 · 生活選物'` 改為 `'apparel'`。`selectedIndustryLabel` 對找不到對應 id 的舊值直接顯示原字串，不會吐出 i18n key。
+- **`BrandProfile` 型別不需擴充。** `industry: string` 原本就容得下 id，這次沒有新增欄位。
+- **搜尋框沿用共用元件 `AppSearchbar`。** 其既有樣式（高 32、圓角 18、border `$gray`、placeholder `$gray-100`、字級 14）與設計稿 `field_搜尋產業` 完全相同，只需覆寫寬度為 100%。
+- **順手修好 `AppSearchbar` 的放大鏡圖示。** 該元件自建立起（`49a8a17`）template 就漏了 `IconSearch` 這一行，但 `import` 與 `.appSearchbar__icon`（`left: 0.75rem`）樣式都在、`input` 也保留了 `padding-left: 2.5rem` 的空位——等於一直空著一塊。補回後正好對上設計稿的「圖示 20 + gap 8 + 左內距 12 = 文字起點 40px」。此修正同時影響 `LibraryView.vue` 與 `ImagePickerDialog.vue` 的搜尋框。
+- **搜尋無結果時的提示是實作新增的。** 設計稿沒有畫空狀態，但 236px 的清單區全空會像壞掉，因此比照 `library.empty`（「沒有符合的素材」）新增 `brandSettings.industryEmpty`（「沒有符合的產業別」）。底部 `dd_foot` 的「找不到適合的？選「其他」」維持設計稿原文不動。
+- **收合狀態的觸發鈕外觀維持原樣**（高 2.75rem、圓角 8、底色 `$blue-light`、文字 `$dark-blue-gray`）。那是任務 2.1 已對齊過的欄位樣式，本次只換開啟後的面板，不順手改已驗收的部分。
+- **`.card--basic` 與 `.field--industry` 的 `overflow` 由 `hidden` 改為 `visible`。** 否則 325px 高的面板會被卡片裁掉。面板 `z-index: 20`，頁面其餘元素都沒有設 z-index，不會被蓋住。
+- **hover 底色 `#f7f8fc` 是實作補的**，設計稿沒有畫 hover 狀態；與字型選單一致。
+- **打勾沿用 `IconCheckCircle`**，設計稿的 `ic_ok` 在此處是 15x15，字型選單是 14x14，同一圖形不同匯出尺寸，SVG 縮放後等價。
+- **`scroll_fade` 放在捲動容器之外。** 與字型選單同一個理由：`position: absolute` 放在 `overflow: auto` 容器內會跟著內容捲走。
