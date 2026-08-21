@@ -63,3 +63,28 @@ section ③（MV-09 `566:4717`／09b `608:5147`／09c `605:4963`）掛在圖庫�
 ## Risks / Trade-offs
 
 - **anchor 覆蓋率低，drift 偵測形同盲區。** sync-mv-09-design 目前僅 6 個 anchor 涵蓋整個 `ImageEditorWorkspace.vue`，本次字型選單大改（3 個 commit）完全沒被 `spectra drift` 抓到。 → Mitigation：為 `ImageEditorWorkspace.vue` 的字型選單、圖層面板、AI 修圖、裁切四塊各補一個 anchor（見 tasks 4.3）。
+
+## 2026-08-21 串接扣款：把「另存」與「扣款」分開
+
+原本 `api.editImage` 一支端點同時承擔「去背／修圖」與「另存為新素材」兩件事，而它其實沒有扣任何飼料——畫面上的 8 顆是寫死在 template 裡的。設計稿的成本說明寫得很清楚：**「目前只有背景移除會扣飼料，且在執行當下即扣；加入物件、文字、裁切、淡化皆不扣，另存也不再扣。」** 依這句話把端點拆開：
+
+| 端點                    | 做什麼                                     | 扣款         |
+| ----------------------- | ------------------------------------------ | ------------ |
+| `getEditorPricing()`    | 回傳價目表（工具、修飾項目、指令式基本費） | 否           |
+| `applyEditTool(tool)`   | 編輯畫布套用一次 AI 工具                   | 是，執行當下 |
+| `retouchImage(req)`     | AI 修圖                                    | 是，生成當下 |
+| `editImage(name, opts)` | 建立編輯產物（非破壞）                     | **否**       |
+
+### 決策
+
+- **金額一律由後端算，不採信前端傳來的成本。** `retouchImage` 只收 `method` 與 `options`，自己查價目表加總後扣款，回傳實際金額。前端畫面上的「預估消耗」就只是預估，最終以回傳值為準（`lastRetouchCost` 改吃 `result.cost`）。
+- **價目表也由後端出。** 原本 `retouchOptions` 的成本是 `index === 2 ? 0 : index === 3 ? 5 : 8` 這種位置推算，工具列的 8 顆更是直接寫在 template。改為 `getEditorPricing()` 回傳後填入，符合 CLAUDE.md 的「前端不得硬寫範例數字」。
+- **背景移除同一張素材只扣一次。** 點工具按鈕＝執行，但重複點不重複扣（`usedTools` 已有該工具就跳過）。換來源素材時清空 `usedTools`，因為扣款紀錄屬於前一張圖。
+- **「本次編輯已使用的 AI 工具」面板改為資料驅動。** 原本寫死一列「背景移除 8 顆」＋合計 8 顆，等於不論使用者做了什麼都長一樣。改為依 `usedTools` 渲染，還沒用過任何 AI 工具時整塊不顯示——**設計稿沒有畫這個空狀態**，但顯示一個空的「已使用」清單更奇怪。
+- **錯誤處理沿用既有慣例。** `isInsufficientFeed(e)` → `errors.insufficientFeed`，其餘 → `errors.generationFailed`，不新增文案。錯誤以 `role="alert"` 呈現在對應面板內。
+- **指令式修圖的項目過濾前後端各做一次。** 前端只送該修圖方式開放的項目，後端 `retouchImage` 也會再濾一次——前端過濾是為了預估金額正確，後端過濾是因為不能信任前端。
+
+### 已知落差
+
+- **扣款目前只發生在 mock。** `api` 指向 `mockApi`，`deduct()` 改的是記憶體裡的 `db.feedBalance`；後端就緒後把這三支換成 http 呼叫即可，介面不變。
+- **背景移除沒有真的去背。** 這一版只做扣款與狀態，畫布上的影像仍是佔位圖——與 `downloadEditedCopy` 的 MOCK 註記同一個層次的限制。

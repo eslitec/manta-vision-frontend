@@ -1,12 +1,17 @@
 import type {
   AiModel,
+  AppliedEditTool,
   Asset,
   BrandProfile,
+  EditorPricing,
+  EditorToolKey,
   GeneratedImage,
   GeneratedPost,
   GenerateImageReq,
   GeneratePostReq,
   Metrics,
+  RetouchReq,
+  RetouchResult,
   UsageSummary,
   VideoJob,
   VideoJobReq,
@@ -99,6 +104,14 @@ const db = {
   >(),
 }
 
+// 編輯器價目表（對齊 MV-09 工具列與 MV-09b 修飾項目的設計稿標價）
+const EDITOR_PRICING: EditorPricing = {
+  tools: { remove: 8, object: 0, fade: 0, text: 0, crop: 0 },
+  retouchOptions: { removeObjects: 8, repair: 8, lighting: 0, upscale: 5 },
+  commandBase: 16,
+}
+const COMMAND_RETOUCH_OPTIONS = ['lighting', 'upscale']
+
 function deduct(cost: number) {
   if (db.feedBalance < cost) throw new Error('INSUFFICIENT_FEED')
   db.feedBalance -= cost
@@ -182,7 +195,40 @@ export const mockApi = {
     return a
   },
 
-  // POST /images/edit（去背／修圖，非破壞→新素材）
+  // GET /editor/pricing — 編輯器價目表（MV-09 工具列與 MV-09b 修飾項目共用同一份）
+  async getEditorPricing(): Promise<EditorPricing> {
+    await delay(120)
+    return {
+      tools: { ...EDITOR_PRICING.tools },
+      retouchOptions: { ...EDITOR_PRICING.retouchOptions },
+      commandBase: EDITOR_PRICING.commandBase,
+    }
+  },
+
+  // POST /images/edit/tool — 編輯畫布套用一次 AI 工具，在執行當下就扣款。
+  // 目前只有背景移除有價；加入物件／文字／淡化／裁切皆為 0，對齊設計稿的成本說明。
+  async applyEditTool(tool: EditorToolKey): Promise<AppliedEditTool> {
+    await delay(500)
+    const cost = EDITOR_PRICING.tools[tool] ?? 0
+    if (cost > 0) deduct(cost)
+    return { tool, cost }
+  },
+
+  // POST /images/retouch — AI 修圖。成本一律由這裡依價目表計算，不採用前端傳來的金額。
+  async retouchImage(req: RetouchReq): Promise<RetouchResult> {
+    await delay(900)
+    // 指令式修圖只開放光線校正與放大兩個加購項，其餘一律忽略
+    const allowed = req.method === 'command' ? COMMAND_RETOUCH_OPTIONS : Object.keys(EDITOR_PRICING.retouchOptions)
+    const options = req.options.filter((key) => allowed.includes(key))
+    const cost =
+      (req.method === 'command' ? EDITOR_PRICING.commandBase : 0) +
+      options.reduce((total, key) => total + (EDITOR_PRICING.retouchOptions[key] ?? 0), 0)
+    if (cost > 0) deduct(cost)
+    return { method: req.method, options, cost }
+  },
+
+  // POST /images/edit（另存編輯產物，非破壞→新素材）
+  // 另存本身不扣飼料——扣款發生在 applyEditTool／retouchImage 的執行當下。
   // opts.folder：使用者選定的存放位置（我的資料夾）；opts.keepLayers：是否保留可再編輯的圖層資訊
   async editImage(name: string, opts?: { folder?: string; keepLayers?: boolean }): Promise<Asset> {
     await delay(600)

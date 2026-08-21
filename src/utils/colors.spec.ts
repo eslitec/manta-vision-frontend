@@ -41,15 +41,26 @@ describe('dominantColors', () => {
     expect(out).not.toContain('#FFFFFF')
   })
 
-  it('飽和度加權：小面積的鮮豔色勝過大面積的淡色背景', () => {
+  // 「挑哪些色」看評分（飽和度加權），「怎麼排序」看像素占比——兩件事分開測。
+  it('飽和度加權：名額有限時，小面積的鮮豔色勝過大面積的淡色背景', () => {
     const dull: [number, number, number, number] = [200, 205, 215, 255] // 大面積淡灰藍
     const vivid: [number, number, number, number] = [220, 20, 30, 255] // 小面積鮮紅
     const data = pixels([
       ...Array<[number, number, number, number]>(20).fill(dull),
       ...Array<[number, number, number, number]>(5).fill(vivid),
     ])
-    const out = dominantColors(data)
-    expect(out[0]).toBe('#DC141E') // 鮮紅排第一，即使像素較少
+    expect(dominantColors(data, 1)).toEqual(['#DC141E']) // 只留一席時選鮮紅，即使像素較少
+  })
+
+  it('回傳順序依像素占比由大到小，與挑選用的評分無關', () => {
+    const dull: [number, number, number, number] = [200, 205, 215, 255]
+    const vivid: [number, number, number, number] = [220, 20, 30, 255]
+    const data = pixels([
+      ...Array<[number, number, number, number]>(20).fill(dull),
+      ...Array<[number, number, number, number]>(5).fill(vivid),
+    ])
+    // 兩色都入選，但淡灰藍占 20/25，排在鮮紅之前
+    expect(dominantColors(data, 6)).toEqual(['#C8CDD7', '#DC141E'])
   })
 
   it('限制回傳數量', () => {
