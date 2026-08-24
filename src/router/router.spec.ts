@@ -3,6 +3,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 import { routes } from './routes'
 import { useSessionStore } from '@/stores/session'
+import { fakeSession } from '@/test/factories'
 
 describe('generate routes', () => {
   const router = createRouter({
@@ -61,7 +62,7 @@ describe('auth guard', () => {
   it('已登入訪問 /login 帶 redirect 時導向該路徑', async () => {
     const router = createTestRouter()
     const session = useSessionStore()
-    session.session = { username: 'mavis', displayName: 'Mavis' }
+    session.session = fakeSession()
     await router.push('/login?redirect=/library')
     expect(router.currentRoute.value.path).toBe('/library')
   })
@@ -69,7 +70,7 @@ describe('auth guard', () => {
   it('已登入訪問 /login 沒有 redirect 時導向首頁', async () => {
     const router = createTestRouter()
     const session = useSessionStore()
-    session.session = { username: 'mavis', displayName: 'Mavis' }
+    session.session = fakeSession()
     await router.push('/login')
     expect(router.currentRoute.value.path).toBe('/')
   })
@@ -77,7 +78,7 @@ describe('auth guard', () => {
   it('已登入訪問受保護路由正常放行', async () => {
     const router = createTestRouter()
     const session = useSessionStore()
-    session.session = { username: 'mavis', displayName: 'Mavis' }
+    session.session = fakeSession()
     await router.push('/library')
     expect(router.currentRoute.value.name).toBe('library')
   })

@@ -29,6 +29,8 @@ import { useBrandStore } from './brand'
 import { useConsentStore } from './consent'
 import { useModelsStore } from './models'
 import { useSessionStore } from './session'
+import { ctx, clearAuth } from '@/api/http'
+import { fakeSession } from '@/test/factories'
 
 // environment: 'node' 沒有原生 localStorage，用記憶體 Map 塞一個最小 shim
 function createLocalStorageStub() {
@@ -132,13 +134,30 @@ describe('models store', () => {
 })
 
 describe('session store', () => {
+  // session store 不只改自己的 state，還會把兩把鑰匙灌進 http 層（模組層級的
+  // 單例），所以每個測試前要清掉，否則會互相污染。
+  beforeEach(() => {
+    clearAuth()
+  })
+
   it('登入成功寫入 session 與 localStorage', async () => {
-    login.mockResolvedValue({ username: 'mavis', displayName: 'Mavis' })
+    const session0 = fakeSession()
+    login.mockResolvedValue(session0)
     const session = useSessionStore()
     await session.login('mavis', 'mavis123')
-    expect(session.session).toEqual({ username: 'mavis', displayName: 'Mavis' })
+    expect(session.session).toEqual(session0)
     expect(session.isAuthenticated).toBe(true)
-    expect(localStorage.getItem('mv_session')).toBe(JSON.stringify({ username: 'mavis', displayName: 'Mavis' }))
+    expect(localStorage.getItem('mv_session')).toBe(JSON.stringify(session0))
+  })
+
+  it('登入成功會把兩把鑰匙灌進 http 層', async () => {
+    // 最容易漏的一步。漏了的話畫面看起來是登入的，但每一支 API 都不帶
+    // Authorization，於是全部 401——而且要等到下一次呼叫才會發作。
+    login.mockResolvedValue(fakeSession({ token: 'jwt-abc', botId: 'bot-123' }))
+    const session = useSessionStore()
+    await session.login('mavis', 'mavis123')
+    expect(ctx.token).toBe('jwt-abc')
+    expect(ctx.botId).toBe('bot-123')
   })
 
   it('帳密錯誤時 session 維持 null 且呼叫端會 reject', async () => {
@@ -149,21 +168,67 @@ describe('session store', () => {
     expect(session.isAuthenticated).toBe(false)
   })
 
-  it('restore 從預先塞好的 localStorage 值還原 session', () => {
-    localStorage.setItem('mv_session', JSON.stringify({ username: 'mavis', displayName: 'Mavis' }))
+  it('restore 從預先塞好的 localStorage 值還原 session 並補上鑰匙', () => {
+    const saved = fakeSession({ token: 'jwt-abc', botId: 'bot-123' })
+    localStorage.setItem('mv_session', JSON.stringify(saved))
     const session = useSessionStore()
     session.restore()
-    expect(session.session).toEqual({ username: 'mavis', displayName: 'Mavis' })
+    expect(session.session).toEqual(saved)
     expect(session.isAuthenticated).toBe(true)
+    expect(ctx.token).toBe('jwt-abc')
   })
 
-  it('logout 清空 session 與 localStorage', async () => {
-    login.mockResolvedValue({ username: 'mavis', displayName: 'Mavis' })
+  it('restore 遇到過期的憑證要丟掉，不能還原', () => {
+    // 憑證沒有續期機制。還原一張過期的 token 只會讓每支 API 都 401，
+    // 使用者看到的是「登入著但什麼都讀不到」的壞掉畫面，比直接要他重登更糟。
+    localStorage.setItem('mv_session', JSON.stringify(fakeSession({ expiresAt: Date.now() - 1 })))
+    const session = useSessionStore()
+    session.restore()
+    expect(session.session).toBeNull()
+    expect(localStorage.getItem('mv_session')).toBeNull()
+    expect(ctx.token).toBe('')
+  })
+
+  it('restore 遇到壞掉的 JSON 不會炸，直接清掉', () => {
+    localStorage.setItem('mv_session', '{not json')
+    const session = useSessionStore()
+    expect(() => session.restore()).not.toThrow()
+    expect(session.session).toBeNull()
+    expect(localStorage.getItem('mv_session')).toBeNull()
+  })
+
+  it('logout 清空 session、localStorage 與鑰匙', async () => {
+    login.mockResolvedValue(fakeSession({ token: 'jwt-abc', botId: 'bot-123' }))
     logout.mockResolvedValue(undefined)
     const session = useSessionStore()
     await session.login('mavis', 'mavis123')
     await session.logout()
     expect(session.session).toBeNull()
     expect(localStorage.getItem('mv_session')).toBeNull()
+    expect(ctx.token).toBe('')
+    expect(ctx.botId).toBe('')
+  })
+
+  it('後端打不通時仍然在前端登出', async () => {
+    // 不然使用者會卡在「按了登出卻還是登入中」，而且他通常正是因為
+    // 後端怪怪的才想登出。
+    login.mockResolvedValue(fakeSession())
+    logout.mockRejectedValue(new Error('NETWORK_ERROR'))
+    const session = useSessionStore()
+    await session.login('mavis', 'mavis123')
+    await expect(session.logout()).rejects.toThrow('NETWORK_ERROR')
+    expect(session.session).toBeNull()
+    expect(localStorage.getItem('mv_session')).toBeNull()
+  })
+
+  it('forceLogout 清乾淨但不打 /auth/logout', async () => {
+    // token 已經失效了，再打一次只會再收到一次 401。
+    login.mockResolvedValue(fakeSession())
+    const session = useSessionStore()
+    await session.login('mavis', 'mavis123')
+    session.forceLogout()
+    expect(session.session).toBeNull()
+    expect(ctx.token).toBe('')
+    expect(logout).not.toHaveBeenCalled()
   })
 })
