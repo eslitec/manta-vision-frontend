@@ -18,7 +18,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     () => tasks.value.filter((t) => t.status === 'pending' || t.status === 'processing').length,
   )
   const unreadCount = computed(
-    () => tasks.value.filter((t) => (t.status === 'succeeded' || t.status === 'failed') && !t.read).length,
+    () => tasks.value.filter((t) => (t.status === 'done' || t.status === 'failed') && !t.read).length,
   )
 
   function showToast(task: GenerationTask, kind: 'done' | 'failed') {
@@ -53,7 +53,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
       t.status = j.status
       // mock：processing 期間讓進度平滑往上爬（真實後端應回傳實際百分比）
       t.progress = Math.max(0, Math.min(100, j.progress))
-      if (j.status === 'succeeded') {
+      if (j.status === 'done') {
         clearTimer(taskId)
         t.progress = 100
         t.doneAt = Date.now()
@@ -108,7 +108,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     tasks.value.unshift(task)
     try {
       const result = await run()
-      task.status = 'succeeded'
+      task.status = 'done'
       task.progress = 100
       task.doneAt = Date.now()
       task.read = false

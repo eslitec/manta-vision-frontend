@@ -20,6 +20,8 @@ export const API_ERROR_CODES = {
   NOT_FOUND: 'NOT_FOUND',
   RATE_LIMITED: 'RATE_LIMITED',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
+  // 飼料（點數）不足；付費端點尚未上線，先收錄進碼表避免之後又漏對齊
+  INSUFFICIENT_FEEDS: 'INSUFFICIENT_FEEDS',
 } as const
 
 /**
