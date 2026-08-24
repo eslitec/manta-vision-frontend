@@ -164,6 +164,17 @@ export interface RegisterReq {
 export interface Session {
   username: string
   displayName: string
+  /** 後端簽發的存取憑證。假後端模式下為空字串——空的就不會送出 Authorization */
+  token: string
+  /** 目前操作的機器人；每支 bot-scoped API 都要帶（`X-Bot-Id`） */
+  botId: string
+  /** 後端回的角色（開帳號的人是 `admin`） */
+  role: string
+  /**
+   * 憑證到期的**絕對時間**（毫秒）。後端回的是剩餘秒數，這裡換算成絕對時間，
+   * 重新整理後才判斷得出來還有沒有效——憑證沒有續期機制，過期就是要重新登入。
+   */
+  expiresAt: number
 }
 
 export type { Asset }

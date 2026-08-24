@@ -36,7 +36,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
-import { isUsernameTaken } from '@/utils/error'
+import { displayMessage, isUsernameTaken } from '@/utils/error'
 import AppButton from '@/components/AppButton.vue'
 import mantagoLogoUrl from '@/assets/images/mantago-logo.svg'
 
@@ -78,8 +78,9 @@ async function submit() {
     await session.register(username.value.trim(), password.value)
     router.push('/')
   } catch (e) {
-    if (isUsernameTaken(e)) fieldError.value = t('errors.usernameTaken')
-    else throw e
+    // 同 LoginView：帳號被用走以外的錯也要顯示，不能靜默失敗。
+    // 後端的欄位驗證（密碼超過 72 bytes 之類）訊息就是從這裡出來的。
+    fieldError.value = isUsernameTaken(e) ? t('errors.usernameTaken') : displayMessage(e, t('errors.submitFailed'))
   }
 }
 </script>

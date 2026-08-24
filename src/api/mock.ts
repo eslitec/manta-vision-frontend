@@ -28,6 +28,20 @@ let seq = 100
 const uid = (p: string) => `${p}_${++seq}`
 
 // demo-only credentials，mock 用；對齊 topbar 顯示的 Mavis／日安選物
+// 假後端沒有真的憑證：token 留空，http 層就不會送出 Authorization。
+// expiresAt 仍給合理的值，讓「還原時檢查過期」那段在兩種模式下都走得到。
+const MOCK_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000
+function mockSession(username: string, displayName: string): Session {
+  return {
+    username,
+    displayName,
+    token: '',
+    botId: '',
+    role: 'admin',
+    expiresAt: Date.now() + MOCK_SESSION_TTL_MS,
+  }
+}
+
 const DEMO_USERNAME = 'mavis'
 const DEMO_PASSWORD = 'mavis123'
 
@@ -412,7 +426,7 @@ export const mockApi = {
     await delay(400)
     const user = db.users.get(username)
     if (!user || user.password !== password) throw new Error('INVALID_CREDENTIALS')
-    const session: Session = { username, displayName: user.displayName }
+    const session = mockSession(username, user.displayName)
     db.session = session
     return session
   },
@@ -426,7 +440,7 @@ export const mockApi = {
     await delay(400)
     if (db.users.has(username)) throw new Error('USERNAME_TAKEN')
     db.users.set(username, { password, displayName: username })
-    const session: Session = { username, displayName: username }
+    const session = mockSession(username, username)
     db.session = session
     return session
   },

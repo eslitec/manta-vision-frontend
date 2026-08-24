@@ -300,7 +300,17 @@ describe('肖像同意', () => {
 describe('登入／登出', () => {
   it('正確帳密回傳 session', async () => {
     const session = await api.login('mavis', 'mavis123')
-    expect(session).toEqual({ username: 'mavis', displayName: 'Mavis' })
+    expect(session).toMatchObject({ username: 'mavis', displayName: 'Mavis' })
+  })
+
+  it('假後端的 session 有 token 與 botId 欄位，但值是空的', () => {
+    // 形狀要跟真後端一致，不然切過去才會發現有欄位沒填。
+    // 值刻意留空字串：http 層看到空的就不送 header，符合「假模式不打真後端」。
+    return api.login('mavis', 'mavis123').then((session) => {
+      expect(session.token).toBe('')
+      expect(session.botId).toBe('')
+      expect(session.expiresAt).toBeGreaterThan(Date.now())
+    })
   })
 
   it('密碼錯誤時擲出 INVALID_CREDENTIALS', async () => {
