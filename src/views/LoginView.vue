@@ -1,11 +1,7 @@
 <template lang="pug">
 .loginView
   form.loginView__panel(@submit.prevent="submit")
-    .loginView__brand
-      span.loginView__avatar
-      .loginView__brandText
-        strong {{ t('brand.name') }}
-        small Manta Vision
+    img.loginView__logo(:src="mantagoLogoUrl" alt="MantaGO")
     h1.loginView__title {{ t('auth.title') }}
     label.loginView__field
       span.loginView__fieldLabel {{ t('auth.usernameLabel') }}
@@ -39,6 +35,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
 import { isInvalidCredentials } from '@/utils/error'
 import AppButton from '@/components/AppButton.vue'
+import mantagoLogoUrl from '@/assets/images/mantago-logo.svg'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -67,6 +64,10 @@ async function submit() {
   @include flex(center, center);
   min-height: 100vh;
   padding: 1.5rem;
+  background-image: url('@/assets/images/login-bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 
   &__panel {
     display: flex;
@@ -80,32 +81,9 @@ async function submit() {
     box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2);
   }
 
-  &__brand {
-    @include flex(flex-start, center, 0.75rem);
-  }
-
-  &__avatar {
-    width: 2.5rem;
-    height: 2.5rem;
-    flex-shrink: 0;
-    border-radius: 50%;
-    background: $blue-dark-500;
-  }
-
-  &__brandText {
-    display: flex;
-    flex-direction: column;
-    color: $blue-dark-500;
-
-    strong {
-      font-size: 1rem;
-      font-weight: 700;
-    }
-
-    small {
-      font-size: 0.75rem;
-      color: $gray-100;
-    }
+  &__logo {
+    width: 8.125rem;
+    height: 2.25rem;
   }
 
   &__title {
