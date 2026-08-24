@@ -136,7 +136,8 @@ const EDITOR_PRICING: EditorPricing = {
 const COMMAND_RETOUCH_OPTIONS = ['lighting', 'upscale']
 
 function deduct(cost: number) {
-  if (db.feedBalance < cost) throw new Error('INSUFFICIENT_FEED')
+  // 錯誤碼跟後端碼表對齊：INSUFFICIENT_FEEDS（有 S，複數形）
+  if (db.feedBalance < cost) throw new Error('INSUFFICIENT_FEEDS')
   db.feedBalance -= cost
   db.monthlyUsed += cost
 }
@@ -161,6 +162,9 @@ export const mockApi = {
   },
 
   // GET /images
+  // ⚠️ 真後端這支有分頁（預設 pageSize=24），這個 mock 為了先讓功能跑起來
+  // 才回全部——串真後端時簽章要改成接受 page/pageSize，回傳也要改成
+  // { total, page, pageSize, items, counts } 這個形狀，不能只是把回傳值換掉。
   async listImages(): Promise<Asset[]> {
     await delay(250)
     return [...db.assets]
@@ -325,7 +329,7 @@ export const mockApi = {
     let status: VideoJob['status'] = 'pending'
     let progress = Math.min(10, Math.round((elapsed / 1500) * 10))
     if (elapsed > 5000) {
-      status = 'succeeded'
+      status = 'done'
       progress = 100
     } else if (elapsed > 1500) {
       status = 'processing'
@@ -338,7 +342,7 @@ export const mockApi = {
         }
       }
     }
-    if (status === 'succeeded') {
+    if (status === 'done') {
       db.successGen += 1
       return { id, status, progress, cost: j.cost, resultUrl: 'mock://video' }
     }

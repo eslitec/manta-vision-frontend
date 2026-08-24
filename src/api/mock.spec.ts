@@ -22,10 +22,10 @@ describe('計費與扣點', () => {
     expect((await api.getFeed()).balance).toBe(before - 8 * 3)
   })
 
-  it('餘額不足時擲出 INSUFFICIENT_FEED，且不扣款', async () => {
+  it('餘額不足時擲出 INSUFFICIENT_FEEDS，且不扣款', async () => {
     const before = (await api.getFeed()).balance
     const req: GenerateImageReq = { modelId: 'flux-1', prompt: 'x', count: 9999 }
-    await expect(api.generateImages(req, 8)).rejects.toThrow('INSUFFICIENT_FEED')
+    await expect(api.generateImages(req, 8)).rejects.toThrow('INSUFFICIENT_FEEDS')
     expect((await api.getFeed()).balance).toBe(before)
   })
 
@@ -117,13 +117,13 @@ describe('圖片編輯與 AI 修圖的扣款（MV-09 / MV-09b）', () => {
     expect((await api.listImages()).length).toBe(beforeCount + 1)
   })
 
-  it('餘額不足時擲出 INSUFFICIENT_FEED，且不扣款', async () => {
+  it('餘額不足時擲出 INSUFFICIENT_FEEDS，且不扣款', async () => {
     // 先把餘額燒到接近見底，再送一筆會超支的修圖
     const { balance } = await api.getFeed()
     const req: GenerateImageReq = { modelId: 'flux-1', prompt: 'x', count: Math.floor(balance / 8) }
     await api.generateImages(req, 8)
     const left = (await api.getFeed()).balance
-    await expect(api.retouchImage({ method: 'command', options: ['upscale'] })).rejects.toThrow('INSUFFICIENT_FEED')
+    await expect(api.retouchImage({ method: 'command', options: ['upscale'] })).rejects.toThrow('INSUFFICIENT_FEEDS')
     expect((await api.getFeed()).balance).toBe(left)
   })
 })
@@ -160,7 +160,7 @@ describe('圖生影非同步任務', () => {
     expect(j.error).toBe('NOT_FOUND')
   })
 
-  it('依經過時間由 pending → processing → succeeded 並回傳進度', async () => {
+  it('依經過時間由 pending → processing → done 並回傳進度', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5)
     const job = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'standard' })
     // 剛建立：pending
@@ -174,12 +174,12 @@ describe('圖生影非同步任務', () => {
     expect(processing.status).toBe('processing')
     expect(processing.progress).toBeGreaterThan(0)
     expect(processing.progress).toBeLessThan(100)
-    // 模擬經過 6 秒：succeeded（delay 用 setTimeout，不受 Date.now 影響）
+    // 模擬經過 6 秒：done（跟後端狀態機對齊；delay 用 setTimeout，不受 Date.now 影響）
     nowSpy.mockReturnValue(baseNow + 6000)
-    const succeeded = await api.getVideoJob(job.id)
-    expect(succeeded.status).toBe('succeeded')
-    expect(succeeded.progress).toBe(100)
-    expect(succeeded.resultUrl).toBeTruthy()
+    const done = await api.getVideoJob(job.id)
+    expect(done.status).toBe('done')
+    expect(done.progress).toBe(100)
+    expect(done.resultUrl).toBeTruthy()
   })
 })
 

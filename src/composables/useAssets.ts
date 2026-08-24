@@ -10,6 +10,11 @@ const loaded = ref(false)
 const folders = ref<string[]>([])
 const foldersLoaded = ref(false)
 
+// ⚠️ 契約警語（見 contract-diff 報告「最該先改的契約」第 2 項）：
+// 真後端的 GET /images 是分頁的（預設 pageSize=24），不會一次回全部素材。
+// 這裡跟 mock 一樣先假設「一次拿到全部」，串接真後端時如果照抄這個假設，
+// 超過 24 筆的素材、資料夾計數、分類統計會安靜地消失、畫面不會報錯——
+// 串接前務必先把這裡改成依 page/pageSize 請求、並改用後端回傳的 counts/total。
 async function load(force = false) {
   if (loaded.value && !force) return
   assets.value = await api.listImages()

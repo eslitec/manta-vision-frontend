@@ -74,7 +74,7 @@
         span.taskstat__pct {{ myTask?.progress ?? 0 }}%
         span.taskstat__eta(v-if="etaText") {{ etaText }}
       p.taskstat__note {{ t('video.backgroundNote') }}
-    template(v-if="myTask?.status === 'succeeded'")
+    template(v-if="myTask?.status === 'done'")
       .visuallyHidden(role="status" aria-live="polite") {{ t('video.completed') }}
       p.result__meta
         span.result__dot
@@ -145,7 +145,7 @@ const myTask = computed(() => tasksStore.tasks.find((t) => t.id === myTaskId.val
 const busy = computed(() => myTask.value?.status === 'pending' || myTask.value?.status === 'processing')
 
 const previewTitle = computed(() =>
-  myTask.value?.status === 'succeeded'
+  myTask.value?.status === 'done'
     ? t('video.previewDone')
     : busy.value
       ? t('video.previewProcessing')

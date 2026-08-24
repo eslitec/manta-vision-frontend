@@ -38,7 +38,9 @@ export interface GeneratedPost {
 }
 
 // ── 非同步任務（圖生影）──
-export type JobStatus = 'pending' | 'processing' | 'succeeded' | 'failed'
+// 狀態值對齊後端影片任務狀態機（pending → processing → done → failed）；
+// 舊版前端用 succeeded，跟後端對不上會導致輪詢永遠等不到「完成」。
+export type JobStatus = 'pending' | 'processing' | 'done' | 'failed'
 export type VideoModelTier = 'standard' | 'advanced' | 'pro'
 export const VIDEO_MODEL_TIERS: { key: VideoModelTier; label: string; multiplier: number }[] = [
   { key: 'standard', label: '標準', multiplier: 1 },
@@ -62,7 +64,9 @@ export interface VideoJob {
 
 // ── 背景生成任務（跨頁面，圖生圖／圖生影共用；驅動頂部工具列「任務」按鈕與任務中心面板）──
 export type GenerationTaskKind = 'image' | 'video'
-export type GenerationTaskStatus = 'pending' | 'processing' | 'succeeded' | 'failed'
+// 圖生圖任務也共用這個型別（純前端內部概念，沒有對應的後端輪詢端點），
+// 但值域跟著 JobStatus 一起改，兩者目前是同一組字面值、指派時才不會型別對不上。
+export type GenerationTaskStatus = 'pending' | 'processing' | 'done' | 'failed'
 export interface GenerationTask {
   id: string
   kind: GenerationTaskKind
