@@ -27,6 +27,10 @@ const delay = (ms = 500) => new Promise((r) => setTimeout(r, ms))
 let seq = 100
 const uid = (p: string) => `${p}_${++seq}`
 
+// demo-only credentials，mock 用；對齊 topbar 顯示的 Mavis／日安選物
+const DEMO_USERNAME = 'mavis'
+const DEMO_PASSWORD = 'mavis123'
+
 const db = {
   feedBalance: 1240,
   monthlyUsed: 3760,
@@ -100,6 +104,9 @@ const db = {
   } as BrandProfile,
   consent: false,
   session: null as Session | null,
+  users: new Map<string, { password: string; displayName: string }>([
+    [DEMO_USERNAME, { password: DEMO_PASSWORD, displayName: 'Mavis' }],
+  ]),
   jobs: new Map<
     string,
     { req: VideoJobReq; created: number; cost: number; failed?: boolean; failedChecked?: boolean }
@@ -113,10 +120,6 @@ const EDITOR_PRICING: EditorPricing = {
   commandBase: 16,
 }
 const COMMAND_RETOUCH_OPTIONS = ['lighting', 'upscale']
-
-// demo-only credentials，mock 用；對齊 topbar 顯示的 Mavis／日安選物
-const DEMO_USERNAME = 'mavis'
-const DEMO_PASSWORD = 'mavis123'
 
 function deduct(cost: number) {
   if (db.feedBalance < cost) throw new Error('INSUFFICIENT_FEED')
@@ -407,8 +410,9 @@ export const mockApi = {
   // POST /auth/login
   async login(username: string, password: string): Promise<Session> {
     await delay(400)
-    if (username !== DEMO_USERNAME || password !== DEMO_PASSWORD) throw new Error('INVALID_CREDENTIALS')
-    const session: Session = { username, displayName: 'Mavis' }
+    const user = db.users.get(username)
+    if (!user || user.password !== password) throw new Error('INVALID_CREDENTIALS')
+    const session: Session = { username, displayName: user.displayName }
     db.session = session
     return session
   },
@@ -416,5 +420,14 @@ export const mockApi = {
   async logout(): Promise<void> {
     await delay(150)
     db.session = null
+  },
+  // POST /auth/register
+  async register(username: string, password: string): Promise<Session> {
+    await delay(400)
+    if (db.users.has(username)) throw new Error('USERNAME_TAKEN')
+    db.users.set(username, { password, displayName: username })
+    const session: Session = { username, displayName: username }
+    db.session = session
+    return session
   },
 }

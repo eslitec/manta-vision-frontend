@@ -26,6 +26,9 @@
       )
     small.loginView__error(v-if="showError" :id="errorId" role="alert") {{ t('errors.invalidCredentials') }}
     AppButton.loginView__submit(native-type="submit" :loading="session.loading" :disabled="!username.trim() || !password") {{ t('auth.submit') }}
+    .loginView__linkRow
+      span.loginView__linkPrompt {{ t('auth.noAccountPrompt') }}
+      router-link.loginView__link(to="/register") {{ t('auth.goToRegister') }}
 </template>
 
 <script setup lang="ts">
@@ -61,81 +64,6 @@ async function submit() {
 
 <style scoped lang="scss">
 .loginView {
-  @include flex(center, center);
-  min-height: 100vh;
-  padding: 1.5rem;
-  background-image: url('@/assets/images/login-bg.png');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-
-  &__panel {
-    display: flex;
-    width: 22.5rem;
-    max-width: 100%;
-    flex-direction: column;
-    gap: 1.25rem;
-    padding: 2rem;
-    border-radius: 10px;
-    background: $white;
-    box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2);
-  }
-
-  &__logo {
-    width: 8.125rem;
-    height: 2.25rem;
-  }
-
-  &__title {
-    font-size: 1.125rem;
-    font-weight: 700;
-    color: $dark-blue-gray;
-  }
-
-  &__field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-  }
-
-  &__fieldLabel {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: $blue-dark-500;
-  }
-
-  &__input {
-    width: 100%;
-    height: 2.25rem;
-    padding: 0.5rem 0.875rem;
-    border: 1px solid $gray;
-    border-radius: 18px;
-    color: $blue-dark-500;
-    font: inherit;
-    font-size: 0.875rem;
-
-    &::placeholder {
-      color: $gray-100;
-    }
-
-    &:focus-visible {
-      border-color: $blue-dark-500;
-      outline: 2px solid rgba(46, 53, 103, 0.2);
-      outline-offset: 1px;
-    }
-
-    &[aria-invalid='true'] {
-      border-color: $red;
-    }
-  }
-
-  &__error {
-    color: $red;
-    font-size: 0.75rem;
-  }
-
-  &__submit {
-    width: 100%;
-  }
+  @include authCard;
 }
 </style>

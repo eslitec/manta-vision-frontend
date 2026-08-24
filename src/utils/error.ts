@@ -13,3 +13,10 @@ export const INVALID_CREDENTIALS = 'INVALID_CREDENTIALS'
 export function isInvalidCredentials(e: unknown): boolean {
   return e instanceof Error && e.message === INVALID_CREDENTIALS
 }
+
+/** 後端在註冊帳號已被使用時擲出的錯誤碼 */
+export const USERNAME_TAKEN = 'USERNAME_TAKEN'
+
+export function isUsernameTaken(e: unknown): boolean {
+  return e instanceof Error && e.message === USERNAME_TAKEN
+}
