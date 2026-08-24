@@ -9,6 +9,7 @@ export default {
     usage: 'Feed Usage and Performance',
     settings: 'Brand Settings',
     login: 'Log In',
+    register: 'Sign Up',
   },
   common: {
     add: 'Add',
@@ -42,6 +43,7 @@ export default {
     generationFailed: 'Generation failed. Please try again.',
     submitFailed: 'Submission failed. Please try again.',
     invalidCredentials: 'Incorrect username or password. Please try again.',
+    usernameTaken: 'This username is already taken. Please choose another one.',
   },
   auth: {
     title: 'Log in to Manta Vision',
@@ -50,6 +52,16 @@ export default {
     passwordLabel: 'Password',
     passwordPlaceholder: 'Enter your password',
     submit: 'Log in',
+    registerTitle: 'Sign up for Manta Vision',
+    registerSubmit: 'Sign up',
+    usernameTooShort: 'Username must be at least 3 characters.',
+    usernameTooLong: 'Username is too long. Please shorten it.',
+    passwordTooShort: 'Password must be at least 8 characters.',
+    passwordTooLong: 'Password is too long. Please shorten it.',
+    hasAccountPrompt: 'Already have an account?',
+    goToLogin: 'Log in',
+    noAccountPrompt: "Don't have an account?",
+    goToRegister: 'Sign up',
   },
   units: { feed: '{count} feed', feedShort: 'feed', feedPerVideo: '{count} feed/video', images: 'images' },
   brand: {

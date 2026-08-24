@@ -33,11 +33,23 @@ export const useSessionStore = defineStore('session', () => {
     }
   }
 
+  // TODO(真後端): api.register 換成真的端點後，這裡也要同步設定 ctx.token（見 api/http.ts）
+  async function register(username: string, password: string) {
+    loading.value = true
+    try {
+      const s = await api.register(username, password)
+      session.value = s
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(s))
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function logout() {
     await api.logout()
     session.value = null
     localStorage.removeItem(STORAGE_KEY)
   }
 
-  return { session, loading, isAuthenticated, restore, login, logout }
+  return { session, loading, isAuthenticated, restore, login, register, logout }
 })
