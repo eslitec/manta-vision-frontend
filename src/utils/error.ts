@@ -25,11 +25,13 @@ function hasCode(e: unknown, code: string): boolean {
   return e instanceof Error && e.message === code
 }
 
+// 後端碼表定案是複數形（有 S）：INSUFFICIENT_FEEDS。函式名稱維持 isInsufficientFeed
+// （英文語感兩種都通），呼叫端不用因為這個字尾改動。
 /** 後端在飼料不足時擲出的錯誤碼 */
-export const INSUFFICIENT_FEED = 'INSUFFICIENT_FEED'
+export const INSUFFICIENT_FEEDS = 'INSUFFICIENT_FEEDS'
 
 export function isInsufficientFeed(e: unknown): boolean {
-  return hasCode(e, INSUFFICIENT_FEED)
+  return hasCode(e, INSUFFICIENT_FEEDS)
 }
 
 /** 後端在帳號或密碼錯誤時擲出的錯誤碼 */
