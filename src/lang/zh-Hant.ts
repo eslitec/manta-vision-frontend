@@ -9,6 +9,7 @@ export default {
     usage: '飼料用量與成效',
     settings: '品牌設定',
     login: '登入',
+    register: '註冊',
   },
   common: {
     add: '新增',
@@ -42,6 +43,7 @@ export default {
     generationFailed: '生成失敗，請再試一次。',
     submitFailed: '送出失敗，請再試一次。',
     invalidCredentials: '帳號或密碼錯誤，請再試一次。',
+    usernameTaken: '此帳號已被使用，請換一個帳號。',
   },
   auth: {
     title: '登入 Manta Vision',
@@ -50,6 +52,16 @@ export default {
     passwordLabel: '密碼',
     passwordPlaceholder: '請輸入密碼',
     submit: '登入',
+    registerTitle: '註冊 Manta Vision',
+    registerSubmit: '註冊',
+    usernameTooShort: '帳號至少需要 3 個字元。',
+    usernameTooLong: '帳號長度過長，請縮短。',
+    passwordTooShort: '密碼至少需要 8 個字元。',
+    passwordTooLong: '密碼長度過長，請縮短。',
+    hasAccountPrompt: '已經有帳號？',
+    goToLogin: '登入',
+    noAccountPrompt: '還沒有帳號？',
+    goToRegister: '註冊',
   },
   units: {
     feed: '{count} 顆飼料',

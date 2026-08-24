@@ -9,6 +9,12 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/views/LoginView.vue'),
   },
   {
+    path: '/register',
+    name: 'register',
+    meta: { public: true, titleKey: 'routeTitles.register' },
+    component: () => import('@/views/RegisterView.vue'),
+  },
+  {
     path: '/',
     component: DefaultLayout,
     children: [
