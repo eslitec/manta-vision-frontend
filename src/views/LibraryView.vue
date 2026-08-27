@@ -726,7 +726,7 @@ async function onUpload(e: Event) {
   background: $blue-dark-500;
   color: $white;
   border-radius: 10px;
-  padding: 0.875rem 1rem;
+  padding: 0.25rem 1rem;
   margin-bottom: 1rem;
   &__selection {
     @include flex(flex-start, center, 0.875rem);
