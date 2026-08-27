@@ -443,22 +443,25 @@ async function onUpload(e: Event) {
 .tabs {
   @include flex(flex-start, center, 0.5rem);
   margin-bottom: 1rem;
-}
-.tabs__item {
-  @include flex(center, center);
-  height: 1.375rem;
-  padding: 0 0.75rem;
-  border-radius: 999px;
-  font-size: 0.8125rem;
-  color: #606692;
-  background: $white;
-  border: 1px solid $gray;
-  &.isActive {
-    background: $blue-dark-500;
-    color: $white;
-    border-color: $blue-dark-500;
+  &__item {
+    padding: 0.125rem 0.75rem;
+    border-radius: 16px;
+    font-size: 0.8125rem;
+    line-height: 1;
+    color: $dark-blue-gray;
+    background: $white;
+    border: 1px solid $gray;
+    white-space: nowrap;
+    flex-shrink: 0;
+    &.isActive {
+      background: $white;
+      color: $blue-dark-500;
+      border-color: #606692;
+      font-weight: 500;
+    }
   }
 }
+
 .mobileFolderToggle {
   display: none;
 }
@@ -616,10 +619,9 @@ async function onUpload(e: Event) {
     white-space: nowrap;
   }
 }
+
 .chip {
-  @include flex(center, center);
-  height: 1.375rem;
-  padding: 0 0.75rem;
+  padding: 0.125rem 0.75rem;
   border-radius: 16px;
   font-size: 0.8125rem;
   line-height: 1;
@@ -717,11 +719,6 @@ async function onUpload(e: Event) {
     flex: none;
     overflow-y: visible;
   }
-  .batchbar {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
 }
 
 .batchbar {
@@ -729,7 +726,7 @@ async function onUpload(e: Event) {
   background: $blue-dark-500;
   color: $white;
   border-radius: 10px;
-  padding: 0.875rem 1rem;
+  padding: 0.25rem 1rem;
   margin-bottom: 1rem;
   &__selection {
     @include flex(flex-start, center, 0.875rem);
@@ -773,6 +770,9 @@ async function onUpload(e: Event) {
 // Mobile overrides follow the desktop batch bar so its fixed button sizing does not win the cascade.
 @include below($bp-sm) {
   .batchbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.75rem;
     padding-inline: 0.625rem;
     &__selection,
     &__actions {

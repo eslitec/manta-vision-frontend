@@ -233,7 +233,7 @@ const confirm = () => {
     background: $white;
     @include flex(center, center);
 
-    // 選中：深藍底 + 白色勾（設計稿 sel_check 的 ic_ok 是白色描邊勾，不是綠色圓形打勾）
+    // 選中：深藍底 + 白色勾（設計稿 sel_check 的 ic_ok 是白色打勾圖示，不是綠色圓形打勾）
     &.isOn {
       border-color: $blue-dark-500;
       opacity: 1;
