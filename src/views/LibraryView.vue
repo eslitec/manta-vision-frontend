@@ -443,22 +443,25 @@ async function onUpload(e: Event) {
 .tabs {
   @include flex(flex-start, center, 0.5rem);
   margin-bottom: 1rem;
-}
-.tabs__item {
-  @include flex(center, center);
-  height: 1.375rem;
-  padding: 0 0.75rem;
-  border-radius: 999px;
-  font-size: 0.8125rem;
-  color: #606692;
-  background: $white;
-  border: 1px solid $gray;
-  &.isActive {
-    background: $blue-dark-500;
-    color: $white;
-    border-color: $blue-dark-500;
+  &__item {
+    padding: 0.125rem 0.75rem;
+    border-radius: 16px;
+    font-size: 0.8125rem;
+    line-height: 1;
+    color: $dark-blue-gray;
+    background: $white;
+    border: 1px solid $gray;
+    white-space: nowrap;
+    flex-shrink: 0;
+    &.isActive {
+      background: $white;
+      color: $blue-dark-500;
+      border-color: #606692;
+      font-weight: 500;
+    }
   }
 }
+
 .mobileFolderToggle {
   display: none;
 }
@@ -616,10 +619,9 @@ async function onUpload(e: Event) {
     white-space: nowrap;
   }
 }
+
 .chip {
-  @include flex(center, center);
-  height: 1.375rem;
-  padding: 0 0.75rem;
+  padding: 0.125rem 0.75rem;
   border-radius: 16px;
   font-size: 0.8125rem;
   line-height: 1;
