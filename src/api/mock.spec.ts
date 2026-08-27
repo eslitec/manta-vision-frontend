@@ -276,9 +276,11 @@ describe('用量與指標', () => {
 describe('品牌設定持久化', () => {
   it('getBrand 回傳深拷貝，改動不會污染後端', async () => {
     const b1 = await api.getBrand()
+    const original = b1.name
     b1.name = '被竄改'
     const b2 = await api.getBrand()
-    expect(b2.name).toBe('日安選物')
+    expect(b2.name).toBe(original)
+    expect(b2.name).not.toBe('被竄改')
   })
 
   it('saveBrand 後 getBrand 讀得到新值', async () => {

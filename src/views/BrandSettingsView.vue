@@ -573,14 +573,20 @@ async function onSave() {
     border-radius: 18px;
     outline: none;
     background: $white;
-    color: $gray-100;
+    color: $dark-blue-gray;
     font-family: inherit;
     font-size: 0.875rem;
     font-weight: 400;
 
+    &::placeholder {
+      color: $gray-100;
+    }
+
     &:focus-visible {
-      outline: 2px solid $yellow;
-      outline-offset: 2px;
+      // 用 inset box-shadow 取代 outline：.field 有 overflow: hidden，
+      // outline-offset 會讓外擴的外框被裁切，聚焦時邊框跑版
+      outline: none;
+      box-shadow: inset 0 0 0 2px $yellow;
     }
   }
 
