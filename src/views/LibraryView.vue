@@ -719,11 +719,6 @@ async function onUpload(e: Event) {
     flex: none;
     overflow-y: visible;
   }
-  .batchbar {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
 }
 
 .batchbar {
@@ -775,6 +770,9 @@ async function onUpload(e: Event) {
 // Mobile overrides follow the desktop batch bar so its fixed button sizing does not win the cascade.
 @include below($bp-sm) {
   .batchbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.75rem;
     padding-inline: 0.625rem;
     &__selection,
     &__actions {
