@@ -17,7 +17,7 @@
 
 ## 5. 過渡資產標記
 
-- [ ] 5.1 對齊設計決策「背景美術資產以 AI 生成圖片作為過渡方案」：commit message 的 body 中註明 `login-bg.png` 為 AI 生成示意圖、非最終定稿，待設計端提供正式圖檔後另立 change 替換。驗證：檢查該次 commit 的 message body 包含此說明文字。
+- [x] 5.1 對齊設計決策「背景美術資產以 AI 生成圖片作為過渡方案」：commit message 的 body 中註明 `login-bg.png` 為 AI 生成示意圖、非最終定稿，待設計端提供正式圖檔後另立 change 替換。驗證：檢查該次 commit 的 message body 包含此說明文字。
 
 ## 6. 驗證
 

@@ -4,7 +4,7 @@
     h1 {{ t(`usage.headers.${tab}.title`) }}
     p {{ t(`usage.headers.${tab}.subtitle`) }}
   .tabs(role="tablist" :aria-label="t('routeTitles.usage')")
-    AppTab(v-for="item in tabs" :key="item.value" :active="tab === item.value" @click="tab = item.value") {{ item.label }}
+    button.tabs__item(v-for="item in tabs" :key="item.value" role="tab" :aria-selected="tab === item.value" :class="{ 'isActive': tab === item.value }" @click="tab = item.value") {{ item.label }}
   .range
     span {{ t('usage.period') }}
     button.range__chip(v-for="item in ranges" :key="item.value" :aria-pressed="range === item.value" :class="{ 'isActive': range === item.value }" @click="selectRange(item.value)") {{ item.label }}
@@ -107,7 +107,6 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppButton from '@/components/AppButton.vue'
-import AppTab from '@/components/AppTab.vue'
 import IconAlertTriangleFilled from '@/components/icons/IconAlertTriangleFilled.vue'
 import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
 import { getUsageAlertLevel } from '@/utils/usage'
@@ -392,9 +391,28 @@ const metricCards = computed(() =>
 }
 .tabs {
   display: flex;
-  gap: 1.125rem;
-  border-bottom: 1px solid #d2d5dd;
+  align-items: center;
+  gap: 0.5rem;
   margin-bottom: 0.75rem;
+}
+.tabs__item {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  padding: 0.1875rem 0.75rem;
+  border: 1px solid #d2d5dd;
+  border-radius: 16px;
+  background: white;
+  color: #606692;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  white-space: nowrap;
+
+  &.isActive {
+    background: #2e3567;
+    border-color: #2e3567;
+    color: white;
+  }
 }
 .range {
   display: flex;
@@ -657,10 +675,9 @@ const metricCards = computed(() =>
 }
 
 .trendConclusion {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  align-items: center;
-  gap: 0.125rem 0.5rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
   padding: 0.625rem 0.75rem;
   border-left: 3px solid #f2bb00;
   border-radius: 8px;
@@ -668,22 +685,29 @@ const metricCards = computed(() =>
   color: #383c4b;
 
   strong {
+    flex-shrink: 0;
     font-size: 0.875rem;
     font-weight: 500;
     line-height: 1.25rem;
+    white-space: nowrap;
   }
 
   span {
+    overflow: hidden;
     color: #606692;
     font-size: 0.8125rem;
     line-height: 1.125rem;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 
   small {
-    grid-column: 1 / -1;
+    flex-shrink: 0;
+    margin-left: auto;
     color: #b4b9c4;
     font-size: 0.75rem;
     line-height: 1rem;
+    white-space: nowrap;
   }
 }
 
