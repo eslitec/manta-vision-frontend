@@ -112,14 +112,16 @@ import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import AppButton from '@/components/AppButton.vue'
 import AppCheckbox from '@/components/AppCheckbox.vue'
 import BrandToggle from '@/components/BrandToggle.vue'
-import IconPlayCircle from '@/components/icons/IconPlayCircle.vue'
-import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
-import IconAlertTriangleFilled from '@/components/icons/IconAlertTriangleFilled.vue'
-import IconClose from '@/components/icons/IconClose.vue'
-import IconDelete from '@/components/icons/IconDelete.vue'
-import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
-import IconLoader from '@/components/icons/IconLoader.vue'
-import IconUpload from '@/components/icons/IconUpload.vue'
+import {
+  IconPlayCircle,
+  IconFeedBottleSmall,
+  IconAlertTriangleFilled,
+  IconClose,
+  IconDelete,
+  IconImagePlaceholder,
+  IconLoader,
+  IconUpload,
+} from '@/components/icons'
 import { useConsentStore } from '@/stores/consent'
 import { useFeedStore } from '@/stores/feed'
 import { useAssets } from '@/composables/useAssets'

@@ -211,10 +211,7 @@ import { useBrandStore } from '@/stores/brand'
 import AppButton from '@/components/AppButton.vue'
 import AppSearchbar from '@/components/AppSearchbar.vue'
 import AppTab from '@/components/AppTab.vue'
-import IconAlertTriangleFilled from '@/components/icons/IconAlertTriangleFilled.vue'
-import IconCheckCircle from '@/components/icons/IconCheckCircle.vue'
-import IconChevronDown from '@/components/icons/IconChevronDown.vue'
-import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
+import { IconAlertTriangleFilled, IconCheckCircle, IconChevronDown, IconImagePlaceholder } from '@/components/icons'
 import { extractColors, type DominantColor } from '@/utils/colors'
 const store = useBrandStore()
 const { profile, saving } = storeToRefs(store)

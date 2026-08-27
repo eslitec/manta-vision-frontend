@@ -97,11 +97,13 @@ import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import ConfirmGenerateDialog from '@/components/ConfirmGenerateDialog.vue'
 import AppButton from '@/components/AppButton.vue'
 import ModelOption from '@/components/ModelOption.vue'
-import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
-import IconAddObject from '@/components/icons/IconAddObject.vue'
-import IconAlertTriangleFilled from '@/components/icons/IconAlertTriangleFilled.vue'
-import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
-import IconMovie from '@/components/icons/IconMovie.vue'
+import {
+  IconFeedBottleSmall,
+  IconAddObject,
+  IconAlertTriangleFilled,
+  IconImagePlaceholder,
+  IconMovie,
+} from '@/components/icons'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
 import { isInsufficientFeed } from '@/utils/error'
 import { VIDEO_MODEL_TIERS } from '@/types/api'

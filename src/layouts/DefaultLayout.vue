@@ -57,12 +57,14 @@ import { storeToRefs } from 'pinia'
 import FeedBadge from '@/components/FeedBadge.vue'
 import TaskCenterPanel from '@/components/TaskCenterPanel.vue'
 import GenerationToast from '@/components/GenerationToast.vue'
-import IconTasksBadge from '@/components/icons/IconTasksBadge.vue'
-import IconAiSparkle from '@/components/icons/IconAiSparkle.vue'
-import IconLibraryPhoto from '@/components/icons/IconLibraryPhoto.vue'
-import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
-import IconSettings from '@/components/icons/IconSettings.vue'
-import IconMenu from '@/components/icons/IconMenu.vue'
+import {
+  IconTasksBadge,
+  IconAiSparkle,
+  IconLibraryPhoto,
+  IconFeedBottleSmall,
+  IconSettings,
+  IconMenu,
+} from '@/components/icons'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
 import { useSessionStore } from '@/stores/session'
 

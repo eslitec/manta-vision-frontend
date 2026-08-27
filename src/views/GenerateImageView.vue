@@ -103,12 +103,14 @@ import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import AppButton from '@/components/AppButton.vue'
 import BrandToggle from '@/components/BrandToggle.vue'
 import ModelOption from '@/components/ModelOption.vue'
-import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
-import IconAddObject from '@/components/icons/IconAddObject.vue'
-import IconAiSparkle from '@/components/icons/IconAiSparkle.vue'
-import IconChevronDown from '@/components/icons/IconChevronDown.vue'
-import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
-import IconLoader from '@/components/icons/IconLoader.vue'
+import {
+  IconFeedBottleSmall,
+  IconAddObject,
+  IconAiSparkle,
+  IconChevronDown,
+  IconImagePlaceholder,
+  IconLoader,
+} from '@/components/icons'
 import { useRouter } from 'vue-router'
 import { useFeedStore } from '@/stores/feed'
 import { useGenerationTasksStore } from '@/stores/generationTasks'

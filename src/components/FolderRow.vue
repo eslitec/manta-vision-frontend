@@ -6,7 +6,7 @@ button.folderRow(type="button" :class="{ 'isActive': active, 'isDropTarget': dro
 </template>
 
 <script setup lang="ts">
-import IconFolder from '@/components/icons/IconFolder.vue'
+import { IconFolder } from '@/components/icons'
 
 withDefaults(
   defineProps<{
