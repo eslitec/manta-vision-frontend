@@ -100,8 +100,10 @@ const db = {
     },
   ] as Asset[],
   brand: {
-    name: '日安選物',
-    positioning: '嚴選日常質感選物，讓生活有溫度',
+    // name／positioning 故意留空：讓「品牌設定」頁進入時只顯示 placeholder，
+    // 不要有預設寫死的文字讓人誤以為是已輸入的值（回應 review 對這兩個欄位的意見）
+    name: '',
+    positioning: '',
     website: 'www.rihan-select.com',
     industry: 'apparel',
     colors: [
