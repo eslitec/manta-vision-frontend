@@ -13,7 +13,7 @@ article.assetCard(:class="{ 'isSelected': selected }")
 <script setup lang="ts">
 import AppCheckbox from '@/components/AppCheckbox.vue'
 import AppPill from '@/components/AppPill.vue'
-import IconMovie from '@/components/icons/IconMovie.vue'
+import { IconMovie } from '@/components/icons'
 import imagePlaceholderUrl from '@/assets/images/library-image-placeholder.svg'
 
 withDefaults(

@@ -10,7 +10,7 @@ label.appSearchbar
 </template>
 
 <script setup lang="ts">
-import IconSearch from '@/components/icons/IconSearch.vue'
+import { IconSearch } from '@/components/icons'
 
 defineProps<{
   label: string

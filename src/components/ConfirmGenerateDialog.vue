@@ -34,9 +34,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFeedStore } from '@/stores/feed'
 import AppButton from '@/components/AppButton.vue'
-import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
-import IconAddObject from '@/components/icons/IconAddObject.vue'
-import IconAlertTriangleFilled from '@/components/icons/IconAlertTriangleFilled.vue'
+import { IconFeedBottleSmall, IconAddObject, IconAlertTriangleFilled } from '@/components/icons'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 
 const props = defineProps<{

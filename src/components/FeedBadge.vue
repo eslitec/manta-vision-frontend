@@ -11,7 +11,7 @@ import { onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useFeedStore } from '@/stores/feed'
-import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
+import { IconFeedBottleSmall } from '@/components/icons'
 import AppButton from '@/components/AppButton.vue'
 const feed = useFeedStore()
 const { balance } = storeToRefs(feed)

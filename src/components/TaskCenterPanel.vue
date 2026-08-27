@@ -47,9 +47,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
-import IconClose from '@/components/icons/IconClose.vue'
-import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
-import IconPlayCircle from '@/components/icons/IconPlayCircle.vue'
+import { IconClose, IconImagePlaceholder, IconPlayCircle } from '@/components/icons'
 
 const open = defineModel<boolean>('open', { required: true })
 const dialogRef = ref<HTMLElement | null>(null)

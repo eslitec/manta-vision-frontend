@@ -164,15 +164,17 @@ import AppCheckbox from '@/components/AppCheckbox.vue'
 import AppSearchbar from '@/components/AppSearchbar.vue'
 import AssetCard from '@/components/AssetCard.vue'
 import FolderRow from '@/components/FolderRow.vue'
-import IconAlertTriangleFilled from '@/components/icons/IconAlertTriangleFilled.vue'
-import IconChevronDown from '@/components/icons/IconChevronDown.vue'
-import IconClose from '@/components/icons/IconClose.vue'
-import IconDelete from '@/components/icons/IconDelete.vue'
-import IconFolder from '@/components/icons/IconFolder.vue'
-import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
-import IconMovie from '@/components/icons/IconMovie.vue'
-import IconPlayTriangle from '@/components/icons/IconPlayTriangle.vue'
-import IconUpload from '@/components/icons/IconUpload.vue'
+import {
+  IconAlertTriangleFilled,
+  IconChevronDown,
+  IconClose,
+  IconDelete,
+  IconFolder,
+  IconImagePlaceholder,
+  IconMovie,
+  IconPlayTriangle,
+  IconUpload,
+} from '@/components/icons'
 import ImageEditorWorkspace from '@/components/ImageEditorWorkspace.vue'
 import { CATEGORY_TAGS, UNFILED_FOLDER, type Asset, type AssetTag } from '@/types/asset'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'

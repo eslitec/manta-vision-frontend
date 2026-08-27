@@ -301,18 +301,20 @@ import AppCheckbox from '@/components/AppCheckbox.vue'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import SaveAssetDialog from '@/components/SaveAssetDialog.vue'
 import { useAssets } from '@/composables/useAssets'
-import IconAiSparkle from '@/components/icons/IconAiSparkle.vue'
-import IconAddObject from '@/components/icons/IconAddObject.vue'
-import IconImagePlaceholder from '@/components/icons/IconImagePlaceholder.vue'
-import IconLayerSort from '@/components/icons/IconLayerSort.vue'
-import IconTextDocument from '@/components/icons/IconTextDocument.vue'
-import IconEdit from '@/components/icons/IconEdit.vue'
-import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
-import IconBack from '@/components/icons/IconBack.vue'
-import IconCheckCircle from '@/components/icons/IconCheckCircle.vue'
-import IconChevronDown from '@/components/icons/IconChevronDown.vue'
-import IconNext from '@/components/icons/IconNext.vue'
-import IconRefresh from '@/components/icons/IconRefresh.vue'
+import {
+  IconAiSparkle,
+  IconAddObject,
+  IconImagePlaceholder,
+  IconLayerSort,
+  IconTextDocument,
+  IconEdit,
+  IconFeedBottleSmall,
+  IconBack,
+  IconCheckCircle,
+  IconChevronDown,
+  IconNext,
+  IconRefresh,
+} from '@/components/icons'
 import { api } from '@/api'
 import { useFeedStore } from '@/stores/feed'
 import { isInsufficientFeed } from '@/utils/error'

@@ -49,14 +49,16 @@ import { useFeedStore } from '@/stores/feed'
 import { useBrandStore } from '@/stores/brand'
 import { api } from '@/api'
 import type { UsageSummary } from '@/types/api'
-import IconGenImage from '@/components/icons/IconGenImage.vue'
-import IconMarketingPost from '@/components/icons/IconMarketingPost.vue'
-import IconGenVideo from '@/components/icons/IconGenVideo.vue'
-import IconTryOn from '@/components/icons/IconTryOn.vue'
-import IconLibraryPhotoLarge from '@/components/icons/IconLibraryPhotoLarge.vue'
-import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
-import IconFeedBottleBadge from '@/components/icons/IconFeedBottleBadge.vue'
-import IconCheckCircle from '@/components/icons/IconCheckCircle.vue'
+import {
+  IconGenImage,
+  IconMarketingPost,
+  IconGenVideo,
+  IconTryOn,
+  IconLibraryPhotoLarge,
+  IconFeedBottleSmall,
+  IconFeedBottleBadge,
+  IconCheckCircle,
+} from '@/components/icons'
 import AppButton from '@/components/AppButton.vue'
 
 const feed = useFeedStore()

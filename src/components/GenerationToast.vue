@@ -18,9 +18,7 @@ import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
-import IconCheckCircle from '@/components/icons/IconCheckCircle.vue'
-import IconAlertTriangleFilled from '@/components/icons/IconAlertTriangleFilled.vue'
-import IconClose from '@/components/icons/IconClose.vue'
+import { IconCheckCircle, IconAlertTriangleFilled, IconClose } from '@/components/icons'
 
 const tasksStore = useGenerationTasksStore()
 const { toast } = storeToRefs(tasksStore)

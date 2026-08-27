@@ -16,7 +16,7 @@ label.appCheckbox
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
-import IconCheck from '@/components/icons/IconCheck.vue'
+import { IconCheck } from '@/components/icons'
 
 const props = withDefaults(
   defineProps<{
