@@ -301,6 +301,8 @@ import AppCheckbox from '@/components/AppCheckbox.vue'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import SaveAssetDialog from '@/components/SaveAssetDialog.vue'
 import { useAssets } from '@/composables/useAssets'
+import { usePointerDrag } from '@/composables/usePointerDrag'
+import { usePercentDrag } from '@/composables/usePercentDrag'
 import {
   IconAiSparkle,
   IconAddObject,
@@ -753,40 +755,31 @@ watch(
   },
   { flush: 'post' },
 )
-let textDragCleanup: (() => void) | undefined
-let textResizeCleanup: (() => void) | undefined
-let objectInteractionCleanup: (() => void) | undefined
+const textDrag = usePercentDrag()
+const textResizeDrag = usePointerDrag()
+const objectPointerDrag = usePointerDrag()
+const objectDrag = usePercentDrag(objectPointerDrag)
 const startTextDrag = (event: PointerEvent) => {
   if (textEditing.value || event.button !== 0 || !artboardRef.value) return
   event.preventDefault()
   selectLayer('text')
   const artboardBounds = artboardRef.value.getBoundingClientRect()
   const textBounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  const halfWidth = Math.min(50, (textBounds.width / artboardBounds.width) * 50)
-  const halfHeight = Math.min(50, (textBounds.height / artboardBounds.height) * 50)
-  const start = {
-    pointerX: event.clientX,
-    pointerY: event.clientY,
-    x: textPosition.x,
-    y: textPosition.y,
-  }
   textDragging.value = true
-  const onMove = (moveEvent: PointerEvent) => {
-    const nextX = start.x + ((moveEvent.clientX - start.pointerX) / artboardBounds.width) * 100
-    const nextY = start.y + ((moveEvent.clientY - start.pointerY) / artboardBounds.height) * 100
-    textPosition.x = Math.max(halfWidth, Math.min(100 - halfWidth, nextX))
-    textPosition.y = Math.max(halfHeight, Math.min(100 - halfHeight, nextY))
-  }
-  const onUp = () => {
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
-    textDragging.value = false
-    textDragCleanup = undefined
-  }
-  textDragCleanup?.()
-  textDragCleanup = onUp
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp, { once: true })
+  textDrag.start({
+    containerBounds: artboardBounds,
+    elementBounds: textBounds,
+    startEvent: event,
+    startX: textPosition.x,
+    startY: textPosition.y,
+    onDrag: (x, y) => {
+      textPosition.x = x
+      textPosition.y = y
+    },
+    onEnd: () => {
+      textDragging.value = false
+    },
+  })
 }
 const objectLayerStyle = (layer: ObjectEditorLayer) => ({
   left: `${layer.x}%`,
@@ -800,26 +793,21 @@ const startObjectDrag = (event: PointerEvent, layer: ObjectEditorLayer) => {
   selectLayer(layer.key)
   const artboardBounds = artboardRef.value.getBoundingClientRect()
   const objectBounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  const halfWidth = Math.min(50, (objectBounds.width / artboardBounds.width) * 50)
-  const halfHeight = Math.min(50, (objectBounds.height / artboardBounds.height) * 50)
-  const start = { pointerX: event.clientX, pointerY: event.clientY, x: layer.x, y: layer.y }
   layer.dragging = true
-  const onMove = (moveEvent: PointerEvent) => {
-    const nextX = start.x + ((moveEvent.clientX - start.pointerX) / artboardBounds.width) * 100
-    const nextY = start.y + ((moveEvent.clientY - start.pointerY) / artboardBounds.height) * 100
-    layer.x = Math.max(halfWidth, Math.min(100 - halfWidth, nextX))
-    layer.y = Math.max(halfHeight, Math.min(100 - halfHeight, nextY))
-  }
-  const onUp = () => {
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
-    layer.dragging = false
-    objectInteractionCleanup = undefined
-  }
-  objectInteractionCleanup?.()
-  objectInteractionCleanup = onUp
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp, { once: true })
+  objectDrag.start({
+    containerBounds: artboardBounds,
+    elementBounds: objectBounds,
+    startEvent: event,
+    startX: layer.x,
+    startY: layer.y,
+    onDrag: (x, y) => {
+      layer.x = x
+      layer.y = y
+    },
+    onEnd: () => {
+      layer.dragging = false
+    },
+  })
 }
 const startObjectResize = (event: PointerEvent, layer: ObjectEditorLayer, _corner: ObjectCorner) => {
   if (event.button !== 0) return
@@ -830,19 +818,10 @@ const startObjectResize = (event: PointerEvent, layer: ObjectEditorLayer, _corne
   const center = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 }
   const startDistance = Math.max(1, Math.hypot(event.clientX - center.x, event.clientY - center.y))
   const startScale = layer.scale
-  const onMove = (moveEvent: PointerEvent) => {
+  objectPointerDrag.start((moveEvent) => {
     const distance = Math.hypot(moveEvent.clientX - center.x, moveEvent.clientY - center.y)
     layer.scale = Math.max(0.35, Math.min(2.5, startScale * (distance / startDistance)))
-  }
-  const onUp = () => {
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
-    objectInteractionCleanup = undefined
-  }
-  objectInteractionCleanup?.()
-  objectInteractionCleanup = onUp
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp, { once: true })
+  })
 }
 const handleObjectResizeKeydown = (event: KeyboardEvent, layer: ObjectEditorLayer) => {
   if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
@@ -900,20 +879,11 @@ const startTextResize = (event: PointerEvent, corner: CropCorner) => {
   const start = { x: event.clientX, y: event.clientY, scale: textScale.value }
   const horizontalDirection = corner.includes('w') ? -1 : 1
   const verticalDirection = corner.includes('n') ? -1 : 1
-  const onMove = (moveEvent: PointerEvent) => {
+  textResizeDrag.start((moveEvent) => {
     const delta =
       ((moveEvent.clientX - start.x) * horizontalDirection + (moveEvent.clientY - start.y) * verticalDirection) / 160
     textScale.value = Math.max(0.5, Math.min(3, start.scale + delta))
-  }
-  const onUp = () => {
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
-    textResizeCleanup = undefined
-  }
-  textResizeCleanup?.()
-  textResizeCleanup = onUp
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp, { once: true })
+  })
 }
 const cropRect = reactive({ x: 12.5, y: 0, width: 75, height: 100 })
 watch(
@@ -974,14 +944,14 @@ const applyCropRatio = (id: Exclude<CropRatioId, 'custom'>) => {
   }
 }
 const resetCrop = () => applyCropRatio('square')
-let resizeCleanup: (() => void) | undefined
+const cropResizeDrag = usePointerDrag()
 const startCropResize = (event: PointerEvent, corner: CropCorner) => {
   if (!artboardRef.value) return
   event.preventDefault()
   ratio.value = 'custom'
   const bounds = artboardRef.value.getBoundingClientRect()
   const start = { pointerX: event.clientX, pointerY: event.clientY, ...cropRect }
-  const onMove = (moveEvent: PointerEvent) => {
+  cropResizeDrag.start((moveEvent) => {
     const dx = ((moveEvent.clientX - start.pointerX) / bounds.width) * 100
     const dy = ((moveEvent.clientY - start.pointerY) / bounds.height) * 100
     const right = start.x + start.width
@@ -999,23 +969,14 @@ const startCropResize = (event: PointerEvent, corner: CropCorner) => {
     } else {
       cropRect.height = Math.max(minSize, Math.min(100 - start.y, start.height + dy))
     }
-  }
-  const onUp = () => {
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
-    resizeCleanup = undefined
-  }
-  resizeCleanup?.()
-  resizeCleanup = onUp
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp, { once: true })
+  })
 }
 onBeforeUnmount(() => {
   artboardResizeObserver?.disconnect()
-  resizeCleanup?.()
-  textDragCleanup?.()
-  textResizeCleanup?.()
-  objectInteractionCleanup?.()
+  cropResizeDrag.stop()
+  textDrag.stop()
+  textResizeDrag.stop()
+  objectPointerDrag.stop()
 })
 const previews = computed(() =>
   ['igPost', 'igStory', 'fbPost', 'line'].map((key, index) => ({
