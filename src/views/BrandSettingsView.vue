@@ -204,10 +204,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useBrandStore } from '@/stores/brand'
+import { useDismissableMenu } from '@/composables/useDismissableMenu'
 import AppButton from '@/components/AppButton.vue'
 import AppSearchbar from '@/components/AppSearchbar.vue'
 import AppTab from '@/components/AppTab.vue'
@@ -268,20 +269,7 @@ function selectIndustry(id: string) {
   if (profile.value) profile.value.industry = id
   industryMenuOpen.value = false
 }
-function onIndustryPointerDown(event: MouseEvent) {
-  if (!industryMenuOpen.value) return
-  if (industrySelectEl.value?.contains(event.target as Node)) return
-  industryMenuOpen.value = false
-}
-function onIndustryKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape' && industryMenuOpen.value) industryMenuOpen.value = false
-}
-document.addEventListener('pointerdown', onIndustryPointerDown)
-document.addEventListener('keydown', onIndustryKeydown)
-onBeforeUnmount(() => {
-  document.removeEventListener('pointerdown', onIndustryPointerDown)
-  document.removeEventListener('keydown', onIndustryKeydown)
-})
+useDismissableMenu(industryMenuOpen, industrySelectEl)
 const addressingOptions = computed(() =>
   ['你', '您', '親愛的顧客'].map((value, index) => ({ value, label: t(`brandSettings.addressing.${index}`) })),
 )

@@ -303,6 +303,7 @@ import SaveAssetDialog from '@/components/SaveAssetDialog.vue'
 import { useAssets } from '@/composables/useAssets'
 import { usePointerDrag } from '@/composables/usePointerDrag'
 import { usePercentDrag } from '@/composables/usePercentDrag'
+import { useDismissableMenu } from '@/composables/useDismissableMenu'
 import {
   IconAiSparkle,
   IconAddObject,
@@ -486,20 +487,7 @@ const selectFont = (id: FontId) => {
   selectedFontId.value = id
   fontMenuOpen.value = false
 }
-const onFontMenuPointerDown = (event: MouseEvent) => {
-  if (!fontMenuOpen.value) return
-  if (fontSelectEl.value?.contains(event.target as Node)) return
-  fontMenuOpen.value = false
-}
-const onFontMenuKeydown = (event: KeyboardEvent) => {
-  if (event.key === 'Escape' && fontMenuOpen.value) fontMenuOpen.value = false
-}
-document.addEventListener('pointerdown', onFontMenuPointerDown)
-document.addEventListener('keydown', onFontMenuKeydown)
-onBeforeUnmount(() => {
-  document.removeEventListener('pointerdown', onFontMenuPointerDown)
-  document.removeEventListener('keydown', onFontMenuKeydown)
-})
+useDismissableMenu(fontMenuOpen, fontSelectEl)
 const textObjectStyle = computed(() => ({
   left: `${textPosition.x}%`,
   top: `${textPosition.y}%`,
