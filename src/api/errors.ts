@@ -22,6 +22,12 @@ export const API_ERROR_CODES = {
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   // 飼料（點數）不足；付費端點尚未上線，先收錄進碼表避免之後又漏對齊
   INSUFFICIENT_FEEDS: 'INSUFFICIENT_FEEDS',
+  // 圖庫／資料夾（feat/gallery-finish，見 docs/api-status.md）
+  FILE_TOO_LARGE: 'FILE_TOO_LARGE',
+  UNSUPPORTED_FORMAT: 'UNSUPPORTED_FORMAT',
+  DUPLICATE_NAME: 'DUPLICATE_NAME',
+  FOLDER_LIMIT_EXCEEDED: 'FOLDER_LIMIT_EXCEEDED',
+  ASSET_IN_USE: 'ASSET_IN_USE',
 } as const
 
 /**

@@ -1,4 +1,15 @@
-import type { Asset } from './asset'
+import type {
+  Asset,
+  BatchResult,
+  Bot,
+  Folder,
+  FolderListResponse,
+  ImageCounts,
+  ImageListQuery,
+  ImageListResponse,
+  Material,
+  MaterialListResponse,
+} from './asset'
 
 // ── 圖生圖模型 ──
 export interface AiModel {
@@ -196,3 +207,15 @@ export type FeedPackageId = 'pkg-500' | 'pkg-1500' | 'pkg-3000'
  * `api.topUpFeed?.(...)` 選擇性呼叫，避免真後端環境下呼叫到不存在的方法。
  */
 export type TopUpFeedFn = (packageId: string) => Promise<{ balance: number }>
+export type {
+  Asset,
+  BatchResult,
+  Bot,
+  Folder,
+  FolderListResponse,
+  ImageCounts,
+  ImageListQuery,
+  ImageListResponse,
+  Material,
+  MaterialListResponse,
+}
