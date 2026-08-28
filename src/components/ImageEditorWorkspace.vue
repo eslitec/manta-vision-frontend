@@ -582,7 +582,6 @@ type ObjectEditorLayer = EditorLayer & {
   scale: number
   dragging: boolean
 }
-type ObjectCorner = 'nw' | 'ne' | 'sw' | 'se'
 const layers = reactive<EditorLayer[]>([
   { key: 'fade', type: 'fade', visible: true, locked: false },
   { key: 'original', type: 'original', visible: true, locked: true },
@@ -809,7 +808,7 @@ const startObjectDrag = (event: PointerEvent, layer: ObjectEditorLayer) => {
     },
   })
 }
-const startObjectResize = (event: PointerEvent, layer: ObjectEditorLayer, _corner: ObjectCorner) => {
+const startObjectResize = (event: PointerEvent, layer: ObjectEditorLayer, _corner: CropCorner) => {
   if (event.button !== 0) return
   event.preventDefault()
   selectLayer(layer.key)
