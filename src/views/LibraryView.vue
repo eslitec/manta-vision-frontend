@@ -104,6 +104,7 @@
           :tag-label="$t(`sources.${a.source}`)"
           :dimensions="a.dim"
           :type="a.type"
+          :url="a.url"
           :selected="selectedIds.has(a.id)"
           @toggle="toggleSelect(a.id)"
         )
