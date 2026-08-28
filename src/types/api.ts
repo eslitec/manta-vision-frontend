@@ -1,4 +1,15 @@
-import type { Asset } from './asset'
+import type {
+  Asset,
+  BatchResult,
+  Bot,
+  Folder,
+  FolderListResponse,
+  ImageCounts,
+  ImageListQuery,
+  ImageListResponse,
+  Material,
+  MaterialListResponse,
+} from './asset'
 
 // ── 圖生圖模型 ──
 export interface AiModel {
@@ -181,4 +192,15 @@ export interface Session {
   expiresAt: number
 }
 
-export type { Asset }
+export type {
+  Asset,
+  BatchResult,
+  Bot,
+  Folder,
+  FolderListResponse,
+  ImageCounts,
+  ImageListQuery,
+  ImageListResponse,
+  Material,
+  MaterialListResponse,
+}

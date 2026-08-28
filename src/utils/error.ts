@@ -47,3 +47,40 @@ export const USERNAME_TAKEN = 'USERNAME_TAKEN'
 export function isUsernameTaken(e: unknown): boolean {
   return hasCode(e, USERNAME_TAKEN)
 }
+
+// ── 圖庫／資料夾（feat/gallery-finish，見 docs/api-status.md）──
+
+/** 後端在資料夾名稱重複時擲出的錯誤碼（`POST /folders`、`PUT /folders/{id}`） */
+export const DUPLICATE_NAME = 'DUPLICATE_NAME'
+
+export function isDuplicateName(e: unknown): boolean {
+  return hasCode(e, DUPLICATE_NAME)
+}
+
+/** 後端在資料夾數量已達上限（200 個／機器人）時擲出的錯誤碼 */
+export const FOLDER_LIMIT_EXCEEDED = 'FOLDER_LIMIT_EXCEEDED'
+
+export function isFolderLimitExceeded(e: unknown): boolean {
+  return hasCode(e, FOLDER_LIMIT_EXCEEDED)
+}
+
+/** 後端擋下刪除「正被使用中」素材時擲出的錯誤碼 */
+export const ASSET_IN_USE = 'ASSET_IN_USE'
+
+export function isAssetInUse(e: unknown): boolean {
+  return hasCode(e, ASSET_IN_USE)
+}
+
+/** 上傳檔案超過大小上限（10MB）時擲出的錯誤碼 */
+export const FILE_TOO_LARGE = 'FILE_TOO_LARGE'
+
+export function isFileTooLarge(e: unknown): boolean {
+  return hasCode(e, FILE_TOO_LARGE)
+}
+
+/** 上傳檔案格式不支援時擲出的錯誤碼（僅支援 jpg／png／webp） */
+export const UNSUPPORTED_FORMAT = 'UNSUPPORTED_FORMAT'
+
+export function isUnsupportedFormat(e: unknown): boolean {
+  return hasCode(e, UNSUPPORTED_FORMAT)
+}

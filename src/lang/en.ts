@@ -25,6 +25,7 @@ export default {
     download: 'Download',
     estimatedCost: 'Estimated cost',
     generating: 'Generating…',
+    loading: 'Loading…',
     generationFailed: 'Generation failed',
     generationResult: 'Generated result',
     openLibrary: 'Open library',
@@ -44,6 +45,11 @@ export default {
     submitFailed: 'Submission failed. Please try again.',
     invalidCredentials: 'Incorrect username or password. Please try again.',
     usernameTaken: 'This username is already taken. Please choose another one.',
+    duplicateFolderName: 'A folder with this name already exists.',
+    folderLimitExceeded: 'You have reached the folder limit (200).',
+    assetInUse: 'This asset is currently in use and cannot be deleted.',
+    fileTooLarge: 'The file exceeds the 10MB limit.',
+    unsupportedFormat: 'Unsupported file format. Please use jpg, png, or webp.',
   },
   auth: {
     title: 'Log in to Manta Vision',
@@ -95,9 +101,10 @@ export default {
     all: 'All',
     upload: 'Uploaded',
     object: 'Object asset',
-    ai: 'AI generated',
+    aiGenerate: 'AI generated',
     edit: 'Edited',
     video: 'Video',
+    tryon: 'AI try-on',
   },
   assetTypes: {
     image: 'Images',
@@ -561,6 +568,8 @@ export default {
     folderNote:
       'Folder “{folder}” · {count} assets. Removing an asset keeps it in the library but removes this folder membership.',
     note: 'This library belongs to the Good Day Select bot. Switching bots shows each bot’s own assets and generated results.',
+    batchFailed: '{count} operations failed. Please try again later.',
+    uploadFailed: '{count} uploads failed. Please try again later.',
   },
   editor: {
     original: 'Original',

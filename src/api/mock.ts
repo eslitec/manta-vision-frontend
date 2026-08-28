@@ -2,13 +2,21 @@ import type {
   AiModel,
   AppliedEditTool,
   Asset,
+  Bot,
   BrandProfile,
   EditorPricing,
   EditorToolKey,
+  Folder,
+  FolderListResponse,
   GeneratedImage,
   GeneratedPost,
   GenerateImageReq,
   GeneratePostReq,
+  ImageCounts,
+  ImageListQuery,
+  ImageListResponse,
+  Material,
+  MaterialListResponse,
   Metrics,
   RetouchReq,
   RetouchResult,
@@ -18,7 +26,6 @@ import type {
   VideoJobReq,
 } from '@/types/api'
 import { VIDEO_MODEL_TIERS } from '@/types/api'
-import { UNFILED_FOLDER } from '@/types/asset'
 
 // ⚠️ 這是「假後端」：所有資料在記憶體中，讓前端功能可端到端運作。
 // 之後把每個函式改成呼叫 http（api/http.ts）即可，介面不變。
@@ -56,47 +63,67 @@ const db = {
   successGen: 123,
   regenBeforeAdopt: 1.7,
   generatedThisMonth: 128, // 本月已生成張數（首頁統計；產圖的模組才計入）
-  folders: ['未分類', '春季企劃', '商品素材', '生成結果'],
+  // 資料夾：id／顯示名稱兩個欄位，對齊後端 FolderResponse（imageCount 由 listFolders 即時算出，不在這裡存）
+  folders: [
+    { folderId: 'folder_spring', folderName: '春季企劃' },
+    { folderId: 'folder_product', folderName: '商品素材' },
+    { folderId: 'folder_result', folderName: '生成結果' },
+  ],
+  // 素材：source／type 對齊後端 ImageSource／MediaType 兩個獨立維度；
+  // 未指定 folderId＝未分類（後端回 null，這裡用 undefined 表示）
   assets: [
     {
       id: 'a1',
       name: '春季主視覺_01',
-      source: '上傳',
-      tag: 'upload',
+      source: 'upload',
       dim: '1024×758',
-      folderId: '春季企劃',
+      type: 'image',
+      folderId: 'folder_spring',
       referencedBy: 2,
     },
     {
       id: 'a2',
       name: '商品_去背_白T',
-      source: '物件素材',
-      tag: 'object',
+      source: 'object',
       dim: '1024×768',
-      folderId: '商品素材',
+      type: 'image',
+      folderId: 'folder_product',
       referencedBy: 1,
     },
-    { id: 'a3', name: '生成_木質桌面情境', source: 'AI 生成', tag: 'ai', dim: '1024×768', folderId: '生成結果' },
-    { id: 'a4', name: '春季主視覺_調色版', source: '編輯產物', tag: 'edit', dim: '1024×768', folderId: '春季企劃' },
-    { id: 'a5', name: '門市外觀', source: '上傳', tag: 'upload', dim: '1024×768', folderId: '未分類' },
+    {
+      id: 'a3',
+      name: '生成_木質桌面情境',
+      source: 'aiGenerate',
+      dim: '1024×768',
+      type: 'image',
+      folderId: 'folder_result',
+    },
+    { id: 'a4', name: '春季主視覺_調色版', source: 'edit', dim: '1024×768', type: 'image', folderId: 'folder_spring' },
+    { id: 'a5', name: '門市外觀', source: 'upload', dim: '1024×768', type: 'image' },
     {
       id: 'a6',
       name: '商品_去背_帆布袋',
-      source: '物件素材',
-      tag: 'object',
+      source: 'object',
       dim: '1024×768',
-      folderId: '商品素材',
+      type: 'image',
+      folderId: 'folder_product',
       referencedBy: 1,
     },
-    { id: 'a7', name: '生成_野餐情境', source: 'AI 生成', tag: 'ai', dim: '1024×768', folderId: '生成結果' },
+    {
+      id: 'a7',
+      name: '生成_野餐情境',
+      source: 'aiGenerate',
+      dim: '1024×768',
+      type: 'image',
+      folderId: 'folder_result',
+    },
     {
       id: 'a8',
       name: '夏季宣傳_短影片',
-      source: '影片',
-      tag: 'video',
+      source: 'aiGenerate',
       dim: '1080×1920',
       type: 'video',
-      folderId: '生成結果',
+      folderId: 'folder_result',
     },
   ] as Asset[],
   brand: {
@@ -143,6 +170,40 @@ function deduct(cost: number) {
   db.feedBalance -= cost
   db.monthlyUsed += cost
 }
+
+// 圖庫／資料夾常數，對齊後端 app/services/images.py、app/services/folders.py
+const MAX_UPLOAD_MB = 10
+const MAX_FOLDERS_PER_BOT = 200
+const SUPPORTED_UPLOAD_FORMATS = ['jpg', 'jpeg', 'png', 'webp']
+
+// 內建素材（GET /materials；不分機器人，全平台共用；model 類別後端也還是空的）
+const MATERIALS: Material[] = [
+  { materialId: 'mat_bg_1', materialName: '白色棚拍背景', category: 'background', url: '' },
+  { materialId: 'mat_bg_2', materialName: '木質桌面情境', category: 'background', url: '' },
+  { materialId: 'mat_obj_1', materialName: '春季花束', category: 'object', url: '' },
+]
+
+// 依 source／mediaType 兩個維度統計整個圖庫（不受目前查詢條件篩選；對齊後端 count_by_bucket）
+function countByBucket(): ImageCounts {
+  const counts: ImageCounts = { all: 0, upload: 0, aiGenerate: 0, edit: 0, object: 0, video: 0 }
+  for (const a of db.assets) {
+    counts.all += 1
+    if (a.type === 'video') {
+      counts.video += 1
+      continue
+    }
+    // 後端把 tryon 併入 aiGenerate 桶（左側欄沒有「試穿」分類）
+    const bucket = a.source === 'tryon' ? 'aiGenerate' : a.source
+    counts[bucket] += 1
+  }
+  return counts
+}
+
+function folderById(folderId: string): Folder | undefined {
+  const f = db.folders.find((x) => x.folderId === folderId)
+  return f ? { ...f, imageCount: db.assets.filter((a) => a.folderId === f.folderId).length } : undefined
+}
+
 export const mockApi = {
   // GET /models
   async listModels(): Promise<AiModel[]> {
@@ -163,65 +224,127 @@ export const mockApi = {
     return { balance: db.feedBalance }
   },
 
-  // GET /images
-  // ⚠️ 真後端這支有分頁（預設 pageSize=24），這個 mock 為了先讓功能跑起來
-  // 才回全部——串真後端時簽章要改成接受 page/pageSize，回傳也要改成
-  // { total, page, pageSize, items, counts } 這個形狀，不能只是把回傳值換掉。
-  async listImages(): Promise<Asset[]> {
+  // GET /images（對齊後端分頁：{ total, page, items, counts }；counts 是整個圖庫的統計，不受這裡的篩選影響）
+  async listImages(query: ImageListQuery = {}): Promise<ImageListResponse> {
     await delay(250)
-    return [...db.assets]
+    const page = query.page ?? 1
+    const pageSize = query.pageSize ?? 8
+    const filtered = db.assets.filter((a) => {
+      if (query.mediaType && a.type !== query.mediaType) return false
+      if (query.source && a.source !== query.source) return false
+      if (query.folderId === null && a.folderId !== undefined) return false
+      if (typeof query.folderId === 'string' && a.folderId !== query.folderId) return false
+      if (query.q && !a.name.includes(query.q)) return false
+      return true
+    })
+    const start = (page - 1) * pageSize
+    return {
+      total: filtered.length,
+      page,
+      items: filtered.slice(start, start + pageSize),
+      counts: countByBucket(),
+    }
   },
 
-  // GET /folders（使用者歸檔的資料夾，與「來源」是獨立維度）
-  async listFolders(): Promise<string[]> {
+  // GET /folders（使用者歸檔的資料夾，與「來源」是獨立維度；imageCount 即時算出）
+  async listFolders(): Promise<FolderListResponse> {
     await delay(150)
-    return [...db.folders]
+    return {
+      items: db.folders.map((f) => ({
+        ...f,
+        imageCount: db.assets.filter((a) => a.folderId === f.folderId).length,
+      })),
+      unfiledCount: db.assets.filter((a) => a.folderId === undefined).length,
+    }
   },
 
-  // POST /folders（新增資料夾）
-  async createFolder(name: string): Promise<string[]> {
+  // POST /folders（新增資料夾；名稱大小寫敏感去重、數量上限對齊後端）
+  async createFolder(name: string): Promise<Folder> {
     await delay(200)
     const n = name.trim()
-    if (n && !db.folders.includes(n)) db.folders.push(n)
-    return [...db.folders]
+    if (db.folders.some((f) => f.folderName === n)) throw new Error('DUPLICATE_NAME')
+    if (db.folders.length >= MAX_FOLDERS_PER_BOT) throw new Error('FOLDER_LIMIT_EXCEEDED')
+    const folder = { folderId: uid('folder'), folderName: n }
+    db.folders.push(folder)
+    return { ...folder, imageCount: 0 }
   },
 
-  // PATCH /images/folders（把選取素材移至資料夾；1:N＝直接替換 folderId，會離開原資料夾）
-  async moveToFolder(assetIds: string[], folder: string): Promise<void> {
+  // PUT /folders/:id（重新命名；同上去重規則）
+  async renameFolder(folderId: string, name: string): Promise<Folder> {
+    await delay(200)
+    const n = name.trim()
+    const folder = db.folders.find((f) => f.folderId === folderId)
+    if (!folder) throw new Error('NOT_FOUND')
+    if (db.folders.some((f) => f.folderId !== folderId && f.folderName === n)) throw new Error('DUPLICATE_NAME')
+    folder.folderName = n
+    return folderById(folderId)!
+  },
+
+  // DELETE /folders/:id（刪除資料夾；夾內素材移回未分類，不會被刪除）
+  async deleteFolder(folderId: string): Promise<{ deleted: boolean; imagesUnfiled: number }> {
     await delay(250)
+    const before = db.folders.length
+    db.folders = db.folders.filter((f) => f.folderId !== folderId)
+    if (db.folders.length === before) throw new Error('NOT_FOUND')
+    let imagesUnfiled = 0
     for (const a of db.assets) {
-      if (assetIds.includes(a.id)) a.folderId = folder
+      if (a.folderId === folderId) {
+        a.folderId = undefined
+        imagesUnfiled += 1
+      }
     }
+    return { deleted: true, imagesUnfiled }
   },
 
-  // PATCH /images/folders/remove（把選取素材移出目前資料夾；1:N＝folderId 設回未分類，素材仍保留在圖庫）
-  async removeFromFolder(assetIds: string[]): Promise<void> {
-    await delay(250)
-    for (const a of db.assets) {
-      if (assetIds.includes(a.id)) a.folderId = UNFILED_FOLDER
-    }
+  // PUT /images/:id（改名／搬資料夾共用一支；folderId 三態：不帶這個 key＝不動，null＝移出未分類，字串＝搬過去）
+  async updateImage(imageId: string, patch: { name?: string; folderId?: string | null }): Promise<Asset> {
+    await delay(200)
+    const a = db.assets.find((x) => x.id === imageId)
+    if (!a) throw new Error('NOT_FOUND')
+    if (patch.name !== undefined) a.name = patch.name.trim().slice(0, 100) || a.name
+    if ('folderId' in patch) a.folderId = patch.folderId ?? undefined
+    return { ...a }
   },
 
-  // DELETE /images（批次刪除素材）
-  async deleteImages(assetIds: string[]): Promise<void> {
-    await delay(300)
-    db.assets = db.assets.filter((a) => !assetIds.includes(a.id))
+  // DELETE /images/:id（單筆刪除；被引用中的素材後端會擋下）
+  async deleteImage(imageId: string): Promise<{ deleted: boolean }> {
+    await delay(200)
+    const a = db.assets.find((x) => x.id === imageId)
+    if (!a) throw new Error('NOT_FOUND')
+    if ((a.referencedBy ?? 0) > 0) throw new Error('ASSET_IN_USE')
+    db.assets = db.assets.filter((x) => x.id !== imageId)
+    return { deleted: true }
   },
 
-  // POST /images (上傳) — 落到指定資料夾，未指定則進「未分類」
-  async uploadImage(file: File, folder?: string): Promise<Asset> {
+  // POST /upload（上傳；落到指定資料夾，未指定則進「未分類」）
+  async uploadImage(file: File, folderId?: string): Promise<Asset> {
     await delay(400)
+    if (file.size > MAX_UPLOAD_MB * 1024 * 1024) throw new Error('FILE_TOO_LARGE')
+    const extension = file.name.split('.').pop()?.toLowerCase() ?? ''
+    if (!SUPPORTED_UPLOAD_FORMATS.includes(extension)) throw new Error('UNSUPPORTED_FORMAT')
     // TODO: 後端就緒後把 file blob 上傳到 R2、回傳真實 URL 與尺寸；目前僅用檔名建立素材
     const a: Asset = {
       id: uid('a'),
       name: file.name,
-      source: '上傳',
-      tag: 'upload',
+      source: 'upload',
       dim: '1024×768',
-      folderId: folder ?? UNFILED_FOLDER,
+      type: 'image',
+      folderId,
     }
     db.assets.unshift(a)
     return a
+  },
+
+  // GET /materials（內建素材；不分機器人）
+  async listMaterials(category?: Material['category']): Promise<MaterialListResponse> {
+    await delay(150)
+    return { items: category ? MATERIALS.filter((m) => m.category === category) : [...MATERIALS] }
+  },
+
+  // GET /bots（目前一帳號一 bot，契約上一律回陣列）
+  async listBots(): Promise<Bot[]> {
+    await delay(150)
+    return [{ botId: 'bot_demo', botName: '日安選物' }]
   },
 
   // GET /editor/pricing — 編輯器價目表（MV-09 工具列與 MV-09b 修飾項目共用同一份）
@@ -264,10 +387,10 @@ export const mockApi = {
     const a: Asset = {
       id: uid('a'),
       name,
-      source: '編輯產物',
-      tag: 'edit',
+      source: 'edit',
       dim: '1024×768',
-      folderId: opts?.folder ?? UNFILED_FOLDER,
+      type: 'image',
+      folderId: opts?.folder || undefined,
       editable: opts?.keepLayers ?? false,
     }
     db.assets.unshift(a)
@@ -364,7 +487,7 @@ export const mockApi = {
   // 存入圖庫（選用）→ 生成結果落地成 AI 生成素材，並記錄採用
   async saveGenerated(name: string): Promise<Asset> {
     await delay(300)
-    const a: Asset = { id: uid('a'), name, source: 'AI 生成', tag: 'ai', dim: '1024×768', folderId: UNFILED_FOLDER }
+    const a: Asset = { id: uid('a'), name, source: 'aiGenerate', dim: '1024×768', type: 'image' }
     db.assets.unshift(a)
     return a
   },

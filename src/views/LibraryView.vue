@@ -19,22 +19,22 @@
     aside#library-folders.folders(:class="{ 'isMobileOpen': foldersOpen }")
       button.folders__item(:class="{ 'isActive': activeView.kind === 'all' }" @click="setView({ kind: 'all' })")
         span {{ t('library.allAssets') }}
-        span.folders__count {{ assets.length }}
+        span.folders__count {{ counts.all }}
       .folders__section {{ t('library.systemCategories') }}
-      button.folders__item(v-for="c in categoryTags" :key="c.tag" :class="{ 'isActive': activeView.kind === 'category' && activeView.tag === c.tag }" @click="setView({ kind: 'category', tag: c.tag })")
+      button.folders__item(v-for="c in categoryTags" :key="c.tag" :class="{ 'isActive': activeView.kind === 'category' && activeView.tag === c.tag }" @click="setView({ kind: 'category', tag: c.tag, dimension: c.dimension })")
         span {{ t(`sources.${c.tag}`) }}
-        span.folders__count {{ categoryCounts.get(c.tag) ?? 0 }}
+        span.folders__count {{ counts[c.tag] }}
       .folders__section.folders__section--folders
         span {{ t('library.myFolders') }}
         button.folders__addIcon(type="button" @click="startAddFolder" :aria-label="t('library.addFolder')")
           span(aria-hidden="true") ＋
       FolderRow(
         v-for="f in folders"
-        :key="f"
-        :name="f"
-        :count="folderCounts.get(f) ?? 0"
-        :active="activeView.kind === 'folder' && activeView.name === f"
-        @click="setView({ kind: 'folder', name: f })"
+        :key="f.folderId"
+        :name="f.folderName"
+        :count="f.imageCount"
+        :active="activeView.kind === 'folder' && activeView.folderId === f.folderId"
+        @click="setView({ kind: 'folder', folderId: f.folderId, name: f.folderName })"
       )
       .folders__new(v-if="addingFolder")
         input.folders__input(
@@ -47,6 +47,7 @@
           @keyup.esc="cancelAddFolder"
           @blur="confirmAddFolder"
         )
+        small.folders__error(v-if="folderError" role="alert") {{ folderError }}
       p.folders__hint {{ t('library.folderHint') }}
     section.assets
       .assets__toolbar
@@ -60,11 +61,13 @@
             span {{ t('library.uploadImages') }}
           input.upload__input(ref="uploadInput" type="file" accept="image/*" multiple @change="onUpload")
 
+      p.assets__error(v-if="batchError" role="alert") {{ batchError }}
+
       .batchbar(v-if="selectedIds.size")
         .batchbar__selection
           span.batchbar__minus
           span {{ t('library.selectedCount', { count: selectedIds.size }) }}
-          button.batchbar__link(@click="selectAllOnPage") {{ t('library.selectPage', { count: paged.length }) }}
+          button.batchbar__link(@click="selectAllOnPage") {{ t('library.selectPage', { count: assets.length }) }}
           button.batchbar__link(@click="clearSelection") {{ t('common.clear') }}
         .batchbar__actions
           AppButton.batchbar__action.batchbar__action--moveToFolder(variant="primary" @click="openMoveDialog") {{ t('library.moveToFolder') }}
@@ -74,7 +77,8 @@
             IconDelete
             | {{ t('common.delete') }}
 
-      .assets__empty(v-if="!filtered.length && !pendingTasks.length") {{ t('library.empty') }}
+      .assets__empty(v-if="loading && !assets.length && !pendingTasks.length") {{ t('common.loading') }}
+      .assets__empty(v-else-if="!assets.length && !pendingTasks.length") {{ t('library.empty') }}
       .assets__grid(v-else)
         .asset.asset--pending(v-for="t in pendingTasks" :key="t.id")
           .pending
@@ -87,19 +91,19 @@
           .asset__name {{ t.name }}
           .asset__pmeta {{ $t('library.pendingVideoMeta', { ratio: t.videoReq?.ratio || '9:16' }) }}
         AssetCard(
-          v-for="a in paged"
+          v-for="a in assets"
           :key="a.id"
           :name="a.name"
-          :tag="a.tag"
-          :tag-label="$t(`sources.${a.tag}`)"
+          :tag="a.source"
+          :tag-label="$t(`sources.${a.source}`)"
           :dimensions="a.dim"
           :type="a.type"
           :selected="selectedIds.has(a.id)"
           @toggle="toggleSelect(a.id)"
         )
 
-      .pagination(v-if="filtered.length")
-        span.pagination__total {{ t('library.totalAssets', { count: filtered.length }) }}
+      .pagination(v-if="total")
+        span.pagination__total {{ t('library.totalAssets', { count: total }) }}
         .pagination__pages
           button.pagination__nav(:aria-label="t('library.previousPage')" :disabled="page === 1" @click="page = page - 1") ‹
           template(v-for="(p, i) in pageItems" :key="i")
@@ -118,17 +122,18 @@
             IconClose
         p.modal__desc {{ t('library.moveDescription', { count: selectedIds.size }) }}
         ul.modal__list
-          li(v-for="f in folders" :key="f")
-            button.modal__listItem(type="button" :aria-pressed="moveTargetFolder === f" :class="{ 'isActive': moveTargetFolder === f }" @click="moveTargetFolder = f")
+          li(v-for="f in folders" :key="f.folderId")
+            button.modal__listItem(type="button" :aria-pressed="moveTargetFolder === f.folderId" :class="{ 'isActive': moveTargetFolder === f.folderId }" @click="moveTargetFolder = f.folderId")
               IconFolder
-              span.modal__listName {{ f }}
-              span.modal__listCount {{ folderCounts.get(f) ?? 0 }}
+              span.modal__listName {{ f.folderName }}
+              span.modal__listCount {{ f.imageCount }}
         .modal__create
           input.modal__createInput(v-model="moveNewFolderName" type="text" :aria-label="t('library.createFolderPlaceholder')" :placeholder="t('library.createFolderPlaceholder')" @keyup.enter="createFolderForMove")
           AppButton.modal__createBtn(variant="ghost" size="compact" @click="createFolderForMove") {{ t('common.create') }}
+        small.modal__error(v-if="moveDialogError" role="alert") {{ moveDialogError }}
         footer.modal__foot
           AppButton(variant="outline" @click="moveDialogOpen = false") {{ t('common.cancel') }}
-          AppButton(variant="primary" :disabled="!moveTargetFolder" @click="confirmMoveToFolder") {{ t('library.moveInto', { folder: moveTargetFolder }) }}
+          AppButton(variant="primary" :disabled="!moveTargetFolder" @click="confirmMoveToFolder") {{ t('library.moveInto', { folder: moveTargetFolderName }) }}
 
   Teleport(to="body")
     .modal(v-if="deleteDialogOpen" @click.self="deleteDialogOpen = false")
@@ -176,15 +181,51 @@ import {
   IconUpload,
 } from '@/components/icons'
 import ImageEditorWorkspace from '@/components/ImageEditorWorkspace.vue'
-import { CATEGORY_TAGS, UNFILED_FOLDER, type Asset, type AssetTag } from '@/types/asset'
+import { CATEGORY_TAGS, type Asset, type AssetSource, type CategoryTag, type ImageListQuery } from '@/types/asset'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
+import { isDuplicateName, isFileTooLarge, isFolderLimitExceeded, isUnsupportedFormat } from '@/utils/error'
 
-const { assets, folders, load, loadFolders, addFolder, moveToFolder, removeFromFolder, deleteAssets, upload } =
-  useAssets()
+const {
+  assets,
+  total,
+  page,
+  counts,
+  loading,
+  load,
+  folders,
+  loadFolders,
+  addFolder,
+  moveToFolder,
+  removeFromFolder,
+  deleteAssets,
+  upload,
+} = useAssets()
 const { t } = useI18n()
 const moveDialogRef = ref<HTMLElement | null>(null)
 const deleteDialogRef = ref<HTMLElement | null>(null)
 const uploadInput = ref<HTMLInputElement | null>(null)
+
+// 素材清單改成伺服器分頁後，assets 只會有「目前這一頁」的內容——批次選取卻允許
+// 跨頁累積（見下方 selectedIds），刪除確認彈窗要秀出所有已選素材的縮圖與名稱，
+// 不能只看目前這頁。這裡把每次載入過的素材都記下來，選取時就查得到完整資料。
+const assetCache = ref<Record<string, Asset>>({})
+watch(
+  assets,
+  (list) => {
+    const next = { ...assetCache.value }
+    for (const a of list) next[a.id] = a
+    assetCache.value = next
+  },
+  { immediate: true },
+)
+
+function errorMessage(e: unknown, fallback: string): string {
+  if (isDuplicateName(e)) return t('errors.duplicateFolderName')
+  if (isFolderLimitExceeded(e)) return t('errors.folderLimitExceeded')
+  if (isFileTooLarge(e)) return t('errors.fileTooLarge')
+  if (isUnsupportedFormat(e)) return t('errors.unsupportedFormat')
+  return fallback
+}
 
 // 非同步生成中的項目（目前只有圖生影會用到；圖片生成是同步完成，不會有機會停在「生成中」狀態）
 // 跟頂部工具列「任務」徽章共用同一份 generationTasks store，只在「全部素材」第一頁顯示，
@@ -208,8 +249,13 @@ function etaText(progress: number) {
     : t('common.remainingSeconds', { seconds: s })
 }
 
-// 左側主要篩選：全部素材／系統分類（依 tag）／我的資料夾（使用者自訂），三者互斥、單選
-type ActiveView = { kind: 'all' } | { kind: 'category'; tag: AssetTag } | { kind: 'folder'; name: string }
+// 左側主要篩選：全部素材／系統分類（依 source 或 mediaType）／我的資料夾（使用者自訂），三者互斥、單選。
+// 系統分類混了兩個維度（object／aiGenerate／edit 是來源；video 是媒體型態），
+// dimension 記著該用查詢的哪個欄位比對，避免把 video 誤當成一種 source 送給後端。
+type ActiveView =
+  | { kind: 'all' }
+  | { kind: 'category'; tag: CategoryTag; dimension: 'source' | 'mediaType' }
+  | { kind: 'folder'; folderId: string; name: string }
 const activeView = ref<ActiveView>({ kind: 'all' })
 const foldersOpen = ref(false)
 function setView(v: ActiveView) {
@@ -222,72 +268,81 @@ const tabs = computed(() =>
 )
 const activeTab = ref('library')
 const sources = computed(() =>
-  ['all', 'upload', 'ai', 'edit'].map((value) => ({ label: t(`sources.${value}`), value })),
+  ['all', 'upload', 'aiGenerate', 'edit'].map((value) => ({ label: t(`sources.${value}`), value })),
 )
 const activeSource = ref('all')
 const keyword = ref('')
+const batchError = ref('')
+
+const PAGE_SIZE = 8
+
+// 資料夾／系統分類（左）＋來源（右上）＋關鍵字組成後端查詢條件。
+// 分類與來源同屬 source 維度：兩者同時指定會做出恆為空的交集，這裡讓「系統分類」優先，
+// 只在不是分類檢視時才套用來源 chip，避免疊出使用者看不懂的空清單。
+function buildQuery(): ImageListQuery {
+  const q: ImageListQuery = { page: page.value, pageSize: PAGE_SIZE }
+  const v = activeView.value
+  if (v.kind === 'category') {
+    if (v.dimension === 'mediaType') q.mediaType = 'video'
+    else q.source = v.tag as AssetSource
+  } else {
+    if (v.kind === 'folder') q.folderId = v.folderId
+    if (activeSource.value !== 'all') q.source = activeSource.value as AssetSource
+  }
+  if (keyword.value) q.q = keyword.value
+  return q
+}
+async function fetchAssets() {
+  await load(buildQuery())
+}
 
 onMounted(() => {
-  load()
   loadFolders()
+  fetchAssets()
 })
 
 // 頂部提示文字：檢視「全部素材」／系統分類時顯示機器人情境；檢視某個資料夾時改顯示該資料夾的說明
 const noteText = computed(() => {
-  if (activeView.value.kind === 'folder') {
-    const count = folderCounts.value.get(activeView.value.name) ?? 0
-    return t('library.folderNote', { folder: activeView.value.name, count })
+  const view = activeView.value
+  if (view.kind === 'folder') {
+    const count = folders.value.find((f) => f.folderId === view.folderId)?.imageCount ?? 0
+    return t('library.folderNote', { folder: view.name, count })
   }
   return t('library.note')
 })
 
-// 系統分類／我的資料夾的數量，都是從目前已載入的 assets 即時算出，不是後端另外提供的欄位
-const categoryCounts = computed(() => {
-  const map = new Map<AssetTag, number>()
-  for (const c of categoryTags) map.set(c.tag, assets.value.filter((a) => a.tag === c.tag).length)
-  return map
-})
-const folderCounts = computed(() => {
-  const map = new Map<string, number>()
-  for (const f of folders.value) map.set(f, assets.value.filter((a) => (a.folderId ?? UNFILED_FOLDER) === f).length)
-  return map
-})
 const activeViewLabel = computed(() => {
   const view = activeView.value
-  return view.kind === 'all' ? t('library.allAssets') : view.kind === 'category' ? t(`sources.${view.tag}`) : view.name
+  if (view.kind === 'all') return t('library.allAssets')
+  if (view.kind === 'category') return t(`sources.${view.tag}`)
+  return view.name
 })
 const activeViewCount = computed(() => {
   const view = activeView.value
-  return view.kind === 'all'
-    ? assets.value.length
-    : view.kind === 'category'
-      ? (categoryCounts.value.get(view.tag) ?? 0)
-      : (folderCounts.value.get(view.name) ?? 0)
+  if (view.kind === 'all') return counts.value.all
+  if (view.kind === 'category') return counts.value[view.tag]
+  return folders.value.find((f) => f.folderId === view.folderId)?.imageCount ?? 0
 })
 
-// 資料夾／系統分類（左）與來源（右上）、關鍵字是不同維度，可疊加過濾
-const filtered = computed(() =>
-  assets.value.filter((a) => {
-    const v = activeView.value
-    const byView =
-      v.kind === 'all' ? true : v.kind === 'category' ? a.tag === v.tag : (a.folderId ?? UNFILED_FOLDER) === v.name
-    const bySource = activeSource.value === 'all' || a.tag === activeSource.value
-    const byKeyword = !keyword.value || a.name.includes(keyword.value)
-    return byView && bySource && byKeyword
-  }),
-)
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
 
-// 分頁（純前端切頁，8 筆一頁）
-const page = ref(1)
-const pageSize = 8
-const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize)))
-const paged = computed(() => filtered.value.slice((page.value - 1) * pageSize, page.value * pageSize))
-watch([activeView, activeSource, keyword], () => {
+// 篩選條件切換時重回第 1 頁；先前的批次選取多半已經不對應目前畫面上看到的素材，直接清空避免誤操作
+watch([activeView, activeSource], () => {
   page.value = 1
-})
-// 篩選條件跟著切換時，先前的批次選取多半已經不對應目前畫面上看到的素材，直接清空避免誤操作
-watch([activeView, activeSource, keyword], () => {
   clearSelection()
+})
+// 分頁與篩選條件共用同一支查詢；三者任一變動都重打 GET /images
+watch([activeView, activeSource, page], fetchAssets)
+
+// 關鍵字搜尋做小小 debounce，不然每敲一個字就打一次後端
+let keywordTimer: ReturnType<typeof setTimeout> | undefined
+watch(keyword, () => {
+  clearTimeout(keywordTimer)
+  keywordTimer = setTimeout(() => {
+    page.value = 1
+    clearSelection()
+    fetchAssets()
+  }, 300)
 })
 
 // 分頁按鈕清單（帶省略號），例如總頁數 16、目前第 1 頁 → [1, 2, 3, '…', 16]
@@ -317,40 +372,57 @@ function toggleSelect(id: string) {
 }
 function selectAllOnPage() {
   const next = new Set(selectedIds.value)
-  for (const a of paged.value) next.add(a.id)
+  for (const a of assets.value) next.add(a.id)
   selectedIds.value = next
 }
 function clearSelection() {
   selectedIds.value = new Set()
+  batchError.value = ''
 }
 
 // 移至資料夾：完整彈窗（單選目標資料夾，可就地建立新資料夾）
 const moveDialogOpen = ref(false)
 const moveTargetFolder = ref('')
 const moveNewFolderName = ref('')
+const moveDialogError = ref('')
+const moveTargetFolderName = computed(
+  () => folders.value.find((f) => f.folderId === moveTargetFolder.value)?.folderName ?? '',
+)
 function openMoveDialog() {
-  moveTargetFolder.value = folders.value[0] ?? ''
+  moveTargetFolder.value = folders.value[0]?.folderId ?? ''
   moveNewFolderName.value = ''
+  moveDialogError.value = ''
   moveDialogOpen.value = true
 }
 async function createFolderForMove() {
   const name = moveNewFolderName.value.trim()
   if (!name) return
-  if (!folders.value.includes(name)) await addFolder(name)
-  moveTargetFolder.value = name
-  moveNewFolderName.value = ''
+  moveDialogError.value = ''
+  try {
+    const folder = await addFolder(name)
+    moveTargetFolder.value = folder.folderId
+    moveNewFolderName.value = ''
+  } catch (e) {
+    moveDialogError.value = errorMessage(e, t('errors.submitFailed'))
+  }
 }
 async function confirmMoveToFolder() {
   if (!moveTargetFolder.value) return
-  await moveToFolder([...selectedIds.value], moveTargetFolder.value)
+  const result = await moveToFolder([...selectedIds.value], moveTargetFolder.value)
   moveDialogOpen.value = false
   clearSelection()
+  await fetchAssets()
+  await loadFolders(true) // 兩邊資料夾的 imageCount 都變了
+  if (result.failedIds.length) batchError.value = t('library.batchFailed', { count: result.failedIds.length })
 }
 
 async function removeSelectedFromFolder() {
   if (activeView.value.kind !== 'folder') return
-  await removeFromFolder([...selectedIds.value])
+  const result = await removeFromFolder([...selectedIds.value])
   clearSelection()
+  await fetchAssets()
+  await loadFolders(true)
+  if (result.failedIds.length) batchError.value = t('library.batchFailed', { count: result.failedIds.length })
 }
 
 // 刪除確認：完整彈窗（縮圖預覽＋勾選「我了解此操作無法復原」才能刪除）
@@ -358,7 +430,10 @@ const deleteDialogOpen = ref(false)
 const deleteConfirmed = ref(false)
 useAccessibleDialog(moveDialogOpen, moveDialogRef, () => (moveDialogOpen.value = false))
 useAccessibleDialog(deleteDialogOpen, deleteDialogRef, () => (deleteDialogOpen.value = false))
-const selectedAssets = computed(() => assets.value.filter((a) => selectedIds.value.has(a.id)))
+// assets 現在只有「目前這一頁」的內容，跨頁選取的素材要查 assetCache 才找得到完整資料
+const selectedAssets = computed(() =>
+  [...selectedIds.value].map((id) => assetCache.value[id]).filter((a): a is Asset => !!a),
+)
 // 被生成結果引用（作為來源／參考圖）的選取素材數；刪除會斷開這些生成紀錄的來源鏈
 const referencedCount = computed(() => selectedAssets.value.filter((a) => (a.referencedBy ?? 0) > 0).length)
 function openDeleteDialog() {
@@ -366,48 +441,82 @@ function openDeleteDialog() {
   deleteDialogOpen.value = true
 }
 async function confirmDelete() {
-  await deleteAssets([...selectedIds.value])
+  const result = await deleteAssets([...selectedIds.value])
   deleteDialogOpen.value = false
   clearSelection()
+  await fetchAssets()
+  await loadFolders(true)
+  // 後端目前還沒有任何地方會把 isInUse 設成 true，所以這條路徑實務上還不會被觸發，
+  // 但介面先接好：真的發生時要讓使用者知道「還有 N 筆沒刪成功」，而不是靜靜失敗。
+  if (result.failedIds.length) batchError.value = t('library.batchFailed', { count: result.failedIds.length })
 }
 
 function downloadSelected() {
-  // 目前素材沒有實際檔案 URL，先做畫面呈現；等後端提供真實檔案來源後再接上真正的下載行為
+  for (const a of selectedAssets.value) {
+    if (!a.url) continue // mock 素材沒有真實檔案，跳過
+    const link = document.createElement('a')
+    link.href = a.url
+    link.download = a.name
+    link.target = '_blank'
+    link.rel = 'noopener'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+  }
 }
 
 // 新增資料夾（行內輸入）
 const addingFolder = ref(false)
 const newFolderName = ref('')
 const folderInput = ref<HTMLInputElement | null>(null)
+const folderError = ref('')
 
 async function startAddFolder() {
   addingFolder.value = true
   newFolderName.value = ''
+  folderError.value = ''
   await nextTick()
   folderInput.value?.focus()
 }
 async function confirmAddFolder() {
   const name = newFolderName.value.trim()
-  if (name && !folders.value.includes(name)) {
-    await addFolder(name)
-    setView({ kind: 'folder', name }) // 建好即切到新資料夾
+  if (!name) {
+    addingFolder.value = false
+    return
   }
-  addingFolder.value = false
+  folderError.value = ''
+  try {
+    const folder = await addFolder(name)
+    setView({ kind: 'folder', folderId: folder.folderId, name: folder.folderName }) // 建好即切到新資料夾
+    addingFolder.value = false
+  } catch (e) {
+    // 失敗時保留輸入框，讓使用者看得到錯誤訊息並可以直接修正重試
+    folderError.value = errorMessage(e, t('errors.submitFailed'))
+  }
 }
 function cancelAddFolder() {
   addingFolder.value = false
+  folderError.value = ''
 }
 
 async function onUpload(e: Event) {
   const input = e.target as HTMLInputElement
   const files = input.files
   if (!files || !files.length) return
-  // 上傳落到目前所在資料夾（不在特定資料夾時進「未分類」）；傳整個 File，後端就緒後改上傳 blob 到 R2
-  const target = activeView.value.kind === 'folder' ? activeView.value.name : undefined
+  // 上傳落到目前所在資料夾（不在特定資料夾時進「未分類」）
+  const target = activeView.value.kind === 'folder' ? activeView.value.folderId : undefined
+  let failed = 0
   for (const f of Array.from(files)) {
-    await upload(f, target)
+    try {
+      await upload(f, target)
+    } catch {
+      failed += 1
+    }
   }
   input.value = '' // 清空，讓同一檔案再次選取也能觸發 change
+  await fetchAssets()
+  await loadFolders(true)
+  if (failed) batchError.value = t('library.uploadFailed', { count: failed })
 }
 </script>
 
@@ -567,6 +676,13 @@ async function onUpload(e: Event) {
     font-size: 0.6875rem;
     line-height: 1.5;
     margin-top: 0.75rem;
+    padding: 0 0.75rem;
+  }
+  &__error {
+    display: block;
+    color: $red;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
     padding: 0 0.75rem;
   }
 }
@@ -799,6 +915,11 @@ async function onUpload(e: Event) {
   font-size: 0.875rem;
   padding: 2.5rem 0;
   text-align: center;
+}
+.assets__error {
+  color: $red;
+  font-size: 0.8125rem;
+  margin-bottom: 0.75rem;
 }
 .assets__grid {
   display: grid;
@@ -1064,6 +1185,12 @@ async function onUpload(e: Event) {
 .modal__create {
   @include flex(flex-start, center, 0.5rem);
   margin-bottom: 1.125rem;
+}
+.modal__error {
+  display: block;
+  color: $red;
+  font-size: 0.75rem;
+  margin: -0.75rem 0 1rem;
 }
 .modal__createInput {
   flex: 1;

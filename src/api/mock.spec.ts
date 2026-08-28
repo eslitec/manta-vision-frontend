@@ -109,12 +109,12 @@ describe('圖片編輯與 AI 修圖的扣款（MV-09 / MV-09b）', () => {
 
   it('另存編輯產物不扣飼料，且不覆寫原素材', async () => {
     const beforeFeed = (await api.getFeed()).balance
-    const beforeCount = (await api.listImages()).length
+    const beforeCount = (await api.listImages()).total
     const saved = await api.editImage('編輯後的圖', { keepLayers: true })
-    expect(saved.tag).toBe('edit')
+    expect(saved.source).toBe('edit')
     expect(saved.editable).toBe(true)
     expect((await api.getFeed()).balance).toBe(beforeFeed)
-    expect((await api.listImages()).length).toBe(beforeCount + 1)
+    expect((await api.listImages()).total).toBe(beforeCount + 1)
   })
 
   it('餘額不足時擲出 INSUFFICIENT_FEEDS，且不扣款', async () => {
@@ -187,63 +187,142 @@ describe('素材（圖庫）', () => {
   it('uploadImage 以 File 建立「上傳」來源並置頂', async () => {
     const file = new File(['x'], '新圖.png', { type: 'image/png' })
     const a = await api.uploadImage(file)
-    expect(a.source).toBe('上傳')
-    expect(a.tag).toBe('upload')
+    expect(a.source).toBe('upload')
     expect(a.name).toBe('新圖.png')
-    expect((await api.listImages())[0].id).toBe(a.id)
+    expect((await api.listImages()).items[0].id).toBe(a.id)
+  })
+
+  it('uploadImage 拒絕超過 10MB 的檔案', async () => {
+    const big = new File([new Uint8Array(11 * 1024 * 1024)], '太大.png')
+    await expect(api.uploadImage(big)).rejects.toThrow('FILE_TOO_LARGE')
+  })
+
+  it('uploadImage 拒絕不支援的格式', async () => {
+    const file = new File(['x'], '文件.pdf')
+    await expect(api.uploadImage(file)).rejects.toThrow('UNSUPPORTED_FORMAT')
   })
 
   it('editImage 產生「編輯產物」且不覆寫原圖（非破壞）', async () => {
-    const countBefore = (await api.listImages()).length
+    const countBefore = (await api.listImages()).total
     const a = await api.editImage('原圖')
-    expect(a.source).toBe('編輯產物')
+    expect(a.source).toBe('edit')
     expect(a.name).toBe('原圖')
-    expect((await api.listImages()).length).toBe(countBefore + 1)
+    expect((await api.listImages()).total).toBe(countBefore + 1)
   })
 
   it('saveGenerated 落地成「AI 生成」素材', async () => {
     const a = await api.saveGenerated('生成結果')
-    expect(a.source).toBe('AI 生成')
-    expect(a.tag).toBe('ai')
+    expect(a.source).toBe('aiGenerate')
   })
 
   it('uploadImage 指定資料夾則落到該資料夾', async () => {
     const file = new File(['x'], '海報.png')
-    const a = await api.uploadImage(file, '春季企劃')
-    expect(a.folderId).toBe('春季企劃')
+    const a = await api.uploadImage(file, 'folder_spring')
+    expect(a.folderId).toBe('folder_spring')
   })
 
   it('uploadImage 未指定資料夾則進未分類', async () => {
     const a = await api.uploadImage(new File(['x'], '隨手拍.png'))
-    expect(a.folderId).toBe('未分類')
+    expect(a.folderId).toBeUndefined()
+  })
+
+  it('listImages 依 source／mediaType／folderId／q 篩選，counts 不受篩選影響', async () => {
+    const uploadsOnly = await api.listImages({ source: 'upload' })
+    expect(uploadsOnly.items.every((a) => a.source === 'upload')).toBe(true)
+    expect(uploadsOnly.counts.all).toBeGreaterThan(uploadsOnly.items.length) // counts 是整個圖庫，不是篩選後的子集
+
+    const videosOnly = await api.listImages({ mediaType: 'video' })
+    expect(videosOnly.items.every((a) => a.type === 'video')).toBe(true)
+
+    const uncategorised = await api.listImages({ folderId: null })
+    expect(uncategorised.items.every((a) => a.folderId === undefined)).toBe(true)
+
+    const byKeyword = await api.listImages({ q: '春季' })
+    expect(byKeyword.items.every((a) => a.name.includes('春季'))).toBe(true)
+  })
+
+  it('updateImage 改名不影響 folderId（folderId 這個 key 沒帶＝不動）', async () => {
+    const before = (await api.listImages({})).items.find((a) => a.id === 'a1')!
+    const updated = await api.updateImage('a1', { name: '改個名字' })
+    expect(updated.name).toBe('改個名字')
+    expect(updated.folderId).toBe(before.folderId)
+  })
+
+  it('updateImage 傳 folderId: null 會移出到未分類', async () => {
+    const updated = await api.updateImage('a1', { folderId: null })
+    expect(updated.folderId).toBeUndefined()
+  })
+
+  it('deleteImage 刪除被引用中的素材會擋下（ASSET_IN_USE）', async () => {
+    // a1 seed 資料 referencedBy: 2，模擬「被生成結果引用中」
+    await expect(api.deleteImage('a1')).rejects.toThrow('ASSET_IN_USE')
+  })
+
+  it('deleteImage 刪除沒有被引用的素材會成功', async () => {
+    const res = await api.deleteImage('a5')
+    expect(res.deleted).toBe(true)
+    expect((await api.listImages({})).items.some((a) => a.id === 'a5')).toBe(false)
   })
 })
 
 describe('資料夾', () => {
-  it('listFolders 回傳預設資料夾', async () => {
-    const folders = await api.listFolders()
-    expect(folders).toContain('春季企劃')
-    expect(folders).toContain('未分類')
+  it('listFolders 回傳預設資料夾與未分類數量', async () => {
+    const res = await api.listFolders()
+    expect(res.items.map((f) => f.folderName)).toContain('春季企劃')
+    expect(res.unfiledCount).toBeGreaterThan(0)
   })
 
-  it('createFolder 新增資料夾（去重）', async () => {
-    const after = await api.createFolder('冬季企劃')
-    expect(after).toContain('冬季企劃')
-    const again = await api.createFolder('冬季企劃')
-    expect(again.filter((f) => f === '冬季企劃')).toHaveLength(1)
+  it('createFolder 新增資料夾，重複名稱擲 DUPLICATE_NAME', async () => {
+    const created = await api.createFolder('冬季企劃')
+    expect(created.folderName).toBe('冬季企劃')
+    await expect(api.createFolder('冬季企劃')).rejects.toThrow('DUPLICATE_NAME')
   })
 
-  it('moveToFolder 1:N：移至資料夾會替換原本歸屬', async () => {
+  it('renameFolder 重新命名；撞名同樣擲 DUPLICATE_NAME', async () => {
+    const { items } = await api.listFolders()
+    const target = items.find((f) => f.folderName === '商品素材')!
+    const renamed = await api.renameFolder(target.folderId, '商品照片')
+    expect(renamed.folderName).toBe('商品照片')
+    await expect(api.renameFolder(renamed.folderId, '生成結果')).rejects.toThrow('DUPLICATE_NAME')
+  })
+
+  it('moveToFolder（updateImage）1:N：移至資料夾會替換原本歸屬', async () => {
     // a1 原本在「春季企劃」
-    await api.moveToFolder(['a1'], '蘋果')
-    const a1 = (await api.listImages()).find((a) => a.id === 'a1')!
-    expect(a1.folderId).toBe('蘋果')
+    await api.updateImage('a1', { folderId: 'folder_product' })
+    const a1 = (await api.listImages({})).items.find((a) => a.id === 'a1')!
+    expect(a1.folderId).toBe('folder_product')
   })
 
-  it('removeFromFolder 1:N：移出後回到未分類', async () => {
-    await api.removeFromFolder(['a1'])
-    const a1 = (await api.listImages()).find((a) => a.id === 'a1')!
-    expect(a1.folderId).toBe('未分類')
+  it('removeFromFolder（updateImage folderId: null）1:N：移出後回到未分類', async () => {
+    await api.updateImage('a1', { folderId: null })
+    const a1 = (await api.listImages({})).items.find((a) => a.id === 'a1')!
+    expect(a1.folderId).toBeUndefined()
+  })
+
+  it('deleteFolder 刪除資料夾會把夾內素材移回未分類，不會刪除素材本身', async () => {
+    const { items } = await api.listFolders()
+    const target = items.find((f) => f.folderName === '春季企劃')!
+    const before = target.imageCount
+    const res = await api.deleteFolder(target.folderId)
+    expect(res.deleted).toBe(true)
+    expect(res.imagesUnfiled).toBe(before)
+    const afterList = await api.listFolders()
+    expect(afterList.items.some((f) => f.folderId === target.folderId)).toBe(false)
+  })
+})
+
+describe('內建素材與機器人清單', () => {
+  it('listMaterials 可依 category 篩選', async () => {
+    const backgrounds = await api.listMaterials('background')
+    expect(backgrounds.items.every((m) => m.category === 'background')).toBe(true)
+    const all = await api.listMaterials()
+    expect(all.items.length).toBeGreaterThanOrEqual(backgrounds.items.length)
+  })
+
+  it('listBots 一律回陣列', async () => {
+    const bots = await api.listBots()
+    expect(Array.isArray(bots)).toBe(true)
+    expect(bots.length).toBeGreaterThan(0)
   })
 })
 
