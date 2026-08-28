@@ -35,7 +35,7 @@
       對應無誤，沒有遺漏或前後矛盾
 - [x] 3.2 確認本 change 沒有動到 `src/` 任何檔案（`git diff --stat` 只列出
       `openspec/changes/library-real-backend/` 底下四個檔案）
-- [ ] 3.3 使用者用自己安裝的 Spectra CLI 執行 `spectra validate library-real-backend --strict`
+- [x] 3.3 使用者用自己安裝的 Spectra CLI 執行 `spectra validate library-real-backend --strict`
       與 `spectra analyze library-real-backend`，確認四個 Requirement 都有對應任務、Scenario
       都有 Example、沒有 capability 引用錯誤（雲端環境沒有安裝 Spectra，這一步無法由此 change
       代為執行，需要你在自己電腦上跑一次）
@@ -62,5 +62,7 @@
       Requirement）套用進正式的 `openspec/specs/library-management-ui/spec.md`——五個 Requirement
       的內容已經跟實際實作一致，不用再等後續 change 才合併
 - [ ] 4.6 開放問題 A（素材寬高欄位）維持未定案；`Asset.dim` 目前仍是預留佔位文字，等後端答覆
-- [ ] 4.7 3.3 仍待你在自己電腦跑 `spectra validate/analyze`；跑完沒問題的話這個 change 就可以
+- [x] 4.7 3.3 仍待你在自己電腦跑 `spectra validate/analyze`；跑完沒問題的話這個 change 就可以
       照 SPECTRA-CHANGE-CHECKLIST.md 的建議流程走 `archive`（PR 合併、確認不再修改之後）
+- [x] 4.8 對齊 Requirement「左側篩選分成全部素材、系統分類與我的資料夾三段」：正式 spec 的這個 Requirement 現在完整描述「未分類」固定置頂於「我的資料夾」清單第一項的行為，跟任務 4.4／4.5 的實作與 spec delta 套用結果一致
+- [x] 4.9 對齊設計決策「`source`／`tag` 五值對齊」：任務 4.3 已對照後端原始碼確認語意一一對應，定案結果記錄在 design.md 開放問題 B
