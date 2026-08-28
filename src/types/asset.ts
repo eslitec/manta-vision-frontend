@@ -36,7 +36,8 @@ export interface FolderListResponse {
   unfiledCount: number
 }
 
-/** 對齊後端 ImageCounts：依目前查詢條件（不含 mediaType/source 本身）算出的各分類數量 */
+/** 對齊後端 ImageCounts：後端 count_by_bucket 對整個機器人的圖庫做全庫統計，
+ *  不受 mediaType/source/folderId/q/page 等任何查詢條件影響（含 folderId／關鍵字搜尋在內）。 */
 export interface ImageCounts {
   all: number
   upload: number
