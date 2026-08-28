@@ -29,6 +29,12 @@
         button.folders__addIcon(type="button" @click="startAddFolder" :aria-label="t('library.addFolder')")
           span(aria-hidden="true") ＋
       FolderRow(
+        :name="unfiledFolderName"
+        :count="unfiledCount"
+        :active="activeView.kind === 'folder' && activeView.folderId === null"
+        @click="setView({ kind: 'folder', folderId: null, name: unfiledFolderName })"
+      )
+      FolderRow(
         v-for="f in folders"
         :key="f.folderId"
         :name="f.folderName"
@@ -71,7 +77,7 @@
           button.batchbar__link(@click="clearSelection") {{ t('common.clear') }}
         .batchbar__actions
           AppButton.batchbar__action.batchbar__action--moveToFolder(variant="primary" @click="openMoveDialog") {{ t('library.moveToFolder') }}
-          AppButton.batchbar__action.batchbar__action--removeFromFolder(variant="outline" v-if="activeView.kind === 'folder'" @click="removeSelectedFromFolder") {{ t('library.removeFromFolder') }}
+          AppButton.batchbar__action.batchbar__action--removeFromFolder(variant="outline" v-if="activeView.kind === 'folder' && activeView.folderId !== null" @click="removeSelectedFromFolder") {{ t('library.removeFromFolder') }}
           AppButton.batchbar__action(variant="ghost" @click="downloadSelected") {{ t('common.download') }}
           AppButton(variant="alert" @click="openDeleteDialog")
             IconDelete
@@ -181,7 +187,14 @@ import {
   IconUpload,
 } from '@/components/icons'
 import ImageEditorWorkspace from '@/components/ImageEditorWorkspace.vue'
-import { CATEGORY_TAGS, type Asset, type AssetSource, type CategoryTag, type ImageListQuery } from '@/types/asset'
+import {
+  CATEGORY_TAGS,
+  UNFILED_FOLDER,
+  type Asset,
+  type AssetSource,
+  type CategoryTag,
+  type ImageListQuery,
+} from '@/types/asset'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 import { isDuplicateName, isFileTooLarge, isFolderLimitExceeded, isUnsupportedFormat } from '@/utils/error'
 
@@ -193,6 +206,7 @@ const {
   loading,
   load,
   folders,
+  unfiledCount,
   loadFolders,
   addFolder,
   moveToFolder,
@@ -238,6 +252,9 @@ const pendingTasks = computed(() =>
 )
 
 const categoryTags = CATEGORY_TAGS
+// 「未分類」不是後端 folders 清單裡的一員，是用 unfiledCount 組裝的固定置頂虛擬項目
+// （沿用 SaveAssetDialog.vue 既有作法：直接用常數字面值，這個詞目前沒有走 i18n）
+const unfiledFolderName = UNFILED_FOLDER
 
 // 生成中卡片的剩餘時間：後端未提供 eta，依進度以約 2 分鐘估算（僅顯示用）
 function etaText(progress: number) {
@@ -252,10 +269,12 @@ function etaText(progress: number) {
 // 左側主要篩選：全部素材／系統分類（依 source 或 mediaType）／我的資料夾（使用者自訂），三者互斥、單選。
 // 系統分類混了兩個維度（object／aiGenerate／edit 是來源；video 是媒體型態），
 // dimension 記著該用查詢的哪個欄位比對，避免把 video 誤當成一種 source 送給後端。
+// folder 檢視的 folderId 為 null 時代表「未分類」——比照後端 folderId 三態語意
+// （見 design.md 決策 1）：這不是某個真實資料夾，是用 unfiledCount 組裝出來、固定置頂的虛擬項目。
 type ActiveView =
   | { kind: 'all' }
   | { kind: 'category'; tag: CategoryTag; dimension: 'source' | 'mediaType' }
-  | { kind: 'folder'; folderId: string; name: string }
+  | { kind: 'folder'; folderId: string | null; name: string }
 const activeView = ref<ActiveView>({ kind: 'all' })
 const foldersOpen = ref(false)
 function setView(v: ActiveView) {
@@ -302,11 +321,15 @@ onMounted(() => {
 })
 
 // 頂部提示文字：檢視「全部素材」／系統分類時顯示機器人情境；檢視某個資料夾時改顯示該資料夾的說明
+function folderImageCount(folderId: string | null): number {
+  if (folderId === null) return unfiledCount.value
+  return folders.value.find((f) => f.folderId === folderId)?.imageCount ?? 0
+}
+
 const noteText = computed(() => {
   const view = activeView.value
   if (view.kind === 'folder') {
-    const count = folders.value.find((f) => f.folderId === view.folderId)?.imageCount ?? 0
-    return t('library.folderNote', { folder: view.name, count })
+    return t('library.folderNote', { folder: view.name, count: folderImageCount(view.folderId) })
   }
   return t('library.note')
 })
@@ -321,7 +344,7 @@ const activeViewCount = computed(() => {
   const view = activeView.value
   if (view.kind === 'all') return counts.value.all
   if (view.kind === 'category') return counts.value[view.tag]
-  return folders.value.find((f) => f.folderId === view.folderId)?.imageCount ?? 0
+  return folderImageCount(view.folderId)
 })
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
@@ -417,7 +440,8 @@ async function confirmMoveToFolder() {
 }
 
 async function removeSelectedFromFolder() {
-  if (activeView.value.kind !== 'folder') return
+  // 已經在「未分類」檢視裡就沒有「移出資料夾」這個動作可做——素材本來就沒有歸屬
+  if (activeView.value.kind !== 'folder' || activeView.value.folderId === null) return
   const result = await removeFromFolder([...selectedIds.value])
   clearSelection()
   await fetchAssets()
@@ -503,8 +527,9 @@ async function onUpload(e: Event) {
   const input = e.target as HTMLInputElement
   const files = input.files
   if (!files || !files.length) return
-  // 上傳落到目前所在資料夾（不在特定資料夾時進「未分類」）
-  const target = activeView.value.kind === 'folder' ? activeView.value.folderId : undefined
+  // 上傳落到目前所在資料夾；本來就在瀏覽「未分類」（folderId: null）或不在任何資料夾檢視時，
+  // 都不帶 folderId，讓後端預設落在未分類——upload() 只接受 string | undefined，null 要正規化掉
+  const target = activeView.value.kind === 'folder' ? (activeView.value.folderId ?? undefined) : undefined
   let failed = 0
   for (const f of Array.from(files)) {
     try {
