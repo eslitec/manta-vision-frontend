@@ -18,6 +18,7 @@ Teleport(to="body")
             span.pick__check(:class="{ isOn: selectedIds.includes(a.id) }" aria-hidden="true")
               IconCheck(v-if="selectedIds.includes(a.id)")
             IconMovie(v-if="a.type === 'video'")
+            img.pick__thumbImage(v-else-if="a.url && !brokenIds.has(a.id)" :src="a.url" :alt="a.name" @error="markBroken(a.id)")
             IconImagePlaceholder(v-else)
           .pick__meta
             span.pick__name {{ a.name }}
@@ -66,6 +67,11 @@ const sources = computed(() => [
 ])
 const activeSource = ref('all')
 const selectedIds = ref<string[]>([])
+// 素材有 url 才畫真圖，網址失效（載入失敗）就記下來退回內建示意圖示，不留破圖
+const brokenIds = ref<Set<string>>(new Set())
+function markBroken(id: string) {
+  brokenIds.value = new Set(brokenIds.value).add(id)
+}
 
 const count = computed(() => selectedIds.value.length)
 const sourceLabel = (source: string) => t(`sources.${source}`)
@@ -96,6 +102,7 @@ watch(open, (v) => {
     selectedIds.value = []
     keyword.value = ''
     activeSource.value = 'all'
+    brokenIds.value = new Set()
     load({ pageSize: 100 })
   }
 })
@@ -216,6 +223,13 @@ const confirm = () => {
       width: 2.75rem;
       height: 2.75rem;
     }
+  }
+  &__thumbImage {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
   }
   &.isSelected &__thumb {
     border-color: $blue-dark-500;
