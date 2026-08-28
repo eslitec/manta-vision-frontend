@@ -6,7 +6,7 @@ article.assetCard(:class="{ 'isSelected': selected }")
     img.assetCard__imagePlaceholder(v-else :src="imagePlaceholderUrl" alt="" aria-hidden="true")
   h3.assetCard__name {{ name }}
   .assetCard__meta
-    AppPill(:tone="tag === 'ai' ? 'tag' : 'neutral'") {{ tagLabel }}
+    AppPill(:tone="tag === 'aiGenerate' ? 'tag' : 'neutral'") {{ tagLabel }}
     span.assetCard__dimensions {{ dimensions }}
 </template>
 
