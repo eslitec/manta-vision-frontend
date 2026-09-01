@@ -181,12 +181,12 @@
             .objectSelection__handle.objectSelection__handle--sw
             .objectSelection__handle.objectSelection__handle--se
             span.objectSelection__tip {{ t('editor.addObject.selectionTip') }}
-          .cropFrame(v-if="tool === 'crop'" :class="{ 'cropFrame--locked': ratio !== 'custom' }" :style="cropFrameStyle")
+          .cropFrame(v-if="tool === 'crop'" :style="cropFrameStyle")
+            .cropAppliedBadge(v-if="ratio !== 'custom'") {{ t('editor.cropApplied.badge', { ratio: cropRatioLabel, width: cropOutputDimensions.width, height: cropOutputDimensions.height }) }}
             button.cropHandle.cropHandle--nw(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'nw')")
             button.cropHandle.cropHandle--ne(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'ne')")
             button.cropHandle.cropHandle--sw(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'sw')")
             button.cropHandle.cropHandle--se(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'se')")
-          .cropAppliedBadge(v-if="tool === 'crop' && ratio !== 'custom'") {{ t('editor.cropApplied.badge', { ratio: cropRatioLabel, width: cropOutputDimensions.width, height: cropOutputDimensions.height }) }}
           .removeOverlay(v-if="applyingTool === 'remove' && !removeOverlayDismissed")
             IconAiSparkle.removeOverlay__spinner
             strong {{ t('editor.tools.removeInProgress') }}
@@ -1327,17 +1327,13 @@ const previews = computed(() =>
     pointer-events: none;
   }
 }
+// 使用者反饋：固定比例拖曳縮放時也要跟自訂裁切一樣有虛線框＋灰底變暗遮罩，
+// 不要只有四個角落把手浮在乾淨畫面上——兩種模式的視覺一致，才看得出目前在調整取景範圍。
 .cropFrame {
   position: absolute;
   z-index: 100;
   border: 2px dashed #2e3567;
   box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.32);
-}
-// 固定比例時維持「已套用」的乾淨畫面（跟 Figma 1144:570 一致，不加外框、不變暗），
-// 但仍保留四個角落把手，讓使用者可以鎖定比例等比例縮放取景範圍，不需要先跳去「自訂」。
-.cropFrame--locked {
-  border: none;
-  box-shadow: none;
 }
 .cropHandle {
   position: absolute;
