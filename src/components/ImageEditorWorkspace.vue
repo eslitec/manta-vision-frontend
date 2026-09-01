@@ -2298,8 +2298,14 @@ const previews = computed(() =>
   font-size: 1rem;
   line-height: 1.375rem;
 }
+// 對齊 Figma（608:5370 row_mode）：選中的修圖方式除了框線變色，
+// 底色要換成 #eff2fa、框線加粗到 1.5px、標題文字也要變成 #2e3567。
 .method.active {
-  border-color: #2e3567;
+  border: 1.5px solid #2e3567;
+  background: #eff2fa;
+}
+.method.active strong {
+  color: #2e3567;
 }
 .method small,
 .option small {
