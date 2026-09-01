@@ -181,7 +181,7 @@
             .objectSelection__handle.objectSelection__handle--sw
             .objectSelection__handle.objectSelection__handle--se
             span.objectSelection__tip {{ t('editor.addObject.selectionTip') }}
-          .cropFrame(v-if="tool === 'crop' && ratio === 'custom'" :style="cropFrameStyle")
+          .cropFrame(v-if="tool === 'crop'" :class="{ 'cropFrame--locked': ratio !== 'custom' }" :style="cropFrameStyle")
             button.cropHandle.cropHandle--nw(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'nw')")
             button.cropHandle.cropHandle--ne(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'ne')")
             button.cropHandle.cropHandle--sw(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'sw')")
@@ -1063,18 +1063,41 @@ const resetCrop = () => applyCropRatio('square')
 const cropRatioLabel = computed(() => ratioOptions.value.find((item) => item.id === ratio.value)?.label ?? '')
 const undoAppliedCrop = () => applyCropRatio('original')
 const cropResizeDrag = usePointerDrag()
+// 使用者需求：拖曳固定比例的裁切框角落把手時，應該維持該比例做等比例縮放（放大／縮小
+// 取景範圍），而不是像自訂模式一樣寬高各自變形、也不應該把 ratio 悄悄改成「自訂」——
+// 「自訂」仍然是使用者要主動點選才會進入的無比例限制模式。
 const startCropResize = (event: PointerEvent, corner: CropCorner) => {
   if (!artboardRef.value) return
   event.preventDefault()
-  ratio.value = 'custom'
   const bounds = artboardRef.value.getBoundingClientRect()
   const start = { pointerX: event.clientX, pointerY: event.clientY, ...cropRect }
+  const lockedAspect = ratio.value === 'custom' ? null : ratioOptions.value.find((item) => item.id === ratio.value)?.aspect ?? null
+  const minSize = 10
   cropResizeDrag.start((moveEvent) => {
+    if (lockedAspect) {
+      const horizontalDirection = corner.includes('w') ? -1 : 1
+      const verticalDirection = corner.includes('n') ? -1 : 1
+      const growthPx =
+        ((moveEvent.clientX - start.pointerX) * horizontalDirection + (moveEvent.clientY - start.pointerY) * verticalDirection) / 2
+      const startWidthPx = (start.width / 100) * bounds.width
+      const anchorXPx = corner.includes('w') ? ((start.x + start.width) / 100) * bounds.width : (start.x / 100) * bounds.width
+      const anchorYPx = corner.includes('n') ? ((start.y + start.height) / 100) * bounds.height : (start.y / 100) * bounds.height
+      const maxWidthPx = corner.includes('w') ? anchorXPx : bounds.width - anchorXPx
+      const maxHeightPx = corner.includes('n') ? anchorYPx : bounds.height - anchorYPx
+      const minWidthPx = Math.min(maxWidthPx, Math.max(40, bounds.width * (minSize / 100)))
+      const maxAllowedWidthPx = Math.max(minWidthPx, Math.min(maxWidthPx, maxHeightPx * lockedAspect))
+      const newWidthPx = Math.max(minWidthPx, Math.min(maxAllowedWidthPx, startWidthPx + growthPx))
+      const newHeightPx = newWidthPx / lockedAspect
+      cropRect.width = (newWidthPx / bounds.width) * 100
+      cropRect.height = (newHeightPx / bounds.height) * 100
+      cropRect.x = corner.includes('w') ? ((anchorXPx - newWidthPx) / bounds.width) * 100 : (anchorXPx / bounds.width) * 100
+      cropRect.y = corner.includes('n') ? ((anchorYPx - newHeightPx) / bounds.height) * 100 : (anchorYPx / bounds.height) * 100
+      return
+    }
     const dx = ((moveEvent.clientX - start.pointerX) / bounds.width) * 100
     const dy = ((moveEvent.clientY - start.pointerY) / bounds.height) * 100
     const right = start.x + start.width
     const bottom = start.y + start.height
-    const minSize = 10
     if (corner.includes('w')) {
       cropRect.x = Math.max(0, Math.min(right - minSize, start.x + dx))
       cropRect.width = right - cropRect.x
@@ -1309,6 +1332,12 @@ const previews = computed(() =>
   z-index: 100;
   border: 2px dashed #2e3567;
   box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.32);
+}
+// 固定比例時維持「已套用」的乾淨畫面（跟 Figma 1144:570 一致，不加外框、不變暗），
+// 但仍保留四個角落把手，讓使用者可以鎖定比例等比例縮放取景範圍，不需要先跳去「自訂」。
+.cropFrame--locked {
+  border: none;
+  box-shadow: none;
 }
 .cropHandle {
   position: absolute;
