@@ -155,7 +155,7 @@
               component(:is="a.type === 'video' ? IconMovie : IconImagePlaceholder")
             span.modal__previewName {{ a.name }}
         .modal__warn(v-if="referencedCount > 0")
-          IconAlertTriangleFilled.modal__warnIcon
+          IconAlertTriangleFilled.modal__warnIcon(color="currentColor")
           .modal__warnText
             strong {{ t('library.referencedWarning', { count: referencedCount }) }}
             span {{ t('library.deleteWarning') }}
@@ -1190,14 +1190,17 @@ async function onUpload(e: Event) {
   padding: 0.625rem 0.75rem;
   border-radius: 8px;
   font-size: 0.875rem;
-  color: $blue-dark-300;
+  // 對齊 Figma opt_春季檔期／opt_常用商品圖（node 442:2870、442:2876）：未選取的列是
+  // 較淡的 $dark-blue-gray，只有選取列才換成較深的 $blue-dark-500 並加淺藍底
+  color: $dark-blue-gray;
   cursor: pointer;
   &:hover {
     background: $blue-light;
   }
   &.isActive {
     background: $blue-light;
-    font-weight: 700;
+    color: $blue-dark-500;
+    font-weight: 500;
   }
 }
 .modal__listName {
@@ -1234,11 +1237,15 @@ async function onUpload(e: Event) {
 .modal__createBtn {
   height: 2.5rem;
   padding: 0 1.125rem;
-  border: 1px solid $gray;
+  // 對齊 Figma row_new 的 btn（node 442:2891）：深藍描邊＋深藍文字＋一點投影，
+  // 不是原本套用的灰色描邊（那是 AppButton ghost variant 的預設樣式，這裡要蓋掉）
+  border: 1px solid $blue-dark-500;
   border-radius: 999px;
   font-size: 0.875rem;
-  color: $blue-dark-300;
+  font-weight: 500;
+  color: $blue-dark-500;
   white-space: nowrap;
+  box-shadow: 0 4px 2px rgba(0, 0, 0, 0.25);
 }
 .modal__foot {
   @include flex(flex-end, center, 0.625rem);
@@ -1248,6 +1255,11 @@ async function onUpload(e: Event) {
   grid-template-columns: repeat(3, 1fr);
   gap: 0.625rem;
   margin-bottom: 0.875rem;
+}
+.modal__previewItem {
+  // grid item 預設 min-width: auto，文字不換行時會撐開欄寬讓 ellipsis 失效，
+  // 名稱過長要能被截斷（PR review 回饋）就要讓它可以縮到比內容窄
+  min-width: 0;
 }
 .modal__previewThumb {
   @include flex(center, center);
@@ -1260,8 +1272,11 @@ async function onUpload(e: Event) {
 }
 .modal__previewName {
   display: block;
+  overflow: hidden;
   font-size: 0.75rem;
   color: $blue-dark-300;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .modal__checkline {
   @include flex(flex-start, center, 0.5rem);
