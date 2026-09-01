@@ -13,40 +13,32 @@
       h3 {{ t('editor.retouch.steps.source') }}
       .sourceThumb: IconImagePlaceholder
       .sourceActions
-        AppButton(variant="outline" @click="openEditorPicker('source')") {{ t('common.selectFromLibrary') }}
+        AppButton(variant="outline" @click="openEditorPicker") {{ t('common.selectFromLibrary') }}
         span.uploadTip {{ t('common.orDragUpload') }}
       h3 {{ t('editor.retouch.steps.method') }}
       .methodRow
         button.method(type="button" :class="{ active: retouchMethod === 'quick' }" :aria-pressed="retouchMethod === 'quick'" @click="setRetouchMethod('quick')") #[strong {{ t('editor.retouch.quick') }}] #[small {{ t('editor.retouch.quickHint') }}]
         button.method(type="button" :class="{ active: retouchMethod === 'command' }" :aria-pressed="retouchMethod === 'command'" @click="setRetouchMethod('command')") #[strong {{ t('editor.retouch.command') }}] #[small {{ t('editor.retouch.commandHint') }}]
-      .commandBaseCost(v-if="retouchMethod === 'command'")
-        span
-          strong {{ t('editor.retouch.commandBaseCost') }}
-          small {{ t('editor.retouch.commandBaseCostHint') }}
-        span.option__cost
-          IconFeedBottleSmall
-          b {{ t('editor.feedShort', { count: commandRetouchBaseCost }) }}
-      .optionSectionHead
-        h3 {{ retouchMethod === 'command' ? t('editor.retouch.steps.optionalOptions') : t('editor.retouch.steps.options') }}
-        button.optionDisclosure(
-          v-if="retouchMethod === 'command'"
-          type="button"
-          :aria-expanded="retouchOptionsOpen"
-          aria-controls="retouch-options"
-          @click="retouchOptionsOpen = !retouchOptionsOpen"
-        )
-          span {{ t(retouchOptionsOpen ? 'editor.retouch.hideOptions' : 'editor.retouch.showOptions') }}
-          IconChevronDown(:class="{ isUp: retouchOptionsOpen }")
-      small.optionalOptionsHint(v-if="retouchMethod === 'command'") {{ t('editor.retouch.optionalOptionsHint') }}
-      #retouch-options.optionList(v-show="retouchOptionsOpen")
-        label.option(v-for="o in retouchOptionsForMethod" :key="o.key" :class="{ isSelected: o.on }")
-          AppCheckbox(v-model="o.on" :label="t(`editor.retouch.options.${o.key}.name`)")
-          span.option__copy #[strong {{ t(`editor.retouch.options.${o.key}.name`) }}] #[small {{ t(`editor.retouch.options.${o.key}.hint`) }}]
-          span.option__cost(:class="{ free: o.free }")
-            IconFeedBottleSmall(v-if="!o.free")
-            b {{ o.free ? t('editor.free') : t('editor.feedShort', { count: o.cost }) }}
-      template(v-if="retouchMethod === 'command'")
+      template(v-if="retouchMethod === 'quick'")
+        .optionSectionHead
+          h3 {{ t('editor.retouch.steps.options') }}
+        #retouch-options.optionList
+          label.option(v-for="o in retouchOptionsForMethod" :key="o.key" :class="{ isSelected: o.on }")
+            AppCheckbox(v-model="o.on" :label="t(`editor.retouch.options.${o.key}.name`)")
+            span.option__copy #[strong {{ t(`editor.retouch.options.${o.key}.name`) }}] #[small {{ t(`editor.retouch.options.${o.key}.hint`) }}]
+            span.option__cost(:class="{ free: o.free }")
+              IconFeedBottleSmall(v-if="!o.free")
+              b {{ o.free ? t('editor.free') : t('editor.feedShort', { count: o.cost }) }}
+      template(v-else)
         h3 {{ t('editor.retouch.steps.requiredInstruction') }}
+        small.optionalOptionsHint {{ t('editor.retouch.presetsHint') }}
+        .presetRow
+          button.presetChip(
+            v-for="preset in commandPresets"
+            :key="preset.key"
+            type="button"
+            @click="applyCommandPreset(preset.label)"
+          ) {{ preset.label }}
         textarea(
           v-model="retouchInstruction"
           maxlength="200"
@@ -63,7 +55,17 @@
       header.resultHead #[strong {{ t('editor.retouch.result') }}] #[span {{ retouchAppliedLabel }}]
       .compare
         .compare__item #[span {{ t('editor.original') }}] #[.compare__thumb: IconImagePlaceholder] #[small {{ t('editor.uploadedDate') }}]
-        .compare__item #[span.active {{ t('editor.afterRetouch') }}] #[.compare__thumb: IconImagePlaceholder] #[small {{ t('editor.consumed', { count: lastRetouchCost }) }}]
+        .compare__item
+          span.active {{ t('editor.afterRetouch') }}
+          .compare__thumb(:class="{ isLoading: retouching }")
+            .retouchProgress(v-if="retouching")
+              IconAiSparkle.retouchProgress__spinner
+              strong {{ t('editor.retouch.inProgress') }}
+              small {{ retouchStepLabel }}
+              .retouchProgress__bar
+                .retouchProgress__fill(:style="{ width: `${retouchProgressPercent}%` }")
+            IconImagePlaceholder(v-else)
+          small(v-if="!retouching") {{ t('editor.consumed', { count: lastRetouchCost }) }}
       footer.resultActions
         span {{ t('editor.saveHint') }}
         AppButton(variant="outline" @click="retouchSetupOpen = true") {{ t('editor.retouch.again') }}
@@ -85,7 +87,7 @@
         small.tool__cost(v-if="removeToolCost")
           IconFeedBottleSmall
           | {{ removeToolCost }}
-      button.tool.tool--object(:class="{active: tool==='object'}" :aria-pressed="tool === 'object'" @click="openObjectPicker") #[IconAddObject] #[span {{ t('editor.tools.object') }}]
+      button.tool.tool--object(:class="{active: tool==='object'}" :aria-pressed="tool === 'object'" @click="tool = 'object'") #[IconAddObject] #[span {{ t('editor.tools.object') }}]
       button.tool(:class="{active: tool==='fade'}" :aria-pressed="tool === 'fade'" @click="tool='fade'") #[IconImagePlaceholder] #[span {{ t('editor.tools.fade') }}]
       button.tool(:class="{active: tool==='text'}" :aria-pressed="tool === 'text'" @click="insertTextLayer") #[IconTextDocument] #[span {{ t('editor.tools.text') }}]
       button.tool(:class="{active: tool==='crop'}" :aria-pressed="tool === 'crop'" @click="tool='crop'") #[IconEdit] #[span {{ t('editor.tools.crop') }}]
@@ -93,7 +95,7 @@
       header.canvasHead
         strong #[IconImagePlaceholder] {{ selectedAssetName }}
         span {{ t('editor.status', { status: tool === 'crop' ? t('editor.cropping') : t('editor.edited') }) }}
-        AppButton.canvasHead__libraryButton(variant="outline" @click="openEditorPicker('source')") {{ t('common.selectFromLibrary') }}
+        AppButton.canvasHead__libraryButton(variant="outline" @click="openEditorPicker") {{ t('common.selectFromLibrary') }}
         .canvasActions
           button.canvasActions__zoom(type="button" :disabled="!canZoomOut" :aria-label="t('editor.zoomOut')" @click="zoomOut")
             IconBack
@@ -168,11 +170,32 @@
               button.objectResizeHandle.objectResizeHandle--ne(type="button" :aria-label="t('editor.resizeObject')" @pointerdown.stop="startObjectResize($event, objectLayer, 'ne')" @keydown="handleObjectResizeKeydown($event, objectLayer)")
               button.objectResizeHandle.objectResizeHandle--sw(type="button" :aria-label="t('editor.resizeObject')" @pointerdown.stop="startObjectResize($event, objectLayer, 'sw')" @keydown="handleObjectResizeKeydown($event, objectLayer)")
               button.objectResizeHandle.objectResizeHandle--se(type="button" :aria-label="t('editor.resizeObject')" @pointerdown.stop="startObjectResize($event, objectLayer, 'se')" @keydown="handleObjectResizeKeydown($event, objectLayer)")
-          .cropFrame(v-if="tool === 'crop'" :style="cropFrameStyle")
+          .objectSelection(
+            v-if="tool === 'object'"
+            :style="objectSelectionStyle"
+            :class="{ isDragging: objectSelectionDragging }"
+            @pointerdown.stop="startObjectSelectionDrag"
+          )
+            .objectSelection__handle.objectSelection__handle--nw
+            .objectSelection__handle.objectSelection__handle--ne
+            .objectSelection__handle.objectSelection__handle--sw
+            .objectSelection__handle.objectSelection__handle--se
+            span.objectSelection__tip {{ t('editor.addObject.selectionTip') }}
+          .cropFrame(v-if="tool === 'crop' && ratio === 'custom'" :style="cropFrameStyle")
             button.cropHandle.cropHandle--nw(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'nw')")
             button.cropHandle.cropHandle--ne(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'ne')")
             button.cropHandle.cropHandle--sw(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'sw')")
             button.cropHandle.cropHandle--se(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'se')")
+          .cropAppliedBadge(v-if="tool === 'crop' && ratio !== 'custom'") {{ t('editor.cropApplied.badge', { ratio: cropRatioLabel, width: cropOutputDimensions.width, height: cropOutputDimensions.height }) }}
+          .removeOverlay(v-if="applyingTool === 'remove' && !removeOverlayDismissed")
+            IconAiSparkle.removeOverlay__spinner
+            strong {{ t('editor.tools.removeInProgress') }}
+            small {{ t('editor.tools.removeInProgressHint') }}
+            AppButton(variant="outline" size="compact" @click="removeOverlayDismissed = true") {{ t('common.cancel') }}
+        .cropAppliedActions(v-if="tool === 'crop' && ratio !== 'custom'")
+          AppButton(variant="outline" size="compact" @click="undoAppliedCrop") {{ t('editor.cropApplied.undo') }}
+          AppButton(variant="outline" size="compact" @click="ratio = 'custom'") {{ t('editor.cropApplied.recrop') }}
+          AppButton(size="compact" :disabled="Boolean(savedAssetId)" @click="openSaveDialog") {{ savedAssetId ? t('common.saved') : t('editor.saveAsNew') }}
         p(:style="canvasHintStyle") {{ tool === 'crop' ? t('editor.cropInstructionDynamic', cropOutputDimensions) : t('editor.selectionInstruction') }}
       footer.canvasFoot {{ t('editor.nonDestructive') }}
     aside.layers(v-if="tool!=='crop'")
@@ -253,6 +276,23 @@
           label.colorPicker(:aria-label="t('editor.textColor')" :style="{ '--selected-color': textColor }")
             input(v-model="textColor" type="color" :title="t('editor.textColor')")
         small.properties__settings {{ t('editor.textSettings') }}
+      .objectGenerator(v-if="tool === 'object'")
+        h3 {{ t('editor.addObject.title') }}
+        textarea.objectGenerator__desc(
+          v-model="objectDescription"
+          maxlength="120"
+          :aria-label="t('editor.addObject.descriptionLabel')"
+          :placeholder="t('editor.addObject.descriptionPlaceholder')"
+        )
+        small.charCounter {{ objectDescription.length }} / 120
+        .presetRow
+          button.presetChip(v-for="preset in objectPresets" :key="preset.key" type="button" @click="applyObjectPreset(preset.label)") {{ preset.label }}
+        small.objectGenerator__hint {{ t('editor.addObject.hint') }}
+        AppButton(
+          :disabled="!objectDescription.trim() || generatingObject"
+          :loading="generatingObject"
+          @click="generateObjectFromDescription"
+        ) {{ generatingObject ? t('editor.addObject.generating') : t('editor.addObject.generate') }}
       p.editorError(v-if="toolError" role="alert") {{ toolError }}
       .aiCost(v-if="usedTools.length")
         h3 {{ t('editor.aiToolsUsed') }}
@@ -354,28 +394,18 @@ onMounted(async () => {
 const tool = ref('remove'),
   ratio = ref('square')
 const editorPickerOpen = ref(false)
-const editorPickerPurpose = ref<'source' | 'object'>('source')
-const editorPickerTitle = computed(() =>
-  t(editorPickerPurpose.value === 'object' ? 'editor.objectPickerTitle' : 'editor.sourcePickerTitle'),
-)
+// 「加入物件」對齊 Figma（1141:906）後改成 AI 生成流程，不再是從圖庫挑素材疊圖，
+// 所以這顆 picker 現在只服務「選擇要編輯的素材」一種用途。
+const editorPickerTitle = computed(() => t('editor.sourcePickerTitle'))
 const selectedAssetName = ref(t('editor.demoAsset'))
 const savingAsset = ref(false)
 const savedAssetId = ref('')
 const saveError = ref(false)
 const saveDialogOpen = ref(false)
-const openEditorPicker = (purpose: 'source' | 'object') => {
-  editorPickerPurpose.value = purpose
+const openEditorPicker = () => {
   editorPickerOpen.value = true
 }
-const openObjectPicker = () => {
-  tool.value = 'object'
-  openEditorPicker('object')
-}
 const selectEditorAsset = (asset: Asset) => {
-  if (editorPickerPurpose.value === 'object') {
-    addObjectLayer(asset)
-    return
-  }
   selectedAssetName.value = asset.name
   savedAssetId.value = ''
   // 換了來源素材＝重新開始，先前的扣款紀錄不再屬於這張圖
@@ -500,8 +530,25 @@ const textObjectStyle = computed(() => ({
 const retouchSetupOpen = ref(false)
 const retouchMethod = ref<'quick' | 'command'>('quick')
 const commandRetouchBaseCost = computed(() => pricing.value?.commandBase ?? 0)
-const retouchOptionsOpen = ref(true)
 const retouchInstruction = ref('')
+// 對齊 Figma（1140:768 row_presets）：點選常用指令快速帶入文字，仍可自行編輯／接續輸入。
+const COMMAND_PRESET_KEYS = [
+  'removePasserby',
+  'changeBackground',
+  'brighten',
+  'deglare',
+  'fillLight',
+  'extend',
+  'removeWatermark',
+] as const
+const commandPresets = computed(() =>
+  COMMAND_PRESET_KEYS.map((key) => ({ key, label: t(`editor.retouch.commandPresets.${key}`) })),
+)
+const applyCommandPreset = (label: string) => {
+  retouchInstruction.value = retouchInstruction.value.trim()
+    ? `${retouchInstruction.value}、${label}`.slice(0, 200)
+    : label
+}
 const lastRetouchCost = ref(16)
 const lastRetouchKeys = ref(['removeObjects', 'repair'])
 const lastRetouchMethod = ref<'quick' | 'command'>('quick')
@@ -516,12 +563,35 @@ watch(
     retouchSetupOpen.value = false
   },
 )
+// 對齊 Figma（1311:580）修圖結果面板的 loading_box：用實際選取的項目模擬逐步進度，
+// 不虛構「約剩 X 秒」這種 mock 沒辦法保證準確的倒數文字。
+const retouchStepIndex = ref(0)
+const retouchStepNames = computed(() =>
+  retouchMethod.value === 'quick'
+    ? retouchOptionsForMethod.value.filter((option) => option.on).map((option) => t(`editor.retouch.options.${option.key}.name`))
+    : [t('editor.retouch.command')],
+)
+const retouchStepLabel = computed(() => {
+  const names = retouchStepNames.value
+  if (!names.length) return ''
+  const current = Math.min(retouchStepIndex.value, names.length - 1)
+  return t('editor.retouch.stepLabel', { current: current + 1, total: names.length, name: names[current] })
+})
+const retouchProgressPercent = computed(() => {
+  const total = retouchStepNames.value.length || 1
+  return Math.min(100, Math.round(((retouchStepIndex.value + 1) / total) * 100))
+})
 // 送出修圖：扣款與最終金額都以後端為準，畫面上的預估只是預估。
 // 送出的項目取 retouchOptionsForMethod（而非全部），否則指令式修圖會把沒收費的快速項目也列進結果。
 async function startRetouch() {
   if (!canStartRetouch.value || retouching.value) return
   retouching.value = true
   retouchError.value = ''
+  retouchStepIndex.value = 0
+  const totalSteps = retouchStepNames.value.length || 1
+  const stepTimer = setInterval(() => {
+    if (retouchStepIndex.value < totalSteps - 1) retouchStepIndex.value += 1
+  }, Math.max(200, 900 / totalSteps))
   try {
     const result = await api.retouchImage({
       method: retouchMethod.value,
@@ -536,15 +606,20 @@ async function startRetouch() {
   } catch (error) {
     retouchError.value = isInsufficientFeed(error) ? t('errors.insufficientFeed') : t('errors.generationFailed')
   } finally {
+    clearInterval(stepTimer)
     retouching.value = false
   }
 }
 
 // 背景移除是「執行當下即扣」，同一張素材只扣一次；其餘工具不扣飼料。
+// removeOverlayDismissed：mock 的扣款發生在 api.applyEditTool 內部、無法真的中止，
+// 「取消」只先收合等待畫面，操作仍會照常完成並入帳（延遲很短，實務上不太會遇到）。
+const removeOverlayDismissed = ref(false)
 async function selectRemoveTool() {
   tool.value = 'remove'
   if (applyingTool.value || usedTools.value.some((item) => item.tool === 'remove')) return
   applyingTool.value = 'remove'
+  removeOverlayDismissed.value = false
   toolError.value = ''
   try {
     usedTools.value.push(await api.applyEditTool('remove'))
@@ -659,23 +734,46 @@ const insertTextLayer = async () => {
   savedAssetId.value = ''
   await beginTextEdit()
 }
-function addObjectLayer(asset: Asset) {
+// 「加入物件」對齊 Figma（1141:906）：畫布上先框選範圍，右側面板輸入描述、
+// 點選常用物件預設可快速帶入描述，「生成物件」才會真的建立新圖層——
+// 不是從素材庫挑現成圖片直接疊上去。加入物件本身不扣飼料（見 editor.costNote）。
+const objectSelection = reactive({ x: 43, y: 17, width: 37, height: 36 })
+const objectDescription = ref('')
+const generatingObject = ref(false)
+const OBJECT_PRESET_KEYS = ['bouquet', 'plant', 'tableware', 'shadow', 'card'] as const
+const objectPresets = computed(() => OBJECT_PRESET_KEYS.map((key) => ({ key, label: t(`editor.addObject.presets.${key}`) })))
+const applyObjectPreset = (label: string) => {
+  objectDescription.value = objectDescription.value.trim() ? `${objectDescription.value}、${label}` : label
+}
+function addObjectLayer(description: string) {
   const key = `object-${crypto.randomUUID()}`
   const layer: ObjectEditorLayer = {
     key,
     type: 'object',
     visible: true,
     locked: false,
-    label: t('editor.objectLayerDynamic', { name: asset.name }),
-    x: 50,
-    y: 50,
+    label: t('editor.objectLayerDynamic', { name: description }),
+    x: objectSelection.x,
+    y: objectSelection.y,
     scale: 1,
     dragging: false,
   }
   layers.unshift(layer)
-  tool.value = 'object'
   selectedLayerKey.value = key
   savedAssetId.value = ''
+}
+// MOCK：生成物件目前沒有真的 AI 影像產出，僅模擬一段生成延遲後直接建立圖層。
+async function generateObjectFromDescription() {
+  const description = objectDescription.value.trim()
+  if (!description || generatingObject.value) return
+  generatingObject.value = true
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    addObjectLayer(description)
+    objectDescription.value = ''
+  } finally {
+    generatingObject.value = false
+  }
 }
 const toggleOriginalLock = () => {
   originalLayer.value.locked = !originalLayer.value.locked
@@ -684,11 +782,9 @@ const toggleOriginalLock = () => {
 const RETOUCH_OPTION_KEYS: RetouchOptionKey[] = ['removeObjects', 'repair', 'lighting', 'upscale']
 // cost／free 由 getEditorPricing 填入，這裡只保留預設勾選狀態
 const retouchOptions = ref(RETOUCH_OPTION_KEYS.map((key, index) => ({ key, on: index < 2, free: true, cost: 0 })))
-const retouchOptionsForMethod = computed(() =>
-  retouchMethod.value === 'command'
-    ? retouchOptions.value.filter((option) => ['lighting', 'upscale'].includes(option.key))
-    : retouchOptions.value,
-)
+// 對齊 Figma（1140:714 指令修圖）：指令修圖沒有可勾選的加購項目，只有一口價的基本費，
+// 所以這裡回傳空陣列——estimatedRetouchCost／送出時就只會計入 commandRetouchBaseCost。
+const retouchOptionsForMethod = computed(() => (retouchMethod.value === 'command' ? [] : retouchOptions.value))
 function setRetouchMethod(method: 'quick' | 'command') {
   if (retouchMethod.value === method) return
 
@@ -699,7 +795,6 @@ function setRetouchMethod(method: 'quick' | 'command') {
   retouchOptions.value.forEach((option) => {
     option.on = retouchSelections[method].includes(option.key)
   })
-  retouchOptionsOpen.value = method === 'quick'
 }
 const estimatedRetouchCost = computed(
   () =>
@@ -746,6 +841,38 @@ const textDrag = usePercentDrag()
 const textResizeDrag = usePointerDrag()
 const objectPointerDrag = usePointerDrag()
 const objectDrag = usePercentDrag(objectPointerDrag)
+const objectSelectionPointerDrag = usePointerDrag()
+const objectSelectionDrag = usePercentDrag(objectSelectionPointerDrag)
+const objectSelectionDragging = ref(false)
+const objectSelectionStyle = computed(() => ({
+  left: `${objectSelection.x}%`,
+  top: `${objectSelection.y}%`,
+  width: `${objectSelection.width}%`,
+  height: `${objectSelection.height}%`,
+}))
+// 對齊 Figma 的框選（1141:1140）：只支援拖曳移動範圍，暫不支援拖角縮放
+// （四個 handle 先做視覺對齊，縮放留待有真的 AI 生成範圍需求時再補）。
+const startObjectSelectionDrag = (event: PointerEvent) => {
+  if (event.button !== 0 || !artboardRef.value) return
+  event.preventDefault()
+  const artboardBounds = artboardRef.value.getBoundingClientRect()
+  const selectionBounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  objectSelectionDragging.value = true
+  objectSelectionDrag.start({
+    containerBounds: artboardBounds,
+    elementBounds: selectionBounds,
+    startEvent: event,
+    startX: objectSelection.x,
+    startY: objectSelection.y,
+    onDrag: (x, y) => {
+      objectSelection.x = x
+      objectSelection.y = y
+    },
+    onEnd: () => {
+      objectSelectionDragging.value = false
+    },
+  })
+}
 const startTextDrag = (event: PointerEvent) => {
   if (textEditing.value || event.button !== 0 || !artboardRef.value) return
   event.preventDefault()
@@ -931,6 +1058,10 @@ const applyCropRatio = (id: Exclude<CropRatioId, 'custom'>) => {
   }
 }
 const resetCrop = () => applyCropRatio('square')
+// 對齊 Figma（1144:570 裁切套用後）：選好固定比例（非自訂拖曳）視為「已套用」，
+// 畫布顯示套用結果徽章與「復原裁切／重新裁切／另存為新素材」，而不是拖曳把手。
+const cropRatioLabel = computed(() => ratioOptions.value.find((item) => item.id === ratio.value)?.label ?? '')
+const undoAppliedCrop = () => applyCropRatio('original')
 const cropResizeDrag = usePointerDrag()
 const startCropResize = (event: PointerEvent, corner: CropCorner) => {
   if (!artboardRef.value) return
@@ -964,6 +1095,7 @@ onBeforeUnmount(() => {
   textDrag.stop()
   textResizeDrag.stop()
   objectPointerDrag.stop()
+  objectSelectionPointerDrag.stop()
 })
 const previews = computed(() =>
   ['igPost', 'igStory', 'fbPost', 'line'].map((key, index) => ({
@@ -1215,6 +1347,150 @@ const previews = computed(() =>
   &:focus-visible {
     outline: 2px solid #f2bb00;
     outline-offset: 2px;
+  }
+}
+.objectSelection {
+  position: absolute;
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border: 2px dashed $blue-dark-500;
+  border-radius: 4px;
+  cursor: grab;
+  touch-action: none;
+
+  &.isDragging {
+    cursor: grabbing;
+  }
+}
+.objectSelection__handle {
+  position: absolute;
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 2px solid $blue-dark-500;
+  border-radius: 2px;
+  background: #fff;
+  pointer-events: none;
+
+  &--nw {
+    top: -0.375rem;
+    left: -0.375rem;
+  }
+
+  &--ne {
+    top: -0.375rem;
+    right: -0.375rem;
+  }
+
+  &--sw {
+    bottom: -0.375rem;
+    left: -0.375rem;
+  }
+
+  &--se {
+    right: -0.375rem;
+    bottom: -0.375rem;
+  }
+}
+.objectSelection__tip {
+  position: relative;
+  bottom: -0.75rem;
+  border-radius: 12px;
+  background: $blue-dark-500;
+  padding: 0.25rem 0.625rem;
+  color: #fff;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.cropAppliedBadge {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 100;
+  border-radius: 12px;
+  background: rgba(46, 53, 103, 0.85);
+  padding: 0.25rem 0.625rem;
+  color: #fff;
+  font-size: 0.75rem;
+}
+.cropAppliedActions {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+.removeOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  background: rgba(255, 255, 255, 0.92);
+  text-align: center;
+
+  strong {
+    color: #2e3567;
+    font-size: 0.9375rem;
+  }
+
+  small {
+    color: #9299aa;
+    font-size: 0.75rem;
+  }
+}
+.removeOverlay__spinner {
+  width: 2rem;
+  height: 2rem;
+  color: $blue-dark-500;
+  animation: editorSpin 0.9s linear infinite;
+}
+.retouchProgress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 1rem;
+  text-align: center;
+
+  strong {
+    color: #2e3567;
+    font-size: 0.9375rem;
+  }
+
+  small {
+    color: #9299aa;
+    font-size: 0.75rem;
+  }
+}
+.retouchProgress__spinner {
+  width: 1.75rem;
+  height: 1.75rem;
+  color: $blue-dark-500;
+  animation: editorSpin 0.9s linear infinite;
+}
+.retouchProgress__bar {
+  width: 8rem;
+  height: 0.375rem;
+  border-radius: 0.1875rem;
+  background: #d2d5dd;
+  overflow: hidden;
+}
+.retouchProgress__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: $blue-dark-500;
+  transition: width 0.2s ease;
+}
+.compare__thumb.isLoading {
+  background: #fff;
+}
+@keyframes editorSpin {
+  to {
+    transform: rotate(1turn);
   }
 }
 .textObject__content {
@@ -1565,8 +1841,37 @@ const previews = computed(() =>
   border-top: 1px solid #d2d5dd;
   padding: 0 1rem 1rem;
 }
+.objectGenerator {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-top: 1px solid #d2d5dd;
+  padding: 1rem;
+}
+.objectGenerator__desc {
+  width: 100%;
+  min-height: 4.5rem;
+  border: 1px solid #d2d5dd;
+  border-radius: 18px;
+  padding: 0.5rem 0.875rem;
+  color: #383c4b;
+  font-size: 0.875rem;
+  line-height: normal;
+  resize: vertical;
+
+  &::placeholder {
+    color: #b4b9c4;
+    opacity: 1;
+  }
+}
+.objectGenerator__hint {
+  color: #9299aa;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+}
 .properties h3,
-.aiCost h3 {
+.aiCost h3,
+.objectGenerator h3 {
   padding-left: 0;
 }
 .properties__text,
@@ -2065,6 +2370,29 @@ const previews = computed(() =>
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+.presetRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+.presetChip {
+  border: 1px solid #d2d5dd;
+  border-radius: 14px;
+  background: #fff;
+  padding: 0.375rem 0.75rem;
+  color: #606692;
+  font-size: 0.8125rem;
+  transition:
+    border-color 0.15s,
+    color 0.15s,
+    background-color 0.15s;
+
+  &:hover {
+    border-color: $blue-dark-500;
+    color: $blue-dark-500;
+  }
 }
 .option {
   display: flex;
