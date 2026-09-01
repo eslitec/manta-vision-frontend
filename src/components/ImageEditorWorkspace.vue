@@ -315,7 +315,7 @@
         button(v-for="option in ratioOptions" :key="option.id" :class="{active:ratio===option.id}" :aria-pressed="ratio === option.id" @click="applyCropRatio(option.id)") {{ option.label }}
       button.custom(:class="{ active: ratio === 'custom' }" :aria-pressed="ratio === 'custom'" @click="ratio = 'custom'") {{ t('editor.custom') }}
       p {{ t('editor.dimensionsDynamic', cropOutputDimensions) }}
-      h3 {{ t('editor.channelPreviews') }}
+      h3.channelPreviewsTitle {{ t('editor.channelPreviews') }}
       .previews
         .preview(v-for="p in previews" :key="p.name")
           .preview__thumb(:class="p.shape"): IconImagePlaceholder
@@ -2148,7 +2148,7 @@ const previews = computed(() =>
   display: flex;
   flex-wrap: wrap;
   gap: 0.375rem;
-  min-height: 4.125rem;
+  min-height: 1.8125rem;
   align-items: center;
   padding: 0 1rem;
 }
@@ -2164,8 +2164,11 @@ const previews = computed(() =>
   border-color: #606692;
   color: #2e3567;
 }
+// 對齊 Figma（606:870 row_ratio）：比例列跟「自訂」只隔 8px，原本 .ratioRow 被塞了
+// 整個 row_ratio 的高度（66px）卻只放第一排按鈕，單行內容貼齊頂部，底下多出約 37px
+// 空白才接到「自訂」，看起來上下兩排間距過大；改成貼合內容高度 + 0.5rem 的上邊距。
 .custom {
-  margin: 0 1rem 0.5rem;
+  margin: 0.5rem 1rem 0.5rem;
 }
 .custom.active {
   border-color: #606692;
@@ -2176,6 +2179,11 @@ const previews = computed(() =>
   font-size: 0.75rem;
   color: #606692;
   padding: 0 1rem;
+}
+// 對齊 Figma（606:885 divider）：「各通路預覽」標題上方要有一條 1px 分隔線，
+// 跟上面「寬 1080px・高 1080px・旋轉 0°」資訊分開，原本兩個 h3 共用同一組樣式，漏掉這條線。
+.channelPreviewsTitle {
+  border-top: 1px solid #d2d5dd;
 }
 .previews {
   display: grid;
@@ -2189,6 +2197,11 @@ const previews = computed(() =>
   flex-direction: column;
   align-items: center;
   font-size: 0.6875rem;
+}
+// 對齊 Figma（606:898 cap 標題文字）：通路名稱字色應為 #2e3567，
+// 原本沒有單獨設定，繼承 .workspace 的 #383c4b，跟其他標題深藍色不一致。
+.preview strong {
+  color: #2e3567;
 }
 .preview__thumb {
   height: 7.5rem;
