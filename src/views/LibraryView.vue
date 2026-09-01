@@ -134,13 +134,21 @@
               IconFolder
               span.modal__listName {{ f.folderName }}
               span.modal__listCount {{ f.imageCount }}
+          li
+            // 「未分類」不是後端 folders 清單的一員，是用 unfiledCount 組裝的虛擬選項；
+            // 排在真實資料夾之後（對齊 Figma 442:2860 的順序）。選到它時不能走
+            // moveToFolder（需要真的 folderId），要改呼叫 removeFromFolder 把 folderId 設回 null。
+            button.modal__listItem(type="button" :aria-pressed="moveTargetFolder === null" :class="{ 'isActive': moveTargetFolder === null }" @click="moveTargetFolder = null")
+              IconFolder
+              span.modal__listName {{ unfiledFolderName }}
+              span.modal__listCount {{ unfiledCount }}
         .modal__create
           input.modal__createInput(v-model="moveNewFolderName" type="text" :aria-label="t('library.createFolderPlaceholder')" :placeholder="t('library.createFolderPlaceholder')" @keyup.enter="createFolderForMove")
           AppButton.modal__createBtn(variant="ghost" size="compact" @click="createFolderForMove") {{ t('common.create') }}
         small.modal__error(v-if="moveDialogError" role="alert") {{ moveDialogError }}
         footer.modal__foot
           AppButton(variant="outline" @click="moveDialogOpen = false") {{ t('common.cancel') }}
-          AppButton(variant="primary" :disabled="!moveTargetFolder" @click="confirmMoveToFolder") {{ t('library.moveInto', { folder: moveTargetFolderName }) }}
+          AppButton(variant="primary" :disabled="moveTargetFolder === undefined" @click="confirmMoveToFolder") {{ t('library.moveInto', { folder: moveTargetFolderName }) }}
 
   Teleport(to="body")
     .modal(v-if="deleteDialogOpen" @click.self="deleteDialogOpen = false")
@@ -405,15 +413,18 @@ function clearSelection() {
 }
 
 // 移至資料夾：完整彈窗（單選目標資料夾，可就地建立新資料夾）
+// moveTargetFolder：string＝真實資料夾、null＝未分類、undefined＝尚未選擇（理論上不會發生，
+// 因為「未分類」一定是可選項之一，但 openMoveDialog 之外的初始值還是留著這個保險狀態）
 const moveDialogOpen = ref(false)
-const moveTargetFolder = ref('')
+const moveTargetFolder = ref<string | null | undefined>(undefined)
 const moveNewFolderName = ref('')
 const moveDialogError = ref('')
-const moveTargetFolderName = computed(
-  () => folders.value.find((f) => f.folderId === moveTargetFolder.value)?.folderName ?? '',
-)
+const moveTargetFolderName = computed(() => {
+  if (moveTargetFolder.value === null) return unfiledFolderName
+  return folders.value.find((f) => f.folderId === moveTargetFolder.value)?.folderName ?? ''
+})
 function openMoveDialog() {
-  moveTargetFolder.value = folders.value[0]?.folderId ?? ''
+  moveTargetFolder.value = folders.value[0]?.folderId ?? null
   moveNewFolderName.value = ''
   moveDialogError.value = ''
   moveDialogOpen.value = true
@@ -431,12 +442,19 @@ async function createFolderForMove() {
   }
 }
 async function confirmMoveToFolder() {
-  if (!moveTargetFolder.value) return
-  const result = await moveToFolder([...selectedIds.value], moveTargetFolder.value)
+  // 先存成區域變數才能讓 TypeScript 正確窄化型別（ref.value 跨陳述式不會自動窄化）
+  const target = moveTargetFolder.value
+  if (target === undefined) return
+  // 移到「未分類」＝跟「移出資料夾」同一件事（folderId 設回 null），
+  // 後端沒有「移到 null」這種 moveToFolder 語意，要改走 removeFromFolder
+  const result =
+    target === null
+      ? await removeFromFolder([...selectedIds.value])
+      : await moveToFolder([...selectedIds.value], target)
   moveDialogOpen.value = false
   clearSelection()
   await fetchAssets()
-  await loadFolders(true) // 兩邊資料夾的 imageCount 都變了
+  await loadFolders(true) // 資料夾與未分類的 imageCount 都可能變了
   if (result.failedIds.length) batchError.value = t('library.batchFailed', { count: result.failedIds.length })
 }
 
