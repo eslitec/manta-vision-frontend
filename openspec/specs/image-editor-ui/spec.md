@@ -109,7 +109,7 @@ code:
 
 ### Requirement: 裁切提供各通路預覽且不扣飼料
 
-裁切 SHALL 提供比例選擇與各社群通路（IG 貼文／IG 限動／FB 貼文／LINE 圖文）預覽，標示是否被裁切；裁切與旋轉 SHALL NOT 消耗飼料。選定固定比例（非自訂拖曳）後 SHALL 顯示套用結果徽章，並提供復原裁切／重新裁切／另存為新素材操作。
+裁切 SHALL 提供比例選擇與各社群通路（IG 貼文／IG 限動／FB 貼文／LINE 圖文）預覽，標示是否被裁切；裁切與旋轉 SHALL NOT 消耗飼料。選定固定比例（非自訂拖曳）後 SHALL 顯示套用結果徽章，並提供復原裁切／重新裁切／另存為新素材操作。比例選擇列與「自訂」按鈕之間 SHALL 只保留 8px 間距；「各通路預覽」標題上方 SHALL 有 1px 分隔線；各通路名稱標題文字色 SHALL 為 `#2e3567`。
 
 #### Scenario: 使用者切換裁切比例
 
@@ -126,8 +126,13 @@ code:
 - **WHEN** 使用者查看各通路預覽的「LINE 圖文 16:9」縮圖
 - **THEN** 該縮圖（比其他三個通路矮）SHALL 在跟其他通路等高的格子裡上下置中，不是貼齊格子底部
 
+#### Scenario: 比例選擇列與自訂按鈕間距、分隔線與標題字色
+
+- **WHEN** 使用者開啟裁切面板
+- **THEN** 固定比例 chips 與「自訂」按鈕之間 SHALL 只有 8px 間距（不因容器高度撐開變大）；「各通路預覽」標題上方 SHALL 有一條 1px `#d2d5dd` 分隔線；各通路名稱標題文字色 SHALL 為 `#2e3567`
+
 <!-- @trace
-source: sync-mv-09-design, fix-mv09-editor-figma-mismatches, fix-mv09-line-preview-centering
+source: sync-mv-09-design, fix-mv09-editor-figma-mismatches, fix-mv09-line-preview-centering, fix-mv09-crop-panel-spacing
 updated: 2026-09-01
 code:
   - src/components/ImageEditorWorkspace.vue
