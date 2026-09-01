@@ -261,8 +261,8 @@ code:
 - THEN 「春季企劃」剩 4 筆、「商品素材」變成 4 筆，「春季主視覺_01」只出現在「商品素材」底下
 
 <!-- @trace
-source: sync-mv-01-design, library-real-backend
-updated: 2026-08-28
+source: sync-mv-01-design, library-real-backend, fix-library-dialog-figma-mismatch
+updated: 2026-09-01
 code:
   - src/views/LibraryView.vue
   - src/components/AssetCard.vue
@@ -358,8 +358,8 @@ code:
 - THEN 其餘 3 筆成功刪除，這 2 筆維持存在，畫面顯示「3 筆已刪除、2 筆使用中，未刪除」
 
 <!-- @trace
-source: sync-mv-01-design, library-real-backend
-updated: 2026-08-28
+source: sync-mv-01-design, library-real-backend, fix-library-dialog-figma-mismatch
+updated: 2026-09-01
 code:
   - src/views/LibraryView.vue
   - src/components/AssetCard.vue
