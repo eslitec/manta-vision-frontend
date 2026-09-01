@@ -192,9 +192,9 @@
             strong {{ t('editor.tools.removeInProgress') }}
             small {{ t('editor.tools.removeInProgressHint') }}
             AppButton(variant="outline" size="compact" @click="removeOverlayDismissed = true") {{ t('common.cancel') }}
-        .cropAppliedActions(v-if="tool === 'crop' && ratio !== 'custom'")
+        .cropAppliedActions(v-if="tool === 'crop'")
           AppButton(variant="outline" size="compact" @click="undoAppliedCrop") {{ t('editor.cropApplied.undo') }}
-          AppButton(variant="outline" size="compact" @click="ratio = 'custom'") {{ t('editor.cropApplied.recrop') }}
+          AppButton(variant="outline" size="compact" @click="recropCustom") {{ t('editor.cropApplied.recrop') }}
           AppButton(size="compact" :disabled="Boolean(savedAssetId)" @click="openSaveDialog") {{ savedAssetId ? t('common.saved') : t('editor.saveAsNew') }}
         p(:style="canvasHintStyle") {{ tool === 'crop' ? t('editor.cropInstructionDynamic', cropOutputDimensions) : t('editor.selectionInstruction') }}
       footer.canvasFoot {{ t('editor.nonDestructive') }}
@@ -1062,6 +1062,19 @@ const resetCrop = () => applyCropRatio('square')
 // 畫布顯示套用結果徽章與「復原裁切／重新裁切／另存為新素材」，而不是拖曳把手。
 const cropRatioLabel = computed(() => ratioOptions.value.find((item) => item.id === ratio.value)?.label ?? '')
 const undoAppliedCrop = () => applyCropRatio('original')
+// 使用者反饋：「復原裁切／重新裁切／另存為新素材」三個按鈕在自訂裁切時也要一起顯示，
+// 不能只有固定比例才有。已經在自訂模式時，「重新裁切」改成把取景框重設為滿版，
+// 讓按鈕在兩種狀態下都有實際作用，而不是點了沒反應。
+const recropCustom = () => {
+  if (ratio.value !== 'custom') {
+    ratio.value = 'custom'
+    return
+  }
+  cropRect.x = 0
+  cropRect.y = 0
+  cropRect.width = 100
+  cropRect.height = 100
+}
 const cropResizeDrag = usePointerDrag()
 // 使用者需求：拖曳固定比例的裁切框角落把手時，應該維持該比例做等比例縮放（放大／縮小
 // 取景範圍），而不是像自訂模式一樣寬高各自變形、也不應該把 ratio 悄悄改成「自訂」——
