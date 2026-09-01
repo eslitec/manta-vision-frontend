@@ -557,7 +557,7 @@ export default {
     nextPage: 'Next page',
     pageNumber: 'Page {page}',
     moveDescription:
-      'Move {count} selected assets to a folder. Each asset belongs to one folder and will leave its current folder.',
+      'Move {count} selected assets to a folder. An asset can be associated with multiple folders simultaneously.',
     createFolderPlaceholder: 'Or create a new folder…',
     moveInto: 'Move into {folder}',
     deleteTitle: 'Delete {count} assets?',

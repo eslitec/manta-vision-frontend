@@ -494,7 +494,7 @@ export default {
     previousPage: '上一頁',
     nextPage: '下一頁',
     pageNumber: '第 {page} 頁',
-    moveDescription: '將選取的 {count} 筆素材移至資料夾。一張素材只會屬於一個資料夾，移動後會離開原資料夾。',
+    moveDescription: '將選取的 {count} 筆素材加入資料夾。素材可同時屬於多個資料夾。',
     createFolderPlaceholder: '或建立新資料夾…',
     moveInto: '移入{folder}',
     deleteTitle: '刪除 {count} 筆素材？',
