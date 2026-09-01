@@ -109,7 +109,7 @@ code:
 
 ### Requirement: 裁切提供各通路預覽且不扣飼料
 
-裁切 SHALL 提供比例選擇與各社群通路（IG 貼文／IG 限動／FB 貼文／LINE 圖文）預覽，標示是否被裁切；裁切與旋轉 SHALL NOT 消耗飼料。選定固定比例（非自訂拖曳）後 SHALL 顯示套用結果徽章，並提供復原裁切／重新裁切／另存為新素材操作。比例選擇列與「自訂」按鈕之間 SHALL 只保留 8px 間距；「各通路預覽」標題上方 SHALL 有 1px 分隔線；各通路名稱標題文字色 SHALL 為 `#2e3567`。
+裁切 SHALL 提供比例選擇與各社群通路（IG 貼文／IG 限動／FB 貼文／LINE 圖文）預覽，標示是否被裁切；裁切與旋轉 SHALL NOT 消耗飼料。選定固定比例（非自訂拖曳）後 SHALL 顯示套用結果徽章，並提供復原裁切／重新裁切／另存為新素材操作。比例選擇列與「自訂」按鈕之間 SHALL 只保留 8px 間距；「各通路預覽」標題上方 SHALL 有 1px 分隔線；各通路名稱標題文字色 SHALL 為 `#2e3567`。選定固定比例時，畫布上 SHALL 仍顯示可拖曳的角落把手（不含虛線外框與變暗遮罩），拖曳把手 SHALL 維持該比例做等比例縮放取景範圍，SHALL NOT 讓寬高各自變形，也 SHALL NOT 因此把比例改為「自訂」；只有使用者主動點選「自訂」或「重新裁切」才會進入無比例限制的自由裁切模式。
 
 #### Scenario: 使用者切換裁切比例
 
@@ -131,8 +131,18 @@ code:
 - **WHEN** 使用者開啟裁切面板
 - **THEN** 固定比例 chips 與「自訂」按鈕之間 SHALL 只有 8px 間距（不因容器高度撐開變大）；「各通路預覽」標題上方 SHALL 有一條 1px `#d2d5dd` 分隔線；各通路名稱標題文字色 SHALL 為 `#2e3567`
 
+#### Scenario: 固定比例下拖曳角落把手維持比例縮放
+
+- **WHEN** 使用者選定固定比例（如 1:1）後，拖曳畫布上裁切框的角落把手
+- **THEN** 取景範圍以對角為錨點等比例放大或縮小，比例本身不變、也不會切換成「自訂」；畫布不出現虛線外框或變暗遮罩，維持套用結果的乾淨外觀
+
+#### Scenario: 使用者主動切換到自訂裁切
+
+- **WHEN** 使用者點選「自訂」chip 或畫布上的「重新裁切」
+- **THEN** 進入無比例限制的自由裁切模式，畫布顯示虛線外框與變暗遮罩，寬高可各自獨立調整
+
 <!-- @trace
-source: sync-mv-09-design, fix-mv09-editor-figma-mismatches, fix-mv09-line-preview-centering, fix-mv09-crop-panel-spacing
+source: sync-mv-09-design, fix-mv09-editor-figma-mismatches, fix-mv09-line-preview-centering, fix-mv09-crop-panel-spacing, fix-mv09-crop-locked-resize
 updated: 2026-09-01
 code:
   - src/components/ImageEditorWorkspace.vue
