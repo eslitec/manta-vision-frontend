@@ -67,7 +67,7 @@ code:
 
 ### Requirement: AI 修圖提供分項修飾與對比
 
-AI 修圖 SHALL 提供分項修飾（去除雜物／修復瑕疵／光線校正／放大），標示各項成本，並在完成後以「原圖／修圖後」對比呈現與總消耗。指令修圖 SHALL 以常用指令快速鍵搭配文字輸入，採一口價計費，不提供分項勾選。
+AI 修圖 SHALL 提供分項修飾（去除雜物／修復瑕疵／光線校正／放大），標示各項成本，並在完成後以「原圖／修圖後」對比呈現與總消耗。指令修圖 SHALL 以常用指令快速鍵搭配文字輸入，採一口價計費，不提供分項勾選。修圖方式（快速修飾／指令修圖）SHALL 以選中／未選中兩種樣式呈現：選中時底色 `#eff2fa`、框線 1.5px `#2e3567`、標題文字 `#2e3567`；未選中時白底、框線 1px `#d2d5dd`、標題文字 `#383c4b`。
 
 #### Scenario: 使用者完成 AI 修圖
 
@@ -79,13 +79,18 @@ AI 修圖 SHALL 提供分項修飾（去除雜物／修復瑕疵／光線校正�
 - **WHEN** 使用者切換到「指令修圖」
 - **THEN** 畫面顯示常用指令快速鍵與指令輸入框，不顯示分項修飾勾選清單，預估成本僅顯示一口價基本費
 
+#### Scenario: 選中的修圖方式底色與標題文字變色
+
+- **WHEN** 使用者點選「快速修飾」或「指令修圖」
+- **THEN** 該按鈕底色變為 `#eff2fa`、框線加粗為 1.5px `#2e3567`、標題文字變為 `#2e3567`；未選中的按鈕維持白底、`#d2d5dd` 框線與 `#383c4b` 標題文字
+
 #### Scenario: AI 修圖執行中顯示處理進度
 
 - **WHEN** 使用者送出修圖後仍在等待結果
 - **THEN** 「修圖後」對比欄位顯示處理中狀態，包含目前處理到第幾個項目與進度條
 
 <!-- @trace
-source: sync-mv-09-design, fix-mv09-editor-figma-mismatches
+source: sync-mv-09-design, fix-mv09-editor-figma-mismatches, fix-mv09-retouch-method-style
 updated: 2026-09-01
 code:
   - src/components/ImageEditorWorkspace.vue
