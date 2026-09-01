@@ -42,9 +42,14 @@ code:
 - **WHEN** 使用者對素材套用「背景移除」
 - **THEN** 顯示該工具成本並在執行時扣除對應飼料
 
+#### Scenario: 背景移除執行中顯示處理覆蓋層
+
+- **WHEN** 背景移除仍在執行中
+- **THEN** 畫布上顯示處理中覆蓋層（含說明文字與取消按鈕），避免使用者誤以為畫面卡住
+
 <!-- @trace
-source: sync-mv-09-design
-updated: 2026-08-21
+source: sync-mv-09-design, fix-mv09-editor-figma-mismatches
+updated: 2026-09-01
 code:
   - src/components/ImageEditorWorkspace.vue
   - src/components/SaveAssetDialog.vue
@@ -62,16 +67,26 @@ code:
 
 ### Requirement: AI 修圖提供分項修飾與對比
 
-AI 修圖 SHALL 提供分項修飾（去除雜物／修復瑕疵／光線校正／放大），標示各項成本，並在完成後以「原圖／修圖後」對比呈現與總消耗。
+AI 修圖 SHALL 提供分項修飾（去除雜物／修復瑕疵／光線校正／放大），標示各項成本，並在完成後以「原圖／修圖後」對比呈現與總消耗。指令修圖 SHALL 以常用指令快速鍵搭配文字輸入，採一口價計費，不提供分項勾選。
 
 #### Scenario: 使用者完成 AI 修圖
 
 - **WHEN** 使用者選定修飾項目並生成
 - **THEN** 顯示原圖與修圖後對比、總消耗顆數，並可重新修圖／下載／另存
 
+#### Scenario: 指令修圖採一口價，不提供分項勾選
+
+- **WHEN** 使用者切換到「指令修圖」
+- **THEN** 畫面顯示常用指令快速鍵與指令輸入框，不顯示分項修飾勾選清單，預估成本僅顯示一口價基本費
+
+#### Scenario: AI 修圖執行中顯示處理進度
+
+- **WHEN** 使用者送出修圖後仍在等待結果
+- **THEN** 「修圖後」對比欄位顯示處理中狀態，包含目前處理到第幾個項目與進度條
+
 <!-- @trace
-source: sync-mv-09-design
-updated: 2026-08-21
+source: sync-mv-09-design, fix-mv09-editor-figma-mismatches
+updated: 2026-09-01
 code:
   - src/components/ImageEditorWorkspace.vue
   - src/components/SaveAssetDialog.vue
@@ -89,16 +104,21 @@ code:
 
 ### Requirement: 裁切提供各通路預覽且不扣飼料
 
-裁切 SHALL 提供比例選擇與各社群通路（IG 貼文／IG 限動／FB 貼文／LINE 圖文）預覽，標示是否被裁切；裁切與旋轉 SHALL NOT 消耗飼料。
+裁切 SHALL 提供比例選擇與各社群通路（IG 貼文／IG 限動／FB 貼文／LINE 圖文）預覽，標示是否被裁切；裁切與旋轉 SHALL NOT 消耗飼料。選定固定比例（非自訂拖曳）後 SHALL 顯示套用結果徽章，並提供復原裁切／重新裁切／另存為新素材操作。
 
 #### Scenario: 使用者切換裁切比例
 
 - **WHEN** 使用者選擇某個裁切比例
 - **THEN** 各通路預覽更新並標示是否會被裁掉邊緣，且不扣飼料
 
+#### Scenario: 選定固定比例後顯示套用結果
+
+- **WHEN** 使用者點選一個固定比例（非「自訂」）
+- **THEN** 畫布顯示比例與尺寸徽章，並提供「復原裁切」「重新裁切」「另存為新素材」三個操作；點選「自訂」或「重新裁切」則回到可拖曳調整的框選狀態
+
 <!-- @trace
-source: sync-mv-09-design
-updated: 2026-08-21
+source: sync-mv-09-design, fix-mv09-editor-figma-mismatches
+updated: 2026-09-01
 code:
   - src/components/ImageEditorWorkspace.vue
   - src/components/SaveAssetDialog.vue
@@ -110,6 +130,30 @@ code:
   - index.html
   - src/lang/zh-Hant.ts
   - src/lang/en.ts
+-->
+
+---
+
+### Requirement: 加入物件為文字描述生成，非從圖庫疊圖
+
+編輯畫布的「加入物件」工具 SHALL 讓使用者在畫布上框選範圍，並以文字描述（可搭配常用物件預設快速鍵）生成新圖層；加入物件 SHALL NOT 消耗飼料。
+
+#### Scenario: 使用者生成新物件圖層
+
+- **WHEN** 使用者選取「加入物件」工具、輸入物件描述並點擊「生成物件」
+- **THEN** 在選取範圍建立一個新的物件圖層，圖層清單同步更新，且不扣飼料
+
+#### Scenario: 使用者點選常用物件預設
+
+- **WHEN** 使用者點選「花束」「綠植」「杯盤」「陰影」「裝飾字卡」等預設
+- **THEN** 對應文字加入物件描述輸入框，可再自行編輯
+
+<!-- @trace
+source: fix-mv09-editor-figma-mismatches
+updated: 2026-09-01
+code:
+  - src/components/ImageEditorWorkspace.vue
+  - src/lang/zh-Hant.ts
 -->
 
 ---
