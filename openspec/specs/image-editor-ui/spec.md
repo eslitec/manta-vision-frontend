@@ -121,8 +121,13 @@ code:
 - **WHEN** 使用者點選一個固定比例（非「自訂」）
 - **THEN** 畫布顯示比例與尺寸徽章，並提供「復原裁切」「重新裁切」「另存為新素材」三個操作；點選「自訂」或「重新裁切」則回到可拖曳調整的框選狀態
 
+#### Scenario: LINE 圖文縮圖在格子中上下置中
+
+- **WHEN** 使用者查看各通路預覽的「LINE 圖文 16:9」縮圖
+- **THEN** 該縮圖（比其他三個通路矮）SHALL 在跟其他通路等高的格子裡上下置中，不是貼齊格子底部
+
 <!-- @trace
-source: sync-mv-09-design, fix-mv09-editor-figma-mismatches
+source: sync-mv-09-design, fix-mv09-editor-figma-mismatches, fix-mv09-line-preview-centering
 updated: 2026-09-01
 code:
   - src/components/ImageEditorWorkspace.vue
