@@ -2214,10 +2214,13 @@ const previews = computed(() =>
 .preview__thumb.fourFive {
   width: 5.75rem;
 }
+// 對齊 Figma（606:922 cell_LINE 圖文）：16:9 縮圖比其他三個通路矮，應該在同高的格子裡
+// 上下置中（各留 1.625rem），原本把整段落差都塞在 margin-top，縮圖會貼底而不是置中。
 .preview__thumb.wide {
   width: 7.5rem;
   height: 4.25rem;
-  margin-top: 3.25rem;
+  margin-top: 1.625rem;
+  margin-bottom: 1.875rem;
 }
 .preview small {
   color: #b4b9c4;
