@@ -21,8 +21,8 @@ TBD - created by archiving change 'sync-components-buttons'. Update Purpose afte
 - **THEN** 使用 `AppButton` 的 `alert` variant
 
 <!-- @trace
-source: sync-components-buttons
-updated: 2026-08-21
+source: sync-components-buttons, fix-checkbox-icon-figma-mismatch
+updated: 2026-09-01
 code:
   - src/components/AppButton.vue
   - src/components/AppCheckbox.vue
@@ -47,8 +47,8 @@ code:
 - **THEN** 原生按鈕不可觸發，並呈現停用視覺
 
 <!-- @trace
-source: sync-components-buttons
-updated: 2026-08-21
+source: sync-components-buttons, fix-checkbox-icon-figma-mismatch
+updated: 2026-09-01
 code:
   - src/components/AppButton.vue
   - src/components/AppCheckbox.vue
@@ -68,8 +68,8 @@ code:
 - **THEN** 最小高度為 36px，文字為 14px／500／18px line-height
 
 <!-- @trace
-source: sync-components-buttons
-updated: 2026-08-21
+source: sync-components-buttons, fix-checkbox-icon-figma-mismatch
+updated: 2026-09-01
 code:
   - src/components/AppButton.vue
   - src/components/AppCheckbox.vue
@@ -89,8 +89,8 @@ Figma 中的 chip、tab、option card、model option、icon-only 與 tool button
 - **THEN** 使用對應的 chip 或 option 樣式，並透過 `aria-pressed` 或 tab 語意表達狀態
 
 <!-- @trace
-source: sync-components-buttons
-updated: 2026-08-21
+source: sync-components-buttons, fix-checkbox-icon-figma-mismatch
+updated: 2026-09-01
 code:
   - src/components/AppButton.vue
   - src/components/AppCheckbox.vue
