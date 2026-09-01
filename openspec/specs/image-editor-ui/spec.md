@@ -160,7 +160,12 @@ code:
 
 ### Requirement: 字型選單的九個字體家族與 Figma list_font 逐項一致
 
-文字圖層屬性面板的字型選單 SHALL 提供與 Figma `list_font`（node `1157:872`）一致的字體家族選項，分為「中文」與「英數」兩組共九項，不得多也不得少；選單 SHALL 以自訂 listbox（`role="listbox"` / `role="option"`）呈現分組標頭、字體名稱、副標與選中列打勾，並提供 default／active 兩種 trigger 框線狀態。
+文字圖層屬性面板的字型選單 SHALL 提供與 Figma `list_font`（node `1157:872`）一致的字體家族選項，分為「中文」與「英數」兩組共九項，不得多也不得少；選單 SHALL 以自訂 listbox（`role="listbox"` / `role="option"`）呈現分組標頭、字體名稱、副標與選中列打勾，並提供 default／active 兩種 trigger 框線狀態。文字圖層屬性面板本身（Figma node `1157:619`）SHALL 有 16px 內距，且與上方圖層清單之間 SHALL 有 1px 分隔線。
+
+#### Scenario: 文字屬性面板有內距與上方分隔線
+
+- **WHEN** 使用者選取文字圖層，顯示「文字屬性」面板
+- **THEN** 面板內容（文字輸入框、字型下拉、色票、字重說明）與面板左右邊界保持 16px 內距，且面板上方與圖層清單之間有一條分隔線
 
 #### Scenario: 使用者開啟字型選單
 
@@ -185,8 +190,8 @@ code:
 - **THEN** 該列以 Medium 500 字重與 `#eff2fa` 底色標示為選中，並顯示 14×14 打勾圖示
 
 <!-- @trace
-source: sync-mv-09-design
-updated: 2026-08-21
+source: sync-mv-09-design, fix-mv09-properties-panel-spacing
+updated: 2026-09-01
 code:
   - src/components/ImageEditorWorkspace.vue
   - src/components/SaveAssetDialog.vue
