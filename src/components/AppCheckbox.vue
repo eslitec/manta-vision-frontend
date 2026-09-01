@@ -9,14 +9,13 @@ label.appCheckbox
   )
   span.appCheckbox__box(aria-hidden="true")
     span.appCheckbox__mark(v-if="indeterminate") −
-    IconCheck(v-else-if="model")
+    span.appCheckbox__check(v-else-if="model") ✓
   span.appCheckbox__label(v-if="$slots.default")
     slot
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
-import { IconCheck } from '@/components/icons'
 
 const props = withDefaults(
   defineProps<{
@@ -87,6 +86,13 @@ watch(() => props.indeterminate, syncIndeterminate)
   }
 
   &__mark {
+    line-height: 1;
+  }
+
+  // 對齊 Figma checkbox（node 441:2640 的 chk 元件）：打勾本來就是純文字「✓」字元
+  // （Noto Sans TC Bold），不是向量圖示，粗體字重才會跟設計稿一樣厚實
+  &__check {
+    font-weight: 700;
     line-height: 1;
   }
 }
