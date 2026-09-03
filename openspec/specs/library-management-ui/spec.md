@@ -220,6 +220,26 @@ code:
 
 ---
 
+### Requirement: 素材挑選彈窗以打勾徽章標示已選取項目
+
+`ImagePickerDialog.vue`（各頁面「從圖庫選取」共用的挑選彈窗）中每張縮圖右上角 SHALL 顯示打勾徽章標示選取狀態，其幾何與顏色 SHALL 對齊 Figma 設計稿（node `1246:2416`／`1246:2423`）：徽章為 22×22、圓角 11px；未選取時為白底、`#d2d5dd` 1px 邊框、透明度 0.9；選取時為 `#2e3567` 實心圓，內含 13×13 的白色勾勾圖示，勾勾線條 SHALL 為單一粗細、對稱、置中的簡潔造型（而非不對稱的手繪曲線）。
+
+#### Scenario: 使用者在挑選彈窗勾選素材
+
+- **WHEN** 使用者在挑選彈窗點擊某張縮圖
+- **THEN** 該縮圖右上角的徽章變為 `#2e3567` 實心圓並顯示白色勾勾，勾勾造型與 Figma `1246:2416` 一致
+- **AND** 未選取的縮圖徽章維持白底、`#d2d5dd` 邊框的空心圓
+
+<!-- @trace
+source: sync-mv-01-design, fix-imagepicker-check-icon
+updated: 2026-09-03
+code:
+  - src/components/ImagePickerDialog.vue
+  - src/components/icons/IconCheck.vue
+-->
+
+---
+
 ### Requirement: 批次移動素材到資料夾
 
 使用者選取一或多筆素材後點擊「移至資料夾」，SHALL 顯示彈窗列出所有資料夾（含數量）供選擇，
