@@ -397,7 +397,17 @@ export default {
     },
     period: '期間',
     export: '匯出',
-    customRange: { start: '開始日期', end: '結束日期', apply: '套用' },
+    customRange: {
+      start: '開始',
+      end: '結束',
+      apply: '套用',
+      prevMonth: '上一個月',
+      nextMonth: '下一個月',
+      monthLabel: '{year} 年 {month} 月',
+      maxRangeHint: '最長可選 {days} 天',
+      weekdays: ['日', '一', '二', '三', '四', '五', '六'],
+      quick: ['過去 7 天', '上個月', '本季', '今年至今'],
+    },
     exportFields: {
       period: '期間',
       used: '已使用飼料',

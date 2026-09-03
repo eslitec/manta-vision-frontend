@@ -442,7 +442,17 @@ export default {
     },
     period: 'Period',
     export: 'Export',
-    customRange: { start: 'Start date', end: 'End date', apply: 'Apply' },
+    customRange: {
+      start: 'Start',
+      end: 'End',
+      apply: 'Apply',
+      prevMonth: 'Previous month',
+      nextMonth: 'Next month',
+      monthLabel: '{month}/{year}',
+      maxRangeHint: 'Up to {days} days',
+      weekdays: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'],
+      quick: ['Last 7 days', 'Last month', 'This quarter', 'Year to date'],
+    },
     exportFields: {
       period: 'Period',
       used: 'Feed used',
