@@ -314,13 +314,13 @@
       .ratioRow
         button(v-for="option in ratioOptions" :key="option.id" :class="{active:ratio===option.id}" :aria-pressed="ratio === option.id" @click="applyCropRatio(option.id)") {{ option.label }}
       button.custom(:class="{ active: ratio === 'custom' }" :aria-pressed="ratio === 'custom'" @click="ratio = 'custom'") {{ t('editor.custom') }}
-      p {{ t('editor.dimensionsDynamic', cropOutputDimensions) }}
-      h3.channelPreviewsTitle {{ t('editor.channelPreviews') }}
+      p {{ ratio === 'custom' ? t('editor.dimensionsDynamic', cropOutputDimensions) : t('editor.croppedToDynamic', { width: cropOutputDimensions.width, height: cropOutputDimensions.height, origWidth: ORIGINAL_IMAGE_DIMENSIONS.width, origHeight: ORIGINAL_IMAGE_DIMENSIONS.height }) }}
+      h3.channelPreviewsTitle {{ ratio === 'custom' ? t('editor.channelPreviews') : t('editor.channelPreviewsApplied') }}
       .previews
         .preview(v-for="p in previews" :key="p.name")
           .preview__thumb(:class="p.shape"): IconImagePlaceholder
           strong {{ p.name }}
-          small(:class="p.warn?'warn':''") {{ p.warn ? t('editor.croppedWarning') : t('editor.fullyVisible') }}
+          small(:class="{ warn: p.warn && ratio === 'custom', full: !p.warn }") {{ p.warn ? (ratio === 'custom' ? t('editor.croppedWarning') : t('editor.paddedNote')) : t('editor.fullyVisible') }}
       p.cropNote {{ t('editor.cropNote') }}
   ImagePickerDialog(v-model:open="editorPickerOpen" :title="editorPickerTitle" @select="selectEditorAsset")
   SaveAssetDialog(
@@ -1029,9 +1029,12 @@ const cropFrameStyle = computed(() => ({
   width: `${cropRect.width}%`,
   height: `${cropRect.height}%`,
 }))
+// 對齊 Figma（1144:631）：套用結果文字要寫「原圖 1440 × 1080」，跟 cropOutputDimensions
+// 的 'original' 分支共用同一組原圖尺寸常數，避免兩處寫死的數字之後跑掉。
+const ORIGINAL_IMAGE_DIMENSIONS = { width: 1440, height: 1080 }
 const cropOutputDimensions = computed(() => {
   const option = ratioOptions.value.find((item) => item.id === ratio.value)
-  if (option?.id === 'original') return { width: 1440, height: 1080 }
+  if (option?.id === 'original') return ORIGINAL_IMAGE_DIMENSIONS
   if (option?.id === 'fourFive') return { width: 1080, height: 1350 }
   if (option?.id === 'story') return { width: 1080, height: 1920 }
   if (option?.id === 'wide') return { width: 1920, height: 1080 }
@@ -2205,18 +2208,22 @@ const previews = computed(() =>
 // 對齊 Figma（606:870 row_ratio）：比例列跟「自訂」只隔 8px，原本 .ratioRow 被塞了
 // 整個 row_ratio 的高度（66px）卻只放第一排按鈕，單行內容貼齊頂部，底下多出約 37px
 // 空白才接到「自訂」，看起來上下兩排間距過大；改成貼合內容高度 + 0.5rem 的上邊距。
+// 下方不留 margin——「自訂」跟下面尺寸文字之間的 12px 由 .cropPanel > p 自己的
+// padding-top 負責，避免兩邊都留間距疊加成 20px。
 .custom {
-  margin: 0.5rem 1rem 0.5rem;
+  margin: 0.5rem 1rem 0;
 }
 .custom.active {
   border-color: #606692;
   color: #2e3567;
   font-weight: 500;
 }
+// 對齊 Figma（606:883 row_size ／ 1144:630 row_size）：這段文字跟上方比例列要留 12px，
+// 跟下方分隔線只留 4px，原本完全沒有上下內距，貼著上下兩個區塊。
 .cropPanel > p {
   font-size: 0.75rem;
   color: #606692;
-  padding: 0 1rem;
+  padding: 0.75rem 1rem 0.25rem;
 }
 // 對齊 Figma（606:885 divider）：「各通路預覽」標題上方要有一條 1px 分隔線，
 // 跟上面「寬 1080px・高 1080px・旋轉 0°」資訊分開，原本兩個 h3 共用同一組樣式，漏掉這條線。
@@ -2278,6 +2285,11 @@ const previews = computed(() =>
 }
 .preview small.warn {
   color: #ea903a;
+}
+// 對齊 Figma（1144:641）：「完整呈現」要用綠色 #54c14f 標示，原本跟「上下留白」
+// 共用預設的灰色，看不出這個通路是完全符合比例、不需要留白或裁切。
+.preview small.full {
+  color: #54c14f;
 }
 .cropNote {
   margin-top: 0.75rem !important;
