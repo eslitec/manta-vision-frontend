@@ -247,18 +247,19 @@ const confirm = () => {
     background: $white;
     @include flex(center, center);
 
-    // 選中：深藍底 + 白色勾（設計稿 sel_check 的 ic_ok 是白色打勾圖示，不是綠色圓形打勾）
+    // 選中：改由 IconCheck 自己畫出完整徽章（深藍底圈 #2e3567 + 內圈綠色圓 #54c14f + 白色勾），
+    // wrapper 不再疊自己的底色；border-width 歸零（而非只轉透明）是因為專案是 border-box，
+    // 保留 1px 透明邊框會讓 svg 的 100% 尺寸少算掉 2px，圖示會比設計稿的 22px 徽章小一圈
     &.isOn {
-      border-color: $blue-dark-500;
+      border-width: 0;
       opacity: 1;
-      background: $blue-dark-500;
-      color: $white;
+      background: transparent;
     }
 
     svg {
       display: block;
-      width: 0.8125rem;
-      height: 0.8125rem;
+      width: 100%;
+      height: 100%;
     }
   }
   &__meta {
