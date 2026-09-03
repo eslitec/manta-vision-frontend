@@ -1919,6 +1919,13 @@ const previews = computed(() =>
     opacity: 1;
   }
 }
+// .charCounter 共用樣式帶了 -0.75rem 的 margin-top（修圖面板用來把字數貼近文字框，
+// 抵掉一部分外層 1rem 的 gap）。但這裡父層 .objectGenerator 的 gap 只有 0.625rem，
+// 兩者疊加會變成負值，字數會整個往上貼到描述框裡；Figma（1141:952）這幾個子項目本來
+// 就是統一的 10px 間距，不需要額外拉近，所以把 margin 歸零。
+.objectGenerator .charCounter {
+  margin-top: 0;
+}
 // 對齊 Figma（1142:800 row_obj_presets）：這裡的預設 chips 間距是 6px，比 .presetRow
 // 共用的 8px（修圖常用指令列用）窄；父層 .objectGenerator 已經用 flex gap 統一控制上下間距，
 // 所以額外把 .presetRow 自己的 margin 歸零，避免疊加。
