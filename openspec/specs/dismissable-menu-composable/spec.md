@@ -43,10 +43,11 @@
 - **THEN** `useDismissableMenu` SHALL 不改變 open 狀態（維持 false）
 
 <!-- @trace
-source: extract-dismissable-menu-composable
-updated: 2026-08-28
+source: extract-dismissable-menu-composable, fix-usage-daterange-panel
+updated: 2026-09-03
 code:
   - src/composables/useDismissableMenu.ts
   - src/views/BrandSettingsView.vue
   - src/components/ImageEditorWorkspace.vue
+  - src/views/UsageView.vue
 -->
