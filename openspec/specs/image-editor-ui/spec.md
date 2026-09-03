@@ -171,7 +171,7 @@ code:
 
 ### Requirement: 加入物件為文字描述生成，非從圖庫疊圖
 
-編輯畫布的「加入物件」工具 SHALL 讓使用者在畫布上框選範圍，並以文字描述（可搭配常用物件預設快速鍵）生成新圖層；加入物件 SHALL NOT 消耗飼料。
+編輯畫布的「加入物件」工具 SHALL 讓使用者在畫布上框選範圍，並以文字描述（可搭配常用物件預設快速鍵）生成新圖層；加入物件 SHALL NOT 消耗飼料。物件描述輸入框 SHALL 支援最多 200 字並顯示字數計數；畫布上的框選範圍 SHALL 有淡藍色底色 `rgba(46,53,103,0.1)` 與 6px 圓角，讓框選區域清楚可辨識。
 
 #### Scenario: 使用者生成新物件圖層
 
@@ -183,12 +183,18 @@ code:
 - **WHEN** 使用者點選「花束」「綠植」「杯盤」「陰影」「裝飾字卡」等預設
 - **THEN** 對應文字加入物件描述輸入框，可再自行編輯
 
+#### Scenario: 描述框字數上限與畫布框選樣式對齊設計稿
+
+- **WHEN** 使用者輸入物件描述，或在畫布上框選生成範圍
+- **THEN** 描述框 SHALL 最多輸入 200 字並即時顯示字數；畫布框選範圍 SHALL 顯示淡藍色底色與 6px 圓角虛線框，範圍下方提示氣泡 SHALL 為 6px 圓角、11px Medium 白字
+
 <!-- @trace
-source: fix-mv09-editor-figma-mismatches
-updated: 2026-09-01
+source: fix-mv09-editor-figma-mismatches, fix-mv09-add-object-panel
+updated: 2026-09-03
 code:
   - src/components/ImageEditorWorkspace.vue
   - src/lang/zh-Hant.ts
+  - src/lang/en.ts
 -->
 
 ---
