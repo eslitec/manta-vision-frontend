@@ -123,16 +123,21 @@ code:
 
 ### Requirement: 側邊欄標示目前所在區塊
 
-側邊欄導覽 SHALL 用底色變化和左側強調色條，同時標示出跟目前路由對應的項目，使其與其他項目有明顯區別。
+側邊欄導覽 SHALL 用底色變化和左側強調色條，同時標示出跟目前路由對應的項目，使其與其他項目有明顯區別。從工作台點進任一生成工具（`/generate/*`，例如圖生圖、圖生影片、AI 產文、AI 試穿）後，側邊欄的「AI 生成工作台」項目 SHALL 維持選取狀態，不 SHALL NOT 因為離開 `/` 而變成沒有項目被選取。
 
 #### Scenario: 使用者位於工作台頁面
 
 - **WHEN** 目前路由是工作台（`/`）
 - **THEN** 側邊欄的「AI 生成工作台」項目顯示使用中的底色與左側強調色條，且沒有其他項目同時顯示這個狀態
 
+#### Scenario: 使用者從工作台進入生成工具頁面
+
+- **WHEN** 使用者從工作台點擊某張生成工具卡片，導覽到 `/generate/*` 底下的頁面（如圖生圖 `/generate/image`）
+- **THEN** 側邊欄的「AI 生成工作台」項目仍顯示使用中的底色與左側強調色條，保持選取狀態
+
 <!-- @trace
-source: sync-mv-00-design
-updated: 2026-08-21
+source: sync-mv-00-design, fix-sidebar-active-generate-routes
+updated: 2026-09-03
 code:
   - src/views/HomeView.vue
   - src/layouts/DefaultLayout.vue
