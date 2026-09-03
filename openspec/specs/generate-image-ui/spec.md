@@ -15,13 +15,25 @@ TBD - created by archiving change 'sync-mv-02-design'. Update Purpose after arch
 - **WHEN** 使用者開啟圖生圖頁面
 - **THEN** 頁面上的間距、字級、行高、色碼與設計稿透過 Figma Inspect 提供的精確數值一致
 
+#### Scenario: 進階設定收合列與展開面板對齊設計稿
+
+- **WHEN** 使用者點開「進階設定」
+- **THEN** 收合列 SHALL 顯示 `1.5px` 邊框、`#eff2fa` 底色與 `#2e3567` 文字色的樣式；展開面板 SHALL 包含參考強度滑桿、負面提示欄（含字數 X / 200 計數）、種子欄（含「隨機」帶入與「鎖定」按鈕、下方提示文字）與「恢復預設值」列
+
+#### Scenario: 展開進階設定時面板內部捲動
+
+- **WHEN** 使用者在寬螢幕（≥ 1024px）展開「進階設定」，導致左側面板內容超出可視高度
+- **THEN** 捲軸 SHALL 只出現在 `section.panel.genimg__input` 內部（即步驟區塊），底部「預估消耗／生成圖片」的 sticky footer SHALL 保持固定不隨內容捲動，頁面本身不出現垂直捲軸
+
 <!-- @trace
-source: sync-mv-02-design
-updated: 2026-08-21
+source: sync-mv-02-design, fix-mv02-genimg-advanced-scroll
+updated: 2026-09-03
 code:
   - src/views/GenerateImageView.vue
   - src/components/ModelOption.vue
   - src/components/ImagePickerDialog.vue
+  - src/lang/zh-Hant.ts
+  - src/lang/en.ts
 -->
 
 ---
