@@ -640,7 +640,7 @@ async function onGenerate() {
   aspect-ratio: 360 / 480;
   background: #e4e9f2;
   border-radius: 10px;
-  color: $babyBlue;
+  color: #aeb8cc; // Figma node 841:618 (ph_video) 圖示實際色碼，比 $babyBlue 更偏灰藍
 }
 
 // Figma 14:113：result_img 為 360 × 480，置於 638 × 606 的 result_wrap 中。

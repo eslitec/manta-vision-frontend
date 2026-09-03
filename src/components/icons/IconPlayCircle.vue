@@ -1,6 +1,6 @@
 <template>
   <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="3" />
-    <path d="M26 21.5 L26 42.5 L45 32 Z" fill="currentColor" />
+    <path d="M32.0001 53.3337C43.7822 53.3337 53.3334 43.7824 53.3334 32.0003C53.3334 20.2183 43.7822 10.667 32.0001 10.667C20.218 10.667 10.6667 20.2183 10.6667 32.0003C10.6667 43.7824 20.218 53.3337 32.0001 53.3337Z" stroke="currentColor" stroke-width="2" />
+    <path d="M27.3333 22.667L41.3333 32.0003L27.3333 41.3337V22.667Z" fill="currentColor" />
   </svg>
 </template>
