@@ -119,3 +119,21 @@ code:
   - src/components/ImagePickerDialog.vue
   - src/stores/consent.ts
 -->
+
+---
+
+### Requirement: 左側設定面板在高度不足時面板內部捲動
+
+左側設定面板（`section.panel.tryon__input`）在寬螢幕（≥ 1281px）且視窗高度不足以顯示全部內容時，SHALL 只在面板內部出現垂直捲軸，不 SHALL NOT 使內容溢出版面或造成畫面錯位；底部「預估消耗／生成試穿」SHALL 保持固定不隨內容捲動。
+
+#### Scenario: 已上傳模特清單過長或視窗高度不足
+
+- **WHEN** 使用者在寬螢幕（≥ 1281px）切到「上傳模特照」並疊加多筆已上傳項目，或瀏覽器視窗高度較小
+- **THEN** 捲軸只出現在 `section.panel.tryon__input` 內部，底部「預估消耗／生成試穿」保持固定不隨內容捲動，內容不會溢出或裁切
+
+<!-- @trace
+source: sync-mv-05-design, fix-tryon-panel-scroll-y
+updated: 2026-09-03
+code:
+  - src/views/TryOnView.vue
+-->
