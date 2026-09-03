@@ -8,13 +8,17 @@
   .range
     span {{ t('usage.period') }}
     button.range__chip(v-for="item in ranges" :key="item.value" :aria-pressed="range === item.value" :class="{ 'isActive': range === item.value }" @click="selectRange(item.value)") {{ item.label }}
-    .customRange(v-if="range === 'custom'")
-      label.visuallyHidden(for="usage-start-date") {{ t('usage.customRange.start') }}
-      input#usage-start-date(v-model="customStart" type="date" :max="customEnd")
-      span –
-      label.visuallyHidden(for="usage-end-date") {{ t('usage.customRange.end') }}
-      input#usage-end-date(v-model="customEnd" type="date" :min="customStart")
-      AppButton(size="compact" variant="outline" :disabled="!customRangeValid" @click="applyCustomRange") {{ t('usage.customRange.apply') }}
+    .customRange(v-if="range === 'custom'" ref="customRangeRef")
+      button.customRange__trigger(type="button" :aria-expanded="customPanelOpen" @click="customPanelOpen = !customPanelOpen")
+        span {{ customRangeTriggerLabel }}
+        IconChevronDown.customRange__chevron
+      DateRangeCalendarPanel(
+        v-if="customPanelOpen"
+        :start="customStart"
+        :end="customEnd"
+        @apply="onApplyCustomRange"
+        @cancel="customPanelOpen = false"
+      )
     span.range__date {{ periodData.dateLabel }}
     AppButton.range__export(variant="outline" @click="exportUsage") {{ t('usage.export') }}
 
@@ -107,7 +111,9 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppButton from '@/components/AppButton.vue'
-import { IconAlertTriangleFilled, IconFeedBottleSmall } from '@/components/icons'
+import DateRangeCalendarPanel from '@/components/DateRangeCalendarPanel.vue'
+import { IconAlertTriangleFilled, IconChevronDown, IconFeedBottleSmall } from '@/components/icons'
+import { useDismissableMenu } from '@/composables/useDismissableMenu'
 import { getUsageAlertLevel } from '@/utils/usage'
 import legendActualUrl from '@/assets/images/usage-legend-actual.svg'
 import legendForecastUrl from '@/assets/images/usage-legend-forecast.svg'
@@ -126,6 +132,12 @@ const customEnd = ref('2026-07-28')
 const appliedCustomStart = ref(customStart.value)
 const appliedCustomEnd = ref(customEnd.value)
 const updating = ref(false)
+const customPanelOpen = ref(false)
+const customRangeRef = ref<HTMLElement | null>(null)
+const customRangeTriggerLabel = computed(
+  () => `${customStart.value.replaceAll('-', '/')} – ${customEnd.value.replaceAll('-', '/')}`,
+)
+useDismissableMenu(customPanelOpen, customRangeRef)
 
 type RangeKey = 'month' | 'days30' | 'days90' | 'custom'
 interface ModuleUsage {
@@ -214,7 +226,13 @@ const periodData = computed(() => {
 
 async function selectRange(value: string) {
   range.value = value
-  if (value === 'custom') return
+  if (value === 'custom') {
+    // 自訂區間：切到這個 chip（或再次點擊）就打開 panel_calendar 下拉面板，
+    // 面板自己的「套用」才會真的觸發資料更新，這裡不用假的 loading 動畫
+    customPanelOpen.value = true
+    return
+  }
+  customPanelOpen.value = false
   updating.value = true
   await new Promise((resolve) => setTimeout(resolve, 120))
   updating.value = false
@@ -226,6 +244,12 @@ async function applyCustomRange() {
   updating.value = true
   await new Promise((resolve) => setTimeout(resolve, 120))
   updating.value = false
+}
+function onApplyCustomRange(start: string, end: string) {
+  customStart.value = start
+  customEnd.value = end
+  customPanelOpen.value = false
+  void applyCustomRange()
 }
 
 const cumulative = computed(() => {
@@ -440,24 +464,40 @@ const metricCards = computed(() =>
   color: #606692;
 }
 .customRange {
+  position: relative;
+}
+.customRange__trigger {
   display: flex;
+  height: 2rem;
   align-items: center;
   gap: 0.375rem;
+  padding: 0 0.625rem;
+  border: 1px solid #d2d5dd;
+  border-radius: 8px;
+  background: white;
+  color: #383c4b;
+  font: inherit;
+  font-size: 0.8125rem;
 
-  input {
-    height: 2rem;
-    padding: 0 0.5rem;
-    border: 1px solid #d2d5dd;
-    border-radius: 8px;
-    background: white;
-    color: #383c4b;
-    font: inherit;
-
-    &:focus-visible {
-      outline: 2px solid #f2bb00;
-      outline-offset: 2px;
-    }
+  &[aria-expanded='true'] {
+    border-color: #2e3567;
+    color: #2e3567;
   }
+
+  &:focus-visible {
+    outline: 2px solid #f2bb00;
+    outline-offset: 2px;
+  }
+}
+.customRange__chevron {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex-shrink: 0;
+  color: #b4b9c4;
+  transition: transform 0.15s;
+}
+.customRange__trigger[aria-expanded='true'] .customRange__chevron {
+  transform: rotate(180deg);
 }
 @include below($bp-sm) {
   .range {
