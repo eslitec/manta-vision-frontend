@@ -15,7 +15,9 @@
 
         .step
           .step__title {{ t('image.steps.prompt') }}
-          textarea#image-prompt.textarea(v-model="prompt" rows="4" :aria-label="t('image.steps.prompt')" :placeholder="t('image.promptPlaceholder')")
+          .textareaWrap
+            textarea#image-prompt.textarea(v-model="prompt" rows="4" maxlength="500" :aria-label="t('image.steps.prompt')" :placeholder="t('image.promptPlaceholder')")
+            span.textareaWrap__counter {{ prompt.length }} / 500
           .assist
             button.assist__action(:disabled="assisting || !prompt" @click="assist")
               span {{ assisting ? t('image.assisting') : t('image.assist') }}
@@ -404,11 +406,22 @@ const goBrandSettings = () => router.push('/settings')
     color: #b4b9c4;
   }
 }
+.textareaWrap {
+  position: relative;
+  &__counter {
+    position: absolute;
+    right: 0.875rem;
+    bottom: 0.5rem;
+    font-size: 0.75rem;
+    color: #b4b9c4;
+    pointer-events: none;
+  }
+}
 .textarea {
   width: 100%;
   border: none;
   border-radius: 8px;
-  padding: 0.75rem 0.875rem;
+  padding: 0.75rem 0.875rem 1.5rem;
   font-size: 0.875rem;
   font-family: inherit;
   color: $blue-dark-300;
