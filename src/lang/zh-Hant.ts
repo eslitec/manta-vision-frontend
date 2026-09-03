@@ -629,9 +629,9 @@ export default {
     addObject: {
       title: '加入物件',
       descriptionLabel: '物件描述',
-      descriptionPlaceholder: '描述想加入的物件，例如「一束向日葵」',
+      descriptionPlaceholder: '描述要生成的物件，例：一束粉色乾燥花，放在桌面左側…',
       presets: { bouquet: '花束', plant: '綠植', tableware: '杯盤', shadow: '陰影', card: '裝飾字卡' },
-      hint: '生成後成為獨立圖層，可再調整',
+      hint: '生成後成為獨立圖層，可再調整位置',
       generate: '生成物件',
       generating: '生成中…',
       selectionTip: '在此範圍生成物件',
