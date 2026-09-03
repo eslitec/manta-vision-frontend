@@ -1,4 +1,6 @@
 <template lang="pug">
-svg(width="1em" height="1em" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true")
-  path(d="M5 13l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round")
+svg(width="1em" height="1em" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true")
+  rect(width="22" height="22" rx="11" fill="#2E3567")
+  path(d="M11 16.6875C14.1411 16.6875 16.6875 14.1411 16.6875 11C16.6875 7.85888 14.1411 5.3125 11 5.3125C7.85888 5.3125 5.3125 7.85888 5.3125 11C5.3125 14.1411 7.85888 16.6875 11 16.6875Z" fill="#54C14F")
+  path(fill-rule="evenodd" clip-rule="evenodd" d="M15.5982 7.65219C15.6218 7.84653 15.5757 8.04994 15.4531 8.22188L11.4219 13.8733C10.9917 14.4764 10.0967 14.4795 9.66237 13.8795L7.63337 11.0761C7.37027 10.7126 7.45167 10.2046 7.81518 9.94149C8.17869 9.67841 8.68666 9.75981 8.94976 10.1233L10.5367 12.316L14.1301 7.27825C14.3343 6.99187 14.6903 6.87781 15.0106 6.9674C15.2239 7.17957 15.4204 7.40855 15.5982 7.65219Z" fill="white")
 </template>
