@@ -81,7 +81,7 @@ code:
 
 ### Requirement: 送出生成前二次確認
 
-系統 SHALL 在使用者點擊「生成影片」後，顯示確認彈窗（含已選模型與預估飼料消耗），使用者確認後才真正送出生成請求。
+系統 SHALL 在使用者點擊「生成影片」後，顯示確認彈窗（含已選模型與預估飼料消耗），使用者確認後才真正送出生成請求。確認彈窗（`ConfirmGenerateDialog.vue`）的標題、內文與各列文字 SHALL 在字級與顏色上對齊 Figma 設計稿（node `125:805`）：標題 18px Bold `#383c4b`；內文 16px Regular `#606692`；「使用模型」「剩餘飼料」列的標籤 14px `#b4b9c4`、數值 14px `#606692`；「本次消耗」列標籤 14px `#383c4b`、金額 16px Bold `#ea903a`。
 
 #### Scenario: 確認後送出
 
@@ -93,14 +93,20 @@ code:
 - **WHEN** 使用者送出生成請求但飼料餘額不足
 - **THEN** 系統顯示錯誤訊息，不建立生成任務
 
+#### Scenario: 確認彈窗文字字級與顏色對齊設計稿
+
+- **WHEN** 使用者開啟「確認生成影片」彈窗
+- **THEN** 標題、內文與「使用模型／本次消耗／剩餘飼料」三列的標籤、數值文字，字級與顏色皆與 Figma `125:805` 提供的數值一致
+
 <!-- @trace
-source: sync-mv-04-design
-updated: 2026-08-21
+source: sync-mv-04-design, fix-confirm-dialog-typography
+updated: 2026-09-03
 code:
   - src/views/GenerateVideoView.vue
   - src/layouts/DefaultLayout.vue
   - src/components/TaskCenterPanel.vue
   - src/components/GenerationToast.vue
+  - src/components/ConfirmGenerateDialog.vue
   - src/stores/generationTasks.ts
 -->
 
