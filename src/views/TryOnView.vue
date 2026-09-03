@@ -10,61 +10,65 @@
 
   .tryon__body
     section.panel.tryon__input
-      .step
-        .step__title {{ t('tryOn.steps.model') }}
-        .subtabs(role="tablist" :aria-label="t('tryOn.steps.model')")
-          button.subtab(v-for="s in modelTabs" :key="s.value" role="tab" :aria-selected="modelTab === s.value" :class="{ 'isActive': modelTab === s.value }" @click="modelTab = s.value") {{ s.label }}
-        template(v-if="modelTab === 'builtIn'")
-          .models
-            button.model(v-for="m in models" :key="m.value" :aria-pressed="model === m.value" :class="{ 'isActive': model === m.value }" @click="model = m.value")
-              span.model__thumb
-                IconImagePlaceholder
-              span.model__label {{ m.label }}
-          button.link {{ t('tryOn.viewFullLibrary') }}
-        template(v-else)
-          label.mdrop
-            input.mdrop__input(type="file" accept="image/*" @change="onModelUpload")
-            IconUpload.mdrop__icon
-            span.mdrop__title {{ t('tryOn.upload.title') }}
-            span.mdrop__hint {{ t('tryOn.upload.hint') }}
-          .mtip {{ t('tryOn.upload.recommendation') }}
-          template(v-if="uploadedModels.length")
-            .uphead
-              span.uphead__title {{ t('tryOn.uploadedModels') }}
-              span.uphead__grow
-              span.uphead__count {{ uploadedModels.length }} / 20
-            .uplist
-              .uprow(v-for="u in uploadedModels" :key="u.id" :class="{ 'isOk': u.status === 'available' }")
-                span.uprow__thumb
-                  IconImagePlaceholder
-                .uprow__col
-                  span.uprow__name {{ u.name }}
-                  span.uprow__note(:class="{ 'isWarn': u.status !== 'available' }") {{ t(`tryOn.upload.notes.${u.noteKey}`) }}
-                span.statuspill(:class="u.status === 'available' ? 'isOk' : 'isReupload'") {{ u.status === 'available' ? t('tryOn.upload.available') : t('tryOn.upload.reupload') }}
-                button.uprow__del(@click="removeModel(u.id)" :aria-label="t('common.delete')")
-                  IconDelete
-            .pconsent
-              AppCheckbox.pconsent__check(v-model="personConsent") {{ t('tryOn.personConsent') }}
-              button.pconsent__link(type="button" @click.prevent="showConsent = true") {{ t('tryOn.viewTerms') }}
-      .step
-        .step__title {{ t('tryOn.steps.apparel') }}
-        .dropzone
-          IconImagePlaceholder.dropzone__icon
-          span.dropzone__name(v-if="apparel") {{ apparel.name }}
-        .dropzone__actions
-          AppButton(variant="outline" @click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
-          span.dropzone__hint {{ t('tryOn.removeBackgroundHint') }}
-      BrandToggle.tryon__brand(v-model="applyBrand" @edit="goBrandSettings")
-      p.err(v-if="errorMsg" role="alert") {{ errorMsg }}
-      .tryon__footer
-        .cost
-          .cost__label {{ t('common.estimatedCost') }}
-          .cost__value
-            IconFeedBottleSmall.cost__icon
-            span {{ t('units.feed', { count: 12 }) }}
-        AppButton(:disabled="generating" @click="onGenerate")
-          IconLoader.spin(v-if="generating")
-          span {{ generating ? t('common.generating') : t('tryOn.generate') }}
+      .tryon__scroll
+        .tryon__steps
+          .step
+            .step__title {{ t('tryOn.steps.model') }}
+            .subtabs(role="tablist" :aria-label="t('tryOn.steps.model')")
+              button.subtab(v-for="s in modelTabs" :key="s.value" role="tab" :aria-selected="modelTab === s.value" :class="{ 'isActive': modelTab === s.value }" @click="modelTab = s.value") {{ s.label }}
+            template(v-if="modelTab === 'builtIn'")
+              .models
+                button.model(v-for="m in models" :key="m.value" :aria-pressed="model === m.value" :class="{ 'isActive': model === m.value }" @click="model = m.value")
+                  span.model__thumb
+                    IconImagePlaceholder
+                  span.model__label {{ m.label }}
+              button.link {{ t('tryOn.viewFullLibrary') }}
+            template(v-else)
+              label.mdrop
+                input.mdrop__input(type="file" accept="image/*" @change="onModelUpload")
+                IconUpload.mdrop__icon
+                span.mdrop__title {{ t('tryOn.upload.title') }}
+                span.mdrop__hint {{ t('tryOn.upload.hint') }}
+              .mtip {{ t('tryOn.upload.recommendation') }}
+              template(v-if="uploadedModels.length")
+                .uphead
+                  span.uphead__title {{ t('tryOn.uploadedModels') }}
+                  span.uphead__grow
+                  span.uphead__count {{ uploadedModels.length }} / 20
+                .uplist
+                  .uprow(v-for="u in uploadedModels" :key="u.id" :class="{ 'isOk': u.status === 'available' }")
+                    span.uprow__thumb
+                      IconImagePlaceholder
+                    .uprow__col
+                      span.uprow__name {{ u.name }}
+                      span.uprow__note(:class="{ 'isWarn': u.status !== 'available' }") {{ t(`tryOn.upload.notes.${u.noteKey}`) }}
+                    span.statuspill(:class="u.status === 'available' ? 'isOk' : 'isReupload'") {{ u.status === 'available' ? t('tryOn.upload.available') : t('tryOn.upload.reupload') }}
+                    button.uprow__del(@click="removeModel(u.id)" :aria-label="t('common.delete')")
+                      IconDelete
+                .pconsent
+                  AppCheckbox.pconsent__check(v-model="personConsent") {{ t('tryOn.personConsent') }}
+                  button.pconsent__link(type="button" @click.prevent="showConsent = true") {{ t('tryOn.viewTerms') }}
+          .step
+            .step__title {{ t('tryOn.steps.apparel') }}
+            .dropzone
+              IconImagePlaceholder.dropzone__icon
+              span.dropzone__name(v-if="apparel") {{ apparel.name }}
+            .dropzone__actions
+              AppButton(variant="outline" @click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
+              span.dropzone__hint {{ t('tryOn.removeBackgroundHint') }}
+          BrandToggle.tryon__brand(v-model="applyBrand" @edit="goBrandSettings")
+        span.tryon__fade(aria-hidden="true")
+      .tryon__sticky
+        p.err(v-if="errorMsg" role="alert") {{ errorMsg }}
+        .tryon__footer
+          .cost
+            .cost__label {{ t('common.estimatedCost') }}
+            .cost__value
+              IconFeedBottleSmall.cost__icon
+              span {{ t('units.feed', { count: 12 }) }}
+          AppButton(:disabled="generating" @click="onGenerate")
+            IconLoader.spin(v-if="generating")
+            span {{ generating ? t('common.generating') : t('tryOn.generate') }}
 
     section.panel.tryon__result
       .result__head
@@ -290,6 +294,26 @@ async function onGenerate() {
 .tryon__input {
   display: flex;
   flex-direction: column;
+}
+.tryon__scroll {
+  @media (min-width: 80.0625rem) {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+  }
+}
+.tryon__fade {
+  display: none;
+  @media (min-width: 80.0625rem) {
+    display: block;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 1.75rem;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0), $white);
+    pointer-events: none;
+  }
 }
 .panel {
   background: $white;
@@ -548,13 +572,25 @@ async function onGenerate() {
 .err {
   color: $red;
   font-size: 0.8125rem;
-  margin-bottom: 0.75rem;
+  margin: 0;
+}
+.tryon__sticky {
+  margin: auto -1.5rem -1.5rem;
+  padding: 0.875rem 1.5rem 1.5rem;
+  border-top: 1px solid $gray;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  // 大螢幕（≥80.0625rem）：.tryon__input 改成 padding: 0（見上），.tryon__scroll 用 flex: 1 頂開，
+  // 不再需要負 margin 抵銷面板留白，sticky footer 固定高不隨內容捲動（同 genimg__sticky／video__sticky 處理方式）
+  @media (min-width: 80.0625rem) {
+    margin: 0;
+    flex-shrink: 0;
+  }
 }
 .tryon__footer {
   @include flex(space-between, flex-end);
-  border-top: 1px solid $gray;
-  margin: auto -1.5rem 0;
-  padding: 0.875rem 1.5rem 0;
+  margin: 0;
 }
 .cost {
   &__label {
@@ -619,6 +655,22 @@ async function onGenerate() {
   .tryon__input,
   .tryon__result {
     min-height: 0;
+  }
+
+  // 左側面板在這個斷點開始有確定高度（.tryon 的 height: 100% 一路往上接到
+  // DefaultLayout 的 .content{overflow-y:auto}），但面板內容（已上傳模特清單、
+  // 同意條款勾選等）沒有上限，過去在視窗高度不足時會直接溢出撐破版面。
+  // 改成 .tryon__scroll(flex:1)／.tryon__steps(overflow-y:auto) 兩段式結構後，
+  // 高度不夠時只在面板內部出現垂直捲軸（Y 軸），不再破圖。
+  .tryon__input {
+    height: 100%;
+    padding: 0;
+  }
+
+  .tryon__steps {
+    height: 100%;
+    overflow-y: auto;
+    padding: 1.5rem 1.5rem 0.75rem;
   }
 
   .result__wrap {
