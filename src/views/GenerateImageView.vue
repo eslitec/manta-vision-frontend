@@ -2,81 +2,94 @@
 .genimg
   h1.visuallyHidden {{ t('routeTitles.generateImage') }}
   section.panel.genimg__input
-    .step
-      .step__title {{ t('image.steps.reference') }}
-      .dropzone
-        IconImagePlaceholder.dropzone__icon
-        span.dropzone__name(v-if="refImage") {{ refImage.name }}
-      .dropzone__actions
-        AppButton(variant="outline" @click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
-        span.dropzone__hint {{ t('common.orDragUpload') }}
+    .genimg__scroll
+      .genimg__steps
+        .step
+          .step__title {{ t('image.steps.reference') }}
+          .dropzone
+            IconImagePlaceholder.dropzone__icon
+            span.dropzone__name(v-if="refImage") {{ refImage.name }}
+          .dropzone__actions
+            AppButton(variant="outline" @click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
+            span.dropzone__hint {{ t('common.orDragUpload') }}
 
-    .step
-      .step__title {{ t('image.steps.prompt') }}
-      textarea#image-prompt.textarea(v-model="prompt" rows="4" :aria-label="t('image.steps.prompt')" :placeholder="t('image.promptPlaceholder')")
-      .assist
-        button.assist__action(:disabled="assisting || !prompt" @click="assist")
-          span {{ assisting ? t('image.assisting') : t('image.assist') }}
-        span.assist__hint {{ t('image.assistHint') }}
-      button.advanced(@click="advancedOpen = !advancedOpen")
-        span {{ t('image.advancedSettings') }}
-        IconChevronDown(:class="{ isUp: advancedOpen }")
-      .adv(v-show="advancedOpen")
-        .adv__row
-          label.adv__label(for="image-reference-strength")
-            span {{ t('image.referenceStrength') }}
-            span.adv__val {{ referenceStrength.toFixed(2) }}
-          input#image-reference-strength.adv__range(type="range" min="0" max="1" step="0.05" v-model.number="referenceStrength" :aria-describedby="'image-reference-strength-hint'")
-          span#image-reference-strength-hint.adv__hint {{ t('image.strengthHint') }}{{ refImage ? '' : t('image.referenceRequired') }}
-        .adv__row
-          label.adv__label(for="image-negative-prompt") {{ t('image.negativePrompt') }}
-          input#image-negative-prompt.adv__input(type="text" v-model="negativePrompt" :placeholder="t('image.negativePlaceholder')")
-          .adv__negpreset
-            button.adv__negchip(
-              v-for="key in negativePresetKeys"
-              :key="key"
-              type="button"
-              :class="{ isActive: isNegativeActive(t(`image.negativePresets.${key}`)) }"
-              :aria-pressed="isNegativeActive(t(`image.negativePresets.${key}`))"
-              @click="toggleNegativePreset(t(`image.negativePresets.${key}`))"
-            ) {{ t(`image.negativePresets.${key}`) }}
-        .adv__row
-          label.adv__label(for="image-seed") {{ t('image.seed') }}
-          input#image-seed.adv__input(type="number" v-model="seedInput" :placeholder="t('image.seedPlaceholder')")
+        .step
+          .step__title {{ t('image.steps.prompt') }}
+          textarea#image-prompt.textarea(v-model="prompt" rows="4" :aria-label="t('image.steps.prompt')" :placeholder="t('image.promptPlaceholder')")
+          .assist
+            button.assist__action(:disabled="assisting || !prompt" @click="assist")
+              span {{ assisting ? t('image.assisting') : t('image.assist') }}
+            span.assist__hint {{ t('image.assistHint') }}
+          button.advanced(@click="advancedOpen = !advancedOpen")
+            span {{ t('image.advancedSettings') }}
+            IconChevronDown(:class="{ isUp: advancedOpen }")
+          .adv(v-show="advancedOpen")
+            .adv__row
+              label.adv__label(for="image-reference-strength")
+                span {{ t('image.referenceStrength') }}
+                span.adv__val {{ referenceStrength.toFixed(2) }}
+              input#image-reference-strength.adv__range(type="range" min="0" max="1" step="0.05" v-model.number="referenceStrength" :aria-describedby="'image-reference-strength-hint'")
+              span#image-reference-strength-hint.adv__hint {{ t('image.strengthHint') }}{{ refImage ? '' : t('image.referenceRequired') }}
+            .adv__row
+              .adv__label
+                label(for="image-negative-prompt") {{ t('image.negativePrompt') }}
+                span.adv__counter {{ negativePrompt.length }} / 200
+              textarea#image-negative-prompt.adv__field.adv__field--negative(v-model="negativePrompt" maxlength="200" :placeholder="t('image.negativePlaceholder')")
+              .adv__negpreset
+                button.adv__negchip(
+                  v-for="key in negativePresetKeys"
+                  :key="key"
+                  type="button"
+                  :class="{ isActive: isNegativeActive(t(`image.negativePresets.${key}`)) }"
+                  :aria-pressed="isNegativeActive(t(`image.negativePresets.${key}`))"
+                  @click="toggleNegativePreset(t(`image.negativePresets.${key}`))"
+                ) {{ t(`image.negativePresets.${key}`) }}
+            .adv__row
+              .adv__label
+                label(for="image-seed") {{ t('image.seed') }}
+                button.adv__randomBtn(type="button" @click="randomizeSeed") {{ t('image.seedRandom') }}
+              .adv__seedRow
+                input#image-seed.adv__field.adv__field--seed(type="number" v-model="seedInput" :placeholder="t('image.seedPlaceholder')" :aria-describedby="'image-seed-hint'")
+                button.adv__lock(type="button" :class="{ isActive: seedLocked }" :aria-pressed="seedLocked" @click="seedLocked = !seedLocked") {{ t('image.seedLock') }}
+              span#image-seed-hint.adv__hint {{ t('image.seedHint') }}
+            .adv__reset
+              button.adv__resetBtn(type="button" @click="resetAdvanced") {{ t('image.resetAdvanced') }}
+              span.adv__resetHint {{ t('image.resetAdvancedHint') }}
 
-    .step
-      .step__head
-        span.step__title {{ t('image.steps.model') }}
-        span.step__hint {{ t('image.modelHint') }}
-      .models
-        ModelOption(
-          v-for="tier in imageTiers"
-          :key="tier.key"
-          :name="$t(`modelTiers.${tier.key}.label`)"
-          :multiplier="tier.multiplier"
-          :cost="$t('image.feedPerImage', { count: IMAGE_BASE_COST * tier.multiplier })"
-          :description="$t(`image.modelDescriptions.${tier.key}`)"
-          :selected="imageTier === tier.key"
-          @click="imageTier = tier.key"
-        )
+        .step
+          .step__head
+            span.step__title {{ t('image.steps.model') }}
+            span.step__hint {{ t('image.modelHint') }}
+          .models
+            ModelOption(
+              v-for="tier in imageTiers"
+              :key="tier.key"
+              :name="$t(`modelTiers.${tier.key}.label`)"
+              :multiplier="tier.multiplier"
+              :cost="$t('image.feedPerImage', { count: IMAGE_BASE_COST * tier.multiplier })"
+              :description="$t(`image.modelDescriptions.${tier.key}`)"
+              :selected="imageTier === tier.key"
+              @click="imageTier = tier.key"
+            )
 
-    BrandToggle.genimg__brand(v-model="applyBrand" @edit="goBrandSettings")
+        BrandToggle.genimg__brand(v-model="applyBrand" @edit="goBrandSettings")
 
-    .count
-      span.count__label {{ t('image.count') }}
-      button.count__pill(v-for="c in counts" :key="c" :aria-pressed="count === c" :class="{ 'isActive': count === c }" @click="count = c") {{ t('image.imageCount', { count: c }) }}
+        .count
+          span.count__label {{ t('image.count') }}
+          button.count__pill(v-for="c in counts" :key="c" :aria-pressed="count === c" :class="{ 'isActive': count === c }" @click="count = c") {{ t('image.imageCount', { count: c }) }}
+      span.genimg__fade(aria-hidden="true")
 
-    p.err(v-if="errorMsg" role="alert") {{ errorMsg }}
-
-    .genimg__footer
-      .cost
-        .cost__label {{ t('common.estimatedCost') }}
-        .cost__value
-          IconFeedBottleSmall.cost__icon
-          span {{ t('units.feed', { count: estCost }) }}
-      AppButton(:disabled="generating || !prompt" @click="generate")
-        component(:is="generating ? IconLoader : IconAddObject" :class="{ spin: generating }")
-        span {{ generating ? t('common.generating') : t('image.generate') }}
+    .genimg__sticky
+      p.err(v-if="errorMsg" role="alert") {{ errorMsg }}
+      .genimg__footer
+        .cost
+          .cost__label {{ t('common.estimatedCost') }}
+          .cost__value
+            IconFeedBottleSmall.cost__icon
+            span {{ t('units.feed', { count: estCost }) }}
+        AppButton(:disabled="generating || !prompt" @click="generate")
+          component(:is="generating ? IconLoader : IconAddObject" :class="{ spin: generating }")
+          span {{ generating ? t('common.generating') : t('image.generate') }}
 
   section.panel.genimg__result
     .result__head
@@ -146,9 +159,11 @@ const errorMsg = ref('')
 const results = ref<GeneratedImage[]>([])
 
 // 進階設定
-const referenceStrength = ref(0.5)
+const DEFAULT_REFERENCE_STRENGTH = 0.5
+const referenceStrength = ref(DEFAULT_REFERENCE_STRENGTH)
 const negativePrompt = ref('')
 const seedInput = ref('')
+const seedLocked = ref(false)
 
 // 負面提示預設詞（點選即帶入下方負面提示欄）
 const negativePresetKeys = ['blur', 'fingers', 'messyBg', 'watermark', 'overexposed'] as const
@@ -167,6 +182,19 @@ function toggleNegativePreset(word: string) {
   const parts = negativeParts.value
   const next = parts.includes(word) ? parts.filter((p) => p !== word) : [...parts, word]
   negativePrompt.value = next.join('、')
+}
+
+// 隨機帶入一組 9 位數種子（對齊設計稿 field_seed 範例格式）
+function randomizeSeed() {
+  seedInput.value = String(Math.floor(100000000 + Math.random() * 900000000))
+}
+
+// 恢復進階設定預設值（不影響飼料消耗，純本地狀態重置）
+function resetAdvanced() {
+  referenceStrength.value = DEFAULT_REFERENCE_STRENGTH
+  negativePrompt.value = ''
+  seedInput.value = ''
+  seedLocked.value = false
 }
 
 onMounted(() => {
@@ -265,6 +293,13 @@ const goBrandSettings = () => router.push('/settings')
   @include below($bp-lg) {
     grid-template-columns: 1fr;
   }
+  // 大螢幕：.genimg__input 改成固定高兩段式結構（捲動區＋sticky footer），
+  // 需要 .genimg 本身有確定高度才能讓內部捲動生效，否則展開「進階設定」會把整頁往下撐開，
+  // 而不是只在 section.panel.genimg__input 內部出現捲軸（比照 GenerateVideoView.vue 的 video__scroll／video__sticky 結構）。
+  @media (min-width: $bp-lg) {
+    height: 100%;
+    min-height: 0;
+  }
 }
 .panel {
   background: $white;
@@ -275,6 +310,52 @@ const goBrandSettings = () => router.push('/settings')
 .genimg__input {
   display: flex;
   flex-direction: column;
+  @media (min-width: $bp-lg) {
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+  }
+}
+.genimg__scroll {
+  @media (min-width: $bp-lg) {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+  }
+}
+.genimg__steps {
+  @media (min-width: $bp-lg) {
+    height: 100%;
+    overflow-y: auto;
+    padding: 1.5rem 1.5rem 0.75rem;
+  }
+}
+.genimg__fade {
+  display: none;
+  @media (min-width: $bp-lg) {
+    display: block;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 1.75rem;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0), $white);
+    pointer-events: none;
+  }
+}
+.genimg__sticky {
+  margin: auto -1.5rem -1.5rem;
+  padding: 0.875rem 1.5rem 1.5rem;
+  border-top: 1px solid $gray;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  // 大螢幕：.genimg__input 改成 padding: 0（見上），.genimg__scroll 用 flex: 1 頂開，
+  // 不再需要負 margin 抵銷面板留白，sticky footer 固定高不隨內容捲動（同 video__sticky 處理方式）
+  @media (min-width: $bp-lg) {
+    margin: 0;
+    flex-shrink: 0;
+  }
 }
 .step {
   margin-bottom: 1rem;
@@ -361,14 +442,20 @@ const goBrandSettings = () => router.push('/settings')
 .advanced {
   @include flex(space-between, center);
   width: 100%;
-  border: none;
-  border-radius: 8px;
-  padding: 0 0.75rem;
-  height: 1.5rem;
-  font-size: 0.875rem;
-  color: $dark-blue-gray;
+  border: 1.5px solid $blue-dark-500;
+  border-radius: 10px;
+  padding: 0 0.75rem 0 0.875rem;
+  height: 2.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: $blue-dark-500;
   margin-bottom: 0.75rem;
   background: $blue-light;
+  svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+  }
 }
 .isUp {
   transform: rotate(180deg);
@@ -388,28 +475,45 @@ const goBrandSettings = () => router.push('/settings')
   }
   &__label {
     @include flex(space-between, center);
-    font-size: 0.8125rem;
-    color: $blue-dark-300;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: $blue-dark-500;
   }
   &__val {
-    font-size: 0.8125rem;
-    font-weight: 700;
-    color: $blue;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: $blue-dark-500;
   }
   &__range {
     width: 100%;
-    accent-color: $blue;
+    accent-color: $blue-dark-500;
     cursor: pointer;
   }
   &__hint {
-    font-size: 0.75rem;
+    font-size: 0.625rem;
     color: $gray-100;
+  }
+  &__counter {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: $gray-100;
+  }
+  &__randomBtn,
+  &__resetBtn {
+    border: none;
+    background: none;
+    padding: 0;
+    font-size: 0.75rem;
+    font-weight: 500;
+    font-family: inherit;
+    color: $blue-dark-500;
+    cursor: pointer;
+    white-space: nowrap;
   }
   &__negpreset {
     display: flex;
     flex-wrap: wrap;
     gap: 0.375rem;
-    margin-top: 0.125rem;
   }
   &__negchip {
     padding: 0.375rem 0.75rem;
@@ -434,21 +538,65 @@ const goBrandSettings = () => router.push('/settings')
       color: $white;
     }
   }
-  &__input {
+  &__field {
     width: 100%;
     border: 1px solid $gray;
-    border-radius: 8px;
-    padding: 0.5rem 0.75rem;
-    font-size: 0.8125rem;
+    border-radius: 18px;
+    font-size: 0.875rem;
     font-family: inherit;
     color: $blue-dark-300;
+    background: $white;
     outline: none;
+    resize: none;
     &:focus {
       border-color: $blue;
     }
     &::placeholder {
       color: $gray-100;
     }
+    &--negative {
+      height: 3.5rem;
+      padding: 0.5rem 0.875rem;
+      line-height: normal;
+    }
+    &--seed {
+      flex: 1;
+      min-width: 0;
+      height: 2.25rem;
+      padding: 0.5rem 0.875rem;
+    }
+  }
+  &__seedRow {
+    @include flex(flex-start, center, 0.5rem);
+    width: 100%;
+  }
+  &__lock {
+    @include flex(center, center);
+    flex-shrink: 0;
+    border: 1px solid $blue-dark-500;
+    border-radius: 18px;
+    background: $white;
+    box-shadow: $btnBoxShadow;
+    padding: 0.5625rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    font-family: inherit;
+    color: $blue-dark-500;
+    cursor: pointer;
+    white-space: nowrap;
+    &.isActive {
+      background: $blue-dark-500;
+      color: $white;
+    }
+  }
+  &__reset {
+    @include flex(flex-start, center, 0.5rem);
+    width: 100%;
+  }
+  &__resetHint {
+    font-size: 0.625rem;
+    color: $gray-100;
+    white-space: nowrap;
   }
 }
 .count {
@@ -498,7 +646,7 @@ const goBrandSettings = () => router.push('/settings')
 @include below($bp-sm) {
   .advanced {
     height: auto;
-    min-height: 2.5rem;
+    min-height: 2.75rem;
     gap: 0.75rem;
     line-height: 1.25rem;
     text-align: left;
@@ -510,13 +658,11 @@ const goBrandSettings = () => router.push('/settings')
 .err {
   color: $red;
   font-size: 0.8125rem;
-  margin-bottom: 0.75rem;
+  margin: 0;
 }
 .genimg__footer {
   @include flex(space-between, flex-end);
-  border-top: 1px solid $gray;
-  margin: auto -1.5rem 0;
-  padding: 0.875rem 1.5rem 0;
+  margin: 0;
 }
 .cost {
   &__label {
