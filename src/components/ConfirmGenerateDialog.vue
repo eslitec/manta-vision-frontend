@@ -9,15 +9,15 @@ Teleport(to="body")
       p.confirm__msg(:id="messageId") {{ resolvedMessage }}
       .confirm__rows
         .confirm__row(v-if="modelLabel")
-          span {{ t('confirmGenerate.model') }}
-          span {{ modelLabel }}
+          span.confirm__label {{ t('confirmGenerate.model') }}
+          span.confirm__value {{ modelLabel }}
         .confirm__row.confirm__row--card
-          span {{ t('confirmGenerate.cost') }}
+          span.confirm__label {{ t('confirmGenerate.cost') }}
           strong.confirm__cost
             IconFeedBottleSmall
             span {{ cost }} {{ t('confirmGenerate.feedUnit') }}
         .confirm__row.confirm__row--sub
-          span {{ t('confirmGenerate.balance') }}
+          span.confirm__label {{ t('confirmGenerate.balance') }}
           span.confirm__balance
             IconFeedBottleSmall
             span {{ balance.toLocaleString() }} {{ t('confirmGenerate.feedUnit') }}
@@ -101,16 +101,16 @@ const confirm = () => {
   }
 
   &__title {
-    font-size: 1.0625rem;
+    font-size: 1.125rem;
     font-weight: 700;
-    color: $blue-dark-300;
+    color: $dark-blue-gray;
   }
 
   &__msg {
     margin-bottom: 1.125rem;
-    color: $gray-400;
-    font-size: 0.875rem;
-    line-height: 1.6;
+    color: #606692;
+    font-size: 1rem;
+    line-height: 1.375;
   }
 
   &__rows {
@@ -122,13 +122,8 @@ const confirm = () => {
   &__row {
     @include flex(space-between, center);
     padding: 0.25rem 0;
-    color: $blue-dark-300;
-    font-size: 0.9375rem;
-
-    &--sub {
-      color: $gray-100;
-      font-size: 0.8125rem;
-    }
+    font-size: 0.875rem;
+    line-height: 1.4286;
 
     &--card {
       margin: 0.375rem 0;
@@ -138,20 +133,36 @@ const confirm = () => {
     }
   }
 
+  &__label {
+    color: $gray-100;
+  }
+
+  &__value {
+    color: #606692;
+  }
+
   &__cost,
   &__balance {
     @include flex(flex-start, center, 0.375rem);
+  }
+
+  &__cost {
     color: $orange;
     font-weight: 700;
+    font-size: 1rem;
   }
 
   &__balance {
-    color: inherit;
-    font-weight: inherit;
+    color: #606692;
+    font-weight: 400;
   }
 
   &__actions {
     @include flex(flex-end, center, 0.625rem);
   }
+}
+// cost_row（本次消耗）的標籤色比 model_row／bal_row 深，對齊設計稿 #383c4b
+.confirm__row--card .confirm__label {
+  color: $dark-blue-gray;
 }
 </style>
