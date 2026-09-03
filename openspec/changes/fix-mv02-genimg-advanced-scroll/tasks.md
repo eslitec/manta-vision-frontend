@@ -8,6 +8,9 @@
 - [x] 1.6 種子欄補上「隨機」帶入按鈕、「鎖定」切換按鈕與下方提示文字；新增「恢復預設值」列
 - [x] 1.7 `zh-Hant.ts`／`en.ts` 補上新增文案的中英翻譯
 - [x] 1.8 `npx vue-tsc --noEmit` 與 `npx eslint` 確認無錯誤
+- [x] 1.9 使用者再次要求「文字的部分要跟設計稿一樣」，逐字重新核對 `scroll_area`（1147:580）底下所有文案節點：修正 `image.strengthHint`（越高越貼近參考圖，越低 AI 自由發揮空間越大）、`image.seed`（種子（Seed））、`image.negativePlaceholder`（模糊、變形手指、雜亂背景）、`image.seedPlaceholder`（784512396）四組既有文案；`zh-Hant.ts`／`en.ts` 同步更新中英版本
+- [x] 1.10 主要描述欄補上 `maxlength="500"` 與即時字數計數（`.textareaWrap__counter`），對齊 `field_prompt`（1147:587）原本完全缺漏的「X / 500」
+- [x] 1.11 `npx vue-tsc --noEmit` 與 `npx eslint` 再次確認無錯誤
 
 ## 2. Ingest
 

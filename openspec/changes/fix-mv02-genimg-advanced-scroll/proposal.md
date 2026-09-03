@@ -12,6 +12,13 @@
    - 完全缺少「恢復預設值」列（設計稿 `row_reset`：「恢復預設值」＋「進階設定不影響飼料消耗」提示）
 2. 「進階設定展開時應該是 `section.panel.genimg__input` 這邊出現 scrollbar」——目前 `.genimg__input` 沒有任何高度上限，展開進階設定後面板一路撐高，捲動發生在整個頁面而非面板內部。對照 Figma `scroll_area`（`1147:580`）可看出左側面板本來就是固定高度、內容超出時才在面板內部捲動的設計。這與 `GenerateVideoView.vue` 先前（`sync-mv-04-design` 2026-08-21 決策）修正過的同一類問題根因相同：`.panel` 沒有高度上限，`.xxx__sticky` 的 `margin-top: auto` 沒有剩餘空間可推，導致整頁捲動。
 
+3. 後續使用者再次附上同一個 Figma 連結（`1147:580`），要求「文字的部分要跟設計稿一樣」，逐字重新核對 `scroll_area` 底下所有文案節點後，另外找到幾處純文字落差：
+   - 參考強度提示文字：實作「低＝貼近參考圖，高＝更聽描述」，設計稿（`1147:755`）是「越高越貼近參考圖，越低 AI 自由發揮空間越大」
+   - 種子欄標籤：實作「種子」，設計稿（`1147:777`）是「種子（Seed）」
+   - 負面提示欄位內文字（`1147:762` placeholder 色 `#b4b9c4`）：實作 placeholder 是「不希望出現：模糊、多餘手指、浮水印、文字…」，設計稿顯示的是「模糊、變形手指、雜亂背景」
+   - 種子欄位內文字（`1147:781` placeholder 色 `#b4b9c4`）：實作 placeholder 是「留空＝隨機（固定可重現同一張）」，設計稿顯示的是範例種子碼「784512396」
+   - 描述欄位（`field_prompt`，`1147:587`）設計稿右下角有字數計數「132 / 500」，實作完全沒有這個計數與 500 字上限
+
 ## 做了什麼
 
 - `src/views/GenerateImageView.vue`
@@ -21,8 +28,9 @@
   - 負面提示欄：`input` 改為 `textarea.adv__field.adv__field--negative`（56px 高、圓角 18px、可輸入至 200 字），標籤列補上 `.adv__counter` 即時字數計數
   - 種子欄：標籤列補上「隨機」按鈕（`randomizeSeed()`，帶入 9 位數範例格式亂數）；欄位下方補上 `.adv__lock`「鎖定」切換按鈕（`seedLocked` 狀態，純前端視覺切換，不影響送出邏輯）與 `.adv__hint` 說明文字
   - 新增「恢復預設值」列（`.adv__reset`，`resetAdvanced()` 重置參考強度／負面提示／種子／鎖定狀態為初始值，純本地狀態、不影響飼料消耗）
-- `src/lang/zh-Hant.ts`、`src/lang/en.ts`：新增 `image.seedRandom`、`image.seedLock`、`image.seedHint`、`image.resetAdvanced`、`image.resetAdvancedHint` 五組文案（中英對照）
-- `openspec/specs/generate-image-ui/spec.md`：「圖生圖頁面呈現對齊設計稿」Requirement 補上進階設定樣式與面板內部捲動兩個 Scenario、trace
+- `src/lang/zh-Hant.ts`、`src/lang/en.ts`：新增 `image.seedRandom`、`image.seedLock`、`image.seedHint`、`image.resetAdvanced`、`image.resetAdvancedHint` 五組文案（中英對照）；修正 `image.strengthHint`、`image.seed`、`image.negativePlaceholder`、`image.seedPlaceholder` 四組既有文案，逐字對齊設計稿
+- 主要描述欄（`#image-prompt`）補上 `maxlength="500"` 與 `.textareaWrap__counter` 即時字數計數，對齊設計稿 `field_prompt`（`1147:587`）的「X / 500」
+- `openspec/specs/generate-image-ui/spec.md`：「圖生圖頁面呈現對齊設計稿」Requirement 補上進階設定樣式、面板內部捲動、文案逐字對齊三個 Scenario、trace
 
 ## 影響範圍
 

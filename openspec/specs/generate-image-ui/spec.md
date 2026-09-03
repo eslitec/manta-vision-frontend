@@ -25,6 +25,11 @@ TBD - created by archiving change 'sync-mv-02-design'. Update Purpose after arch
 - **WHEN** 使用者在寬螢幕（≥ 1024px）展開「進階設定」，導致左側面板內容超出可視高度
 - **THEN** 捲軸 SHALL 只出現在 `section.panel.genimg__input` 內部（即步驟區塊），底部「預估消耗／生成圖片」的 sticky footer SHALL 保持固定不隨內容捲動，頁面本身不出現垂直捲軸
 
+#### Scenario: 文案逐字對齊設計稿
+
+- **WHEN** 使用者檢視描述欄與進階設定的文字內容
+- **THEN** 描述欄 SHALL 顯示字數計數「{目前字數} / 500」；參考強度提示文字 SHALL 為「越高越貼近參考圖，越低 AI 自由發揮空間越大」；種子欄標籤 SHALL 為「種子（Seed）」；負面提示欄與種子欄的欄位提示文字（placeholder）SHALL 分別為「模糊、變形手指、雜亂背景」與「784512396」，逐字對齊 Figma `scroll_area`（1147:580）內對應節點
+
 <!-- @trace
 source: sync-mv-02-design, fix-mv02-genimg-advanced-scroll
 updated: 2026-09-03
