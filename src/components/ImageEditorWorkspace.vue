@@ -280,11 +280,11 @@
         h3 {{ t('editor.addObject.title') }}
         textarea.objectGenerator__desc(
           v-model="objectDescription"
-          maxlength="120"
+          maxlength="200"
           :aria-label="t('editor.addObject.descriptionLabel')"
           :placeholder="t('editor.addObject.descriptionPlaceholder')"
         )
-        small.charCounter {{ objectDescription.length }} / 120
+        small.charCounter {{ objectDescription.length }} / 200
         .presetRow
           button.presetChip(v-for="preset in objectPresets" :key="preset.key" type="button" @click="applyObjectPreset(preset.label)") {{ preset.label }}
         small.objectGenerator__hint {{ t('editor.addObject.hint') }}
@@ -1390,6 +1390,8 @@ const previews = computed(() =>
     outline-offset: 2px;
   }
 }
+// 對齊 Figma（1141:1140 selection_marquee）：選取範圍要有淡淡的藍色底色 rgba(46,53,103,0.1)
+// 才看得出框選了哪塊區域，原本沒有底色，只有虛線框；圓角也應該是 6px，原本是 4px。
 .objectSelection {
   position: absolute;
   z-index: 100;
@@ -1397,7 +1399,8 @@ const previews = computed(() =>
   align-items: flex-end;
   justify-content: center;
   border: 2px dashed $blue-dark-500;
-  border-radius: 4px;
+  border-radius: 6px;
+  background: rgba(46, 53, 103, 0.1);
   cursor: grab;
   touch-action: none;
 
@@ -1434,14 +1437,17 @@ const previews = computed(() =>
     bottom: -0.375rem;
   }
 }
+// 對齊 Figma（1141:1145 selection_tip）：圓角 6px（不是藥丸形的 12px）、上下內距 6px
+// （原本 4px）、文字 11px Medium（原本 12px、沒有加粗）。
 .objectSelection__tip {
   position: relative;
   bottom: -0.75rem;
-  border-radius: 12px;
+  border-radius: 6px;
   background: $blue-dark-500;
-  padding: 0.25rem 0.625rem;
+  padding: 0.375rem 0.625rem;
   color: #fff;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
   white-space: nowrap;
 }
 .cropAppliedBadge {
@@ -1888,10 +1894,12 @@ const previews = computed(() =>
   border-top: 1px solid #d2d5dd;
   padding: 0 1rem 1rem;
 }
+// 對齊 Figma（1141:952 props_object）：六個子項目（標題／描述框／字數／預設列／提示文字／
+// 按鈕）之間統一是 10px 間距，原本用 8px。
 .objectGenerator {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.625rem;
   border-top: 1px solid #d2d5dd;
   padding: 1rem;
 }
@@ -1911,8 +1919,16 @@ const previews = computed(() =>
     opacity: 1;
   }
 }
+// 對齊 Figma（1142:800 row_obj_presets）：這裡的預設 chips 間距是 6px，比 .presetRow
+// 共用的 8px（修圖常用指令列用）窄；父層 .objectGenerator 已經用 flex gap 統一控制上下間距，
+// 所以額外把 .presetRow 自己的 margin 歸零，避免疊加。
+.objectGenerator .presetRow {
+  gap: 0.375rem;
+  margin: 0;
+}
+// 對齊 Figma（1142:812）：提示文字顏色是 #b4b9c4，原本用了更深的 #9299aa。
 .objectGenerator__hint {
-  color: #9299aa;
+  color: #b4b9c4;
   font-size: 0.6875rem;
   line-height: 1rem;
 }
@@ -2455,13 +2471,15 @@ const previews = computed(() =>
   gap: 0.5rem;
   margin: 0.5rem 0;
 }
+// 對齊 Figma（1140:768 row_presets／1142:800 row_obj_presets）：兩處的 chip 樣式其實共用
+// 同一組規格——18px 圓角、文字 #383c4b、14px，原本用了 14px 圓角、#606692、13px。
 .presetChip {
   border: 1px solid #d2d5dd;
-  border-radius: 14px;
+  border-radius: 18px;
   background: #fff;
   padding: 0.375rem 0.75rem;
-  color: #606692;
-  font-size: 0.8125rem;
+  color: #383c4b;
+  font-size: 0.875rem;
   transition:
     border-color 0.15s,
     color 0.15s,
