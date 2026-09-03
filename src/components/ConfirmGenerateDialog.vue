@@ -80,23 +80,25 @@ const confirm = () => {
     width: 26.25rem;
     max-width: 100%;
     background: $white;
-    border-radius: 16px;
+    border-radius: 10px;
     padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem; // dialog_head／內文／rows 群組／actions 之間統一 16px（對齊 Figma flex-col gap-16）
   }
 
   &__head {
-    @include flex(flex-start, center, 0.625rem);
-    margin-bottom: 0.75rem;
+    @include flex(flex-start, center, 0.75rem);
   }
 
   &__icon {
-    width: 2.125rem;
-    height: 2.125rem;
-    border-radius: 50%;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 8px;
     flex-shrink: 0;
-    background: #faeeda;
-    color: #ba7517;
-    font-size: 1.125rem;
+    background: $blue-light;
+    color: $blue-dark-500;
+    font-size: 1.5rem;
     @include flex(center, center);
   }
 
@@ -107,27 +109,24 @@ const confirm = () => {
   }
 
   &__msg {
-    margin-bottom: 1.125rem;
     color: #606692;
     font-size: 1rem;
     line-height: 1.375;
   }
 
   &__rows {
-    margin-bottom: 1.125rem;
-    padding-top: 0.875rem;
-    border-top: 1px solid $lightGray;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem; // model_row／cost_row／bal_row 之間統一 16px；設計稿沒有分隔線，移除原本的 border-top
   }
 
   &__row {
     @include flex(space-between, center);
-    padding: 0.25rem 0;
     font-size: 0.875rem;
     line-height: 1.4286;
 
     &--card {
-      margin: 0.375rem 0;
-      padding: 0.625rem 0.75rem;
+      padding: 0.75rem;
       border-radius: 8px;
       background: $blue-light;
     }
@@ -143,7 +142,7 @@ const confirm = () => {
 
   &__cost,
   &__balance {
-    @include flex(flex-start, center, 0.375rem);
+    @include flex(flex-start, center, 0.25rem);
   }
 
   &__cost {
@@ -158,7 +157,7 @@ const confirm = () => {
   }
 
   &__actions {
-    @include flex(flex-end, center, 0.625rem);
+    @include flex(flex-end, center, 0.75rem);
   }
 }
 // cost_row（本次消耗）的標籤色比 model_row／bal_row 深，對齊設計稿 #383c4b
