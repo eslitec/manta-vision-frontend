@@ -13,8 +13,8 @@
         v-for="item in navItems"
         :key="item.to"
         :to="item.to"
-        :aria-current="isActive(item.to) ? 'page' : undefined"
-        :class="{ 'isActive': isActive(item.to) }"
+        :aria-current="isActive(item) ? 'page' : undefined"
+        :class="{ 'isActive': isActive(item) }"
       )
         span.sidebar__itemIcon
           component(:is="item.icon")
@@ -50,7 +50,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
@@ -79,9 +79,17 @@ watch(
   () => (sidebarOpen.value = false), // 換頁自動收起手機抽屜
 )
 const { activeCount, unreadCount } = storeToRefs(useGenerationTasksStore())
-const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.startsWith(to))
-const navItems = computed(() => [
-  { label: t('nav.workbench'), icon: IconAiSparkle, to: '/' },
+// 部分導覽項目除了自己的路徑外，還要涵蓋其他子路由才算選取中——
+// 「AI 生成工作台」從首頁點進圖生圖／圖生影片／AI 產文／AI 試穿等
+// 工具卡片後，會導到獨立的 /generate/* 路由，此時 sidebar 仍要保持
+// 「AI 生成工作台」的選取狀態，而不是完全沒有項目被選取。
+type NavItem = { label: string; icon: Component; to: string; activePrefixes?: string[] }
+const isActive = (item: NavItem) => {
+  const prefixes = item.activePrefixes ?? [item.to]
+  return prefixes.some((prefix) => (prefix === '/' ? route.path === '/' : route.path.startsWith(prefix)))
+}
+const navItems = computed<NavItem[]>(() => [
+  { label: t('nav.workbench'), icon: IconAiSparkle, to: '/', activePrefixes: ['/', '/generate'] },
   { label: t('nav.library'), icon: IconLibraryPhoto, to: '/library' },
   { label: t('nav.usage'), icon: IconFeedBottleSmall, to: '/usage' },
   { label: t('nav.settings'), icon: IconSettings, to: '/settings' },
