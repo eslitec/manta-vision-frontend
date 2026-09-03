@@ -1939,10 +1939,23 @@ const previews = computed(() =>
   font-size: 0.6875rem;
   line-height: 1rem;
 }
+// 這三個 h3 都是 aside.layers 底下的子面板標題，會被 `.layers h3` 那條規則（min-height
+// 2.875rem + padding 0.75rem 1rem）用後代選擇器一起吃到，之前只清掉了 padding-left，
+// 上下 12px padding 跟 46px 最小高度還在，導致標題底下多出比設計稿多的空白——這三個
+// 面板本來就各自管理自己的內距（見上面 .properties／.aiCost／.objectGenerator 的規則），
+// 標題文字本身在 Figma 裡沒有額外的內距，全部歸零讓面板自己的 gap／padding 說了算。
 .properties h3,
 .aiCost h3,
 .objectGenerator h3 {
-  padding-left: 0;
+  min-height: 0;
+  padding: 0;
+}
+// 對齊 Figma（1142:795）：「加入物件」標題是 13px Bold、正常行高，不是繼承 .layers h3
+// 的 15px／1.375rem 行高（後者會讓文字框比實際文字高出一截，變相多出上下空間）。
+.objectGenerator h3 {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: normal;
 }
 .properties__text,
 .fontSelect__trigger {
