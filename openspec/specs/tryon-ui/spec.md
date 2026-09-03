@@ -76,7 +76,7 @@ code:
 
 ### Requirement: 首次進入與生成完成狀態分離
 
-系統 SHALL 在首次進入且尚未生成時顯示空的試穿結果預覽；完成生成後才顯示結果動作。
+系統 SHALL 在首次進入且尚未生成時顯示空的試穿結果預覽；完成生成後才顯示結果動作。空預覽的播放圖示（`IconPlayCircle`）SHALL 在幾何與顏色上對齊 Figma 設計稿（node `841:618`）：圓形描邊 `stroke-width: 2`、半徑約為 viewBox 的 1/3（非撐滿整個圖示框），顏色為 `#aeb8cc`。
 
 #### Scenario: 使用者首次進入 MV-05
 
@@ -89,14 +89,20 @@ code:
 - **WHEN** 試穿生成成功
 - **THEN** 結果區顯示生成結果與「存入圖庫／下載／重新生成」動作
 
+#### Scenario: 空預覽播放圖示對齊設計稿
+
+- **WHEN** 使用者檢視尚未生成的試穿結果空預覽
+- **THEN** 播放圖示的圓形比例、描邊粗細與顏色皆與 Figma `841:618` 提供的數值一致
+
 <!-- @trace
-source: sync-mv-05-design
-updated: 2026-08-21
+source: sync-mv-05-design, fix-tryon-result-icon-color
+updated: 2026-09-03
 code:
   - src/views/TryOnView.vue
   - src/components/BrandToggle.vue
   - src/components/ImagePickerDialog.vue
   - src/stores/consent.ts
+  - src/components/icons/IconPlayCircle.vue
 -->
 
 ---
