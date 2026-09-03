@@ -109,7 +109,7 @@ code:
 
 ### Requirement: 裁切提供各通路預覽且不扣飼料
 
-裁切 SHALL 提供比例選擇與各社群通路（IG 貼文／IG 限動／FB 貼文／LINE 圖文）預覽，標示是否被裁切；裁切與旋轉 SHALL NOT 消耗飼料。選定固定比例（非自訂拖曳）後 SHALL 顯示套用結果徽章，並提供復原裁切／重新裁切／另存為新素材操作。比例選擇列與「自訂」按鈕之間 SHALL 只保留 8px 間距；「各通路預覽」標題上方 SHALL 有 1px 分隔線；各通路名稱標題文字色 SHALL 為 `#2e3567`。選定固定比例時，畫布上 SHALL 顯示跟「自訂」裁切一致的虛線外框、灰底變暗遮罩與可拖曳的角落把手，讓使用者能清楚辨識目前的取景範圍；拖曳把手 SHALL 維持該比例做等比例縮放，SHALL NOT 讓寬高各自變形，也 SHALL NOT 因此把比例改為「自訂」；套用結果徽章 SHALL 錨定在裁切框本身的左上角（而非整個畫布的左上角）。只有使用者主動點選「自訂」或「重新裁切」才會進入無比例限制的自由裁切模式。「復原裁切／重新裁切／另存為新素材」三個操作 SHALL 在固定比例與自訂裁切下皆顯示，不因裁切模式而缺漏。
+裁切 SHALL 提供比例選擇與各社群通路（IG 貼文／IG 限動／FB 貼文／LINE 圖文）預覽，標示是否被裁切；裁切與旋轉 SHALL NOT 消耗飼料。選定固定比例（非自訂拖曳）後 SHALL 顯示套用結果徽章，並提供復原裁切／重新裁切／另存為新素材操作。比例選擇列與「自訂」按鈕之間 SHALL 只保留 8px 間距；「各通路預覽」標題上方 SHALL 有 1px 分隔線；各通路名稱標題文字色 SHALL 為 `#2e3567`。選定固定比例時，畫布上 SHALL 顯示跟「自訂」裁切一致的虛線外框、灰底變暗遮罩與可拖曳的角落把手，讓使用者能清楚辨識目前的取景範圍；拖曳把手 SHALL 維持該比例做等比例縮放，SHALL NOT 讓寬高各自變形，也 SHALL NOT 因此把比例改為「自訂」；套用結果徽章 SHALL 錨定在裁切框本身的左上角（而非整個畫布的左上角）。只有使用者主動點選「自訂」或「重新裁切」才會進入無比例限制的自由裁切模式。「復原裁切／重新裁切／另存為新素材」三個操作 SHALL 在固定比例與自訂裁切下皆顯示，不因裁切模式而缺漏。已套用固定比例時，側邊欄尺寸文字 SHALL 顯示「已裁切為 {寬} × {高} px（原圖 {原寬} × {原高}）」，通路預覽標題 SHALL 顯示「套用後各通路預覽」，完全符合比例的通路副標文字 SHALL 為綠色「完整呈現」，其餘通路副標文字 SHALL 為灰色「上下留白」（非橘色警示，因為只是留白不是內容遺失）；自訂裁切時則維持「寬 {width} px ・ 高 {height} px ・ 旋轉 0°」與「各通路預覽」／「會被裁掉邊緣」（橘色）文案。
 
 #### Scenario: 使用者切換裁切比例
 
@@ -146,9 +146,14 @@ code:
 - **WHEN** 使用者處於自訂裁切模式
 - **THEN** 畫布下方 SHALL 同樣顯示「復原裁切／重新裁切／另存為新素材」三個按鈕；此時點選「重新裁切」會把取景框重設為滿版，而非沒有反應
 
+#### Scenario: 已套用固定比例時側邊欄文案切換
+
+- **WHEN** 使用者選定固定比例（非自訂）
+- **THEN** 側邊欄尺寸文字改為「已裁切為 {寬} × {高} px（原圖 1440 × 1080）」、通路預覽標題改為「套用後各通路預覽」，完全符合比例的通路副標為綠色「完整呈現」，其餘通路副標為灰色「上下留白」；上方比例列到這段文字留 12px、文字到下方分隔線留 4px
+
 <!-- @trace
-source: sync-mv-09-design, fix-mv09-editor-figma-mismatches, fix-mv09-line-preview-centering, fix-mv09-crop-panel-spacing, fix-mv09-crop-locked-resize
-updated: 2026-09-01
+source: sync-mv-09-design, fix-mv09-editor-figma-mismatches, fix-mv09-line-preview-centering, fix-mv09-crop-panel-spacing, fix-mv09-crop-locked-resize, fix-mv09-crop-applied-panel-text
+updated: 2026-09-03
 code:
   - src/components/ImageEditorWorkspace.vue
   - src/components/SaveAssetDialog.vue
