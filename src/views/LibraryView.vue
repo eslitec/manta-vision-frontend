@@ -83,8 +83,8 @@
             IconDelete
             | {{ t('common.delete') }}
 
-      .assets__empty(v-if="loading && !assets.length && !pendingTasks.length") {{ t('common.loading') }}
-      .assets__empty(v-else-if="!assets.length && !pendingTasks.length") {{ t('library.empty') }}
+      .assets__empty(v-if="loading && !assets.length && !pendingTasks.length && !showMaterials") {{ t('common.loading') }}
+      .assets__empty(v-else-if="!assets.length && !pendingTasks.length && !showMaterials") {{ t('library.empty') }}
       .assets__grid(v-else)
         .asset.asset--pending(v-for="t in pendingTasks" :key="t.id")
           .pending
@@ -96,6 +96,18 @@
             span.pending__eta(v-if="t.status !== 'pending'") {{ etaText(t.progress) }}
           .asset__name {{ t.name }}
           .asset__pmeta {{ $t('library.pendingVideoMeta', { ratio: t.videoReq?.ratio || '9:16' }) }}
+        template(v-if="showMaterials")
+          p.assets__materialsLabel {{ t('library.builtinMaterials') }}
+          AssetCard(
+            v-for="m in materials"
+            :key="m.materialId"
+            :name="m.materialName"
+            :tag="m.category"
+            :tag-label="materialCategoryLabel(m.category)"
+            dimensions=""
+            :url="m.url"
+            :selectable="false"
+          )
         AssetCard(
           v-for="a in assets"
           :key="a.id"
@@ -204,6 +216,8 @@ import {
   type CategoryTag,
   type ImageListQuery,
 } from '@/types/asset'
+import type { Material } from '@/types/asset'
+import { api } from '@/api'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 import { isDuplicateName, isFileTooLarge, isFolderLimitExceeded, isUnsupportedFormat } from '@/utils/error'
 
@@ -227,6 +241,20 @@ const { t } = useI18n()
 const moveDialogRef = ref<HTMLElement | null>(null)
 const deleteDialogRef = ref<HTMLElement | null>(null)
 const uploadInput = ref<HTMLInputElement | null>(null)
+const materials = ref<Material[]>([])
+
+const materialCategoryLabels: Record<Material['category'], string> = {
+  background: '背景素材',
+  object: '物件素材',
+  model: '模特素材',
+}
+function materialCategoryLabel(category: Material['category']): string {
+  return materialCategoryLabels[category]
+}
+// 內建素材不屬於任何資料夾／來源／分類（跟下面 pendingTasks 是同樣的道理，見那邊的註解），
+// 只在「全部素材」第一頁額外插入顯示；換頁、切資料夾、切系統分類、關鍵字搜尋時都不能出現，
+// 否則會讓使用者誤以為這些素材屬於當下篩選的範圍。
+const showMaterials = computed(() => activeView.value.kind === 'all' && page.value === 1 && materials.value.length > 0)
 
 // 素材清單改成伺服器分頁後，assets 只會有「目前這一頁」的內容——批次選取卻允許
 // 跨頁累積（見下方 selectedIds），刪除確認彈窗要秀出所有已選素材的縮圖與名稱，
@@ -327,6 +355,9 @@ async function fetchAssets() {
 onMounted(() => {
   loadFolders()
   fetchAssets()
+  api.listMaterials().then((res) => {
+    materials.value = res.items
+  })
 })
 
 // 頂部提示文字：檢視「全部素材」／系統分類時顯示機器人情境；檢視某個資料夾時改顯示該資料夾的說明
@@ -976,6 +1007,14 @@ async function onUpload(e: Event) {
   flex: 1; // 佔滿面板剩餘高度，讓分頁列貼齊底部
   align-content: flex-start; // 素材列靠上排列，不因多餘空間被拉開
   overflow-y: auto;
+}
+// 內建素材跟使用者自己的素材混在同一個 grid 裡，用一行小字隔開，
+// 提醒這批不算在下方「共 N 筆素材」裡（那個數字對應的是使用者自己的圖庫分頁）
+.assets__materialsLabel {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: $gray-100;
+  font-size: 0.75rem;
 }
 .asset {
   position: relative;

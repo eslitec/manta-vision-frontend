@@ -1,6 +1,6 @@
 <template lang="pug">
 article.assetCard(:class="{ 'isSelected': selected }")
-  AppCheckbox.assetCard__check(:model-value="selected" :label="name" @update:model-value="$emit('toggle')")
+  AppCheckbox.assetCard__check(v-if="selectable" :model-value="selected" :label="name" @update:model-value="$emit('toggle')")
   .assetCard__thumb
     IconMovie(v-if="type === 'video'" aria-hidden="true")
     img.assetCard__thumbImage(v-else-if="url && !imgError" :src="url" :alt="name" @error="imgError = true")
@@ -26,12 +26,14 @@ const props = withDefaults(
     dimensions: string
     type?: 'image' | 'video'
     selected?: boolean
+    selectable?: boolean
     // 真後端的素材才有真實檔案網址；假資料／舊素材沒有這個欄位時退回內建的灰色示意圖示。
     url?: string
   }>(),
   {
     type: 'image',
     selected: false,
+    selectable: true,
     url: undefined,
   },
 )
