@@ -201,6 +201,8 @@ const WIRE_IMAGE = {
   folderId: null,
   isInUse: false,
   createdAt: '2026-01-01T00:00:00Z',
+  width: 1024,
+  height: 768,
 }
 
 describe('圖庫（images）', () => {
@@ -228,7 +230,25 @@ describe('圖庫（images）', () => {
       folderId: undefined,
       url: WIRE_IMAGE.url,
       referencedBy: 0,
+      dim: '1024×768',
     })
+  })
+
+  it('listImages 對量不出寬高的舊資料，dim 回空字串而不是 "null×null"', async () => {
+    stubRoutes({
+      '/images': {
+        data: {
+          total: 1,
+          page: 1,
+          items: [{ ...WIRE_IMAGE, width: null, height: null }],
+          counts: { all: 1, upload: 1, aiGenerate: 0, edit: 0, object: 0, video: 0 },
+        },
+      },
+    })
+
+    const res = await realApi.listImages()
+
+    expect(res.items[0].dim).toBe('')
   })
 
   it('listImages 的 folderId 三態：null 篩「未分類」時送字面值 "null"', async () => {
