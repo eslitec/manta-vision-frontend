@@ -43,9 +43,7 @@
 - [x] 4.4 `npx vitest run src/api/real.spec.ts src/stores/stores.spec.ts` 41 個測試全過；
       `stores.spec.ts` 單獨執行 18 個測試全過（含串接過程中一度誤用舊版檔案內容、已修正
       還原的 session store 既有測試）
-- [ ] 4.5 `npx eslint` 在使用者機器上因故執行超過 3 分鐘未完成（疑似環境問題，`vue-tsc`／
-      `vitest` 在同一台機器上都能正常跑完），這次沒能拿到 lint 結果，建議你自己找時間跑一次
-      `npm run lint` 確認格式與既有規則沒有問題
+- [x] 4.5 `npm run lint` 已於 2026-09-04 重新執行，`eslint .` 全過，無錯誤無警告
 - [x] 4.6 `git diff --cached` 逐檔覆核，確認沒有意外覆蓋掉分支上其他未讀到的既有變更
       （曾經在覆核時發現 `stores.spec.ts` 的編輯是基於過時的暫存內容，已用
       `git show HEAD:...` 還原成當下真正的內容後重做該筆測試異動，過程記錄見本檔第 4.4 項）
@@ -55,6 +53,13 @@
 - [x] 5.1 更新 `openspec/specs/brand-settings-ui/spec.md`「提供合規與授權資訊」Requirement，
       補上「填寫內容會被存檔」的行為說明與新 Scenario
 - [x] 5.2 四個 Requirement 的 `@trace` code 清單加上 `src/api/real.ts`，`updated` 日期更新
-- [ ] 5.3 使用者自行執行 `spectra validate brand-real-backend-wiring --strict` 與
-      `spectra analyze brand-real-backend-wiring`（雲端環境沒有安裝 Spectra CLI）
+- [x] 5.3 2026-09-04 執行 `spectra validate brand-real-backend-wiring --strict`（`valid`）與
+      `spectra analyze brand-real-backend-wiring`：初次執行回報 2 個 CRITICAL——本 change
+      從未建立 `specs/` delta（proposal.md 的 Modified Capabilities 宣告 `brand-settings-ui`
+      卻沒有對應 spec 檔），以及 proposal.md 描述文字裡把 `@trace`／`src/api/real.ts` 用反引號
+      包住、被 analyze 誤判成另外兩個 capability 宣告（context 說明裡已記載這個已知陷阱：
+      「只有真正要新增或修改的 capability 才用反引號標示」）。已修正：補上
+      `specs/brand-settings-ui/spec.md`（MODIFIED Requirement，內容對齊已套用進正式 spec 的
+      「提供合規與授權資訊」），並拿掉 proposal.md 該兩處多餘的反引號。重跑後 Coverage／Gaps
+      Clean，僅剩 2 個 SUGGEST（Scenario 缺 `##### Example:`，非阻斷項）
 - [ ] 5.4 待 PR 合併後再 `archive`（比照 repo 既有慣例）
