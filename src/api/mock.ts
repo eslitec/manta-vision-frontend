@@ -76,7 +76,7 @@ const db = {
       id: 'a1',
       name: '春季主視覺_01',
       source: 'upload',
-      dim: '1024×758',
+      dim: '1024×768',
       type: 'image',
       folderId: 'folder_spring',
       referencedBy: 2,
@@ -181,9 +181,9 @@ const SUPPORTED_UPLOAD_FORMATS = ['jpg', 'jpeg', 'png', 'webp']
 
 // 內建素材（GET /materials；不分機器人，全平台共用；model 類別後端也還是空的）
 const MATERIALS: Material[] = [
-  { materialId: 'mat_bg_1', materialName: '白色棚拍背景', category: 'background', url: '' },
-  { materialId: 'mat_bg_2', materialName: '木質桌面情境', category: 'background', url: '' },
-  { materialId: 'mat_obj_1', materialName: '春季花束', category: 'object', url: '' },
+  { materialId: 'mat_bg_1', materialName: '白色棚拍背景', category: 'background', url: '', width: 1024, height: 768 },
+  { materialId: 'mat_bg_2', materialName: '木質桌面情境', category: 'background', url: '', width: 1024, height: 768 },
+  { materialId: 'mat_obj_1', materialName: '春季花束', category: 'object', url: '', width: 1024, height: 768 },
 ]
 
 // 依 source／mediaType 兩個維度統計整個圖庫（不受目前查詢條件篩選；對齊後端 count_by_bucket）

@@ -104,7 +104,7 @@
             :name="m.materialName"
             :tag="m.category"
             :tag-label="materialCategoryLabel(m.category)"
-            dimensions=""
+            :dimensions="formatDimensions(m.width, m.height)"
             :url="m.url"
             :selectable="false"
           )
@@ -220,6 +220,7 @@ import {
 import type { Material } from '@/types/asset'
 import { api } from '@/api'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
+import { formatDimensions } from '@/utils/dimensions'
 import { isDuplicateName, isFileTooLarge, isFolderLimitExceeded, isUnsupportedFormat } from '@/utils/error'
 
 const {
