@@ -19,7 +19,7 @@
     aside#library-folders.folders(:class="{ 'isMobileOpen': foldersOpen }")
       button.folders__item(:class="{ 'isActive': activeView.kind === 'all' }" @click="setView({ kind: 'all' })")
         span {{ t('library.allAssets') }}
-        span.folders__count {{ counts.all }}
+        span.folders__count {{ displayTotal }}
       .folders__section {{ t('library.systemCategories') }}
       button.folders__item(v-for="c in categoryTags" :key="c.tag" :class="{ 'isActive': activeView.kind === 'category' && activeView.tag === c.tag }" @click="setView({ kind: 'category', tag: c.tag, dimension: c.dimension })")
         span {{ t(`sources.${c.tag}`) }}
@@ -73,7 +73,7 @@
         .batchbar__selection
           span.batchbar__minus
           span {{ t('library.selectedCount', { count: selectedIds.size }) }}
-          button.batchbar__link(@click="selectAllOnPage") {{ t('library.selectPage', { count: assets.length }) }}
+          button.batchbar__link(@click="selectAllOnPage") {{ t('library.selectPage', { count: pagedRealAssets.length }) }}
           button.batchbar__link(@click="clearSelection") {{ t('common.clear') }}
         .batchbar__actions
           AppButton.batchbar__action.batchbar__action--moveToFolder(variant="primary" @click="openMoveDialog") {{ t('library.moveToFolder') }}
@@ -83,8 +83,8 @@
             IconDelete
             | {{ t('common.delete') }}
 
-      .assets__empty(v-if="loading && !assets.length && !pendingTasks.length && !showMaterials") {{ t('common.loading') }}
-      .assets__empty(v-else-if="!assets.length && !pendingTasks.length && !showMaterials") {{ t('library.empty') }}
+      .assets__empty(v-if="loading && !pagedRealAssets.length && !pendingTasks.length && !showMaterials") {{ t('common.loading') }}
+      .assets__empty(v-else-if="!pagedRealAssets.length && !pendingTasks.length && !showMaterials") {{ t('library.empty') }}
       .assets__grid(v-else)
         .asset.asset--pending(v-for="t in pendingTasks" :key="t.id")
           .pending
@@ -99,7 +99,7 @@
         template(v-if="showMaterials")
           p.assets__materialsLabel {{ t('library.builtinMaterials') }}
           AssetCard(
-            v-for="m in materials"
+            v-for="m in pagedMaterials"
             :key="m.materialId"
             :name="m.materialName"
             :tag="m.category"
@@ -109,7 +109,7 @@
             :selectable="false"
           )
         AssetCard(
-          v-for="a in assets"
+          v-for="a in pagedRealAssets"
           :key="a.id"
           :name="a.name"
           :tag="a.source"
@@ -215,6 +215,7 @@ import {
   type AssetSource,
   type CategoryTag,
   type ImageListQuery,
+  type ImageListResponse,
 } from '@/types/asset'
 import type { Material } from '@/types/asset'
 import { api } from '@/api'
@@ -254,9 +255,27 @@ function materialCategoryLabel(category: Material['category']): string {
 // 內建素材不屬於任何資料夾／來源／分類（跟下面 pendingTasks 是同樣的道理，見那邊的註解），
 // 只在「全部素材」第一頁額外插入顯示；換頁、切資料夾、切系統分類、關鍵字搜尋時都不能出現，
 // 否則會讓使用者誤以為這些素材屬於當下篩選的範圍。
-const showMaterials = computed(() => activeView.value.kind === 'all' && page.value === 1 && materials.value.length > 0)
+// 內建素材（materials）永遠整批載入、不分頁；使用者自己的圖庫在「全部素材」檢視
+// 也已經整批撈回來（見 fetchAllRealAssets），兩邊在這裡合併成一份虛擬清單，
+// 依 materials 排在前、真實素材排在後的順序，用 PAGE_SIZE 在前端切出目前這一頁。
+// 資料夾／系統分類／關鍵字搜尋這些檢視完全不會混入內建素材（見下面 pagedMaterials）。
+const pagedMaterials = computed(() => {
+  if (activeView.value.kind !== 'all') return []
+  const start = (page.value - 1) * PAGE_SIZE
+  return materials.value.slice(start, start + PAGE_SIZE)
+})
+const pagedRealAssets = computed(() => {
+  if (activeView.value.kind !== 'all') return assets.value
+  const start = (page.value - 1) * PAGE_SIZE
+  const end = page.value * PAGE_SIZE
+  const realStart = Math.max(0, start - materials.value.length)
+  const realEnd = Math.max(0, end - materials.value.length)
+  return assets.value.slice(realStart, realEnd)
+})
+const showMaterials = computed(() => pagedMaterials.value.length > 0)
 
-// 左下角「共 N 筆素材」要跟畫面上看得到的東西一致：使用者自己的圖庫（total，後端分頁的權威值）
+// 側欄「全部素材」徽章、手機版切換列的數字、跟左下角「共 N 筆素材」都要跟畫面上看得到的東西一致：
+// 使用者自己的圖庫（total，後端分頁的權威值）
 // 加上內建素材（materials 不分頁，永遠整批載入）。只有「全部素材」檢視會混內建素材進畫面，
 // 資料夾／系統分類／關鍵字搜尋這些篩選結果裡不會出現內建素材（見 showMaterials 註解），
 // 這裡的計數也要跟著排除，不然文字會暗示篩選結果裡有內建素材、但畫面上其實看不到。
@@ -268,9 +287,10 @@ const displayTotal = computed(() =>
   activeView.value.kind === 'all' ? total.value + materials.value.length : total.value,
 )
 
-// 素材清單改成伺服器分頁後，assets 只會有「目前這一頁」的內容——批次選取卻允許
-// 跨頁累積（見下方 selectedIds），刪除確認彈窗要秀出所有已選素材的縮圖與名稱，
-// 不能只看目前這頁。這裡把每次載入過的素材都記下來，選取時就查得到完整資料。
+// 資料夾／系統分類視圖是伺服器分頁，assets 只有「目前這一頁」的內容；「全部素材」視圖
+// 為了跟內建素材合併分頁，assets 改成整批撈回來（見 fetchAllRealAssets）。不管哪種情況，
+// 批次選取都允許跨頁累積（見下方 selectedIds），刪除確認彈窗要秀出所有已選素材的縮圖與
+// 名稱，不能只看目前這頁看得到的。這裡把每次載入過的素材都記下來，選取時就查得到完整資料。
 const assetCache = ref<Record<string, Asset>>({})
 watch(
   assets,
@@ -360,7 +380,45 @@ function buildQuery(): ImageListQuery {
   if (keyword.value) q.q = keyword.value
   return q
 }
+
+// 「全部素材」要跟內建素材合併分頁（materials + 使用者自己的圖庫混在同一組頁碼裡），
+// 但內建素材完全不分頁、使用者圖庫是後端分頁——兩邊分頁機制不一樣，沒辦法直接合併查詢。
+// 做法：這個檢視改成把使用者自己的圖庫「一次全部撈完」，回來後跟 materials 一起交給
+// pagedMaterials／pagedRealAssets 在前端切頁。後端 page_size 上限是 100
+// （app/schemas/image.py），超過 100 筆要分好幾次要，這裡用迴圈把每一頁都撈回來。
+const REAL_FETCH_PAGE_SIZE = 100
+async function fetchAllRealAssets(filters: Omit<ImageListQuery, 'page' | 'pageSize'>) {
+  let collected: Asset[] = []
+  let p = 1
+  let total = Infinity
+  let counts = null as ImageListResponse['counts'] | null
+  for (;;) {
+    const res = await api.listImages({ ...filters, page: p, pageSize: REAL_FETCH_PAGE_SIZE })
+    collected = collected.concat(res.items)
+    total = res.total
+    counts = res.counts
+    // 保險：後端回傳異常（例如 items 空但 total 還沒撈完）時別無限迴圈下去
+    if (res.items.length === 0 || collected.length >= total) break
+    p += 1
+  }
+  return { items: collected, total, counts: counts! }
+}
+
 async function fetchAssets() {
+  if (activeView.value.kind === 'all') {
+    loading.value = true
+    try {
+      const { page: _page, pageSize: _pageSize, ...filters } = buildQuery()
+      const res = await fetchAllRealAssets(filters)
+      assets.value = res.items
+      total.value = res.total
+      counts.value = res.counts
+      // page.value 維持使用者目前點的頁碼——這裡是前端自己切頁，不能被後端回傳蓋掉
+    } finally {
+      loading.value = false
+    }
+    return
+  }
   await load(buildQuery())
 }
 
@@ -394,12 +452,15 @@ const activeViewLabel = computed(() => {
 })
 const activeViewCount = computed(() => {
   const view = activeView.value
-  if (view.kind === 'all') return counts.value.all
+  if (view.kind === 'all') return displayTotal.value
   if (view.kind === 'category') return counts.value[view.tag]
   return folderImageCount(view.folderId)
 })
 
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
+const totalPages = computed(() => {
+  const combined = activeView.value.kind === 'all' ? total.value + materials.value.length : total.value
+  return Math.max(1, Math.ceil(combined / PAGE_SIZE))
+})
 
 // 篩選條件切換時重回第 1 頁；先前的批次選取多半已經不對應目前畫面上看到的素材，直接清空避免誤操作
 watch([activeView, activeSource], () => {
@@ -447,7 +508,9 @@ function toggleSelect(id: string) {
 }
 function selectAllOnPage() {
   const next = new Set(selectedIds.value)
-  for (const a of assets.value) next.add(a.id)
+  // 「全選本頁」要跟畫面上這一頁看得到的真實素材一致——「全部素材」視圖的 assets
+  // 現在整批撈回來給合併分頁用，不能直接拿來全選，否則會把其他頁的素材也選進去。
+  for (const a of pagedRealAssets.value) next.add(a.id)
   selectedIds.value = next
 }
 function clearSelection() {
