@@ -193,10 +193,10 @@
       span {{ t('brandSettings.complianceNotice') }}
     .field
       label(for="brand-portrait-consent") {{ t('brandSettings.fields.portraitConsent') }}
-      textarea#brand-portrait-consent(v-model="portraitConsent" rows="4")
+      textarea#brand-portrait-consent(v-model="profile.portraitConsent" rows="4")
     .field
-      label(for="brand-image-license") {{ t('brandSettings.fields.imageLicense') }} #[small {{ imageLicense.length }} / 200]
-      input#brand-image-license(v-model="imageLicense" maxlength="200")
+      label(for="brand-image-license") {{ t('brandSettings.fields.imageLicense') }} #[small {{ profile.imageLicense.length }} / 200]
+      input#brand-image-license(v-model="profile.imageLicense" maxlength="200")
 
   footer.brand__foot
     AppButton(variant="outline" @click="onCancel") {{ t('common.cancel') }}
@@ -291,8 +291,6 @@ useDismissableMenu(industryMenuOpen, industrySelectEl)
 const addressingOptions = computed(() =>
   ['你', '您', '親愛的顧客'].map((value, index) => ({ value, label: t(`brandSettings.addressing.${index}`) })),
 )
-const portraitConsent = ref(t('brandSettings.defaults.portraitConsent'))
-const imageLicense = ref(t('brandSettings.defaults.imageLicense'))
 const detectedPalette = ref<DominantColor[]>([])
 const selectedColor = ref('')
 const analyzing = ref(false)
