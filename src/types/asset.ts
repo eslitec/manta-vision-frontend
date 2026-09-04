@@ -15,7 +15,9 @@ export interface Asset {
   id: string // 後端 imageId
   name: string // 後端 imageName
   source: AssetSource // 後端 source
-  dim: string // 尺寸顯示文字；後端目前不回寬高，mock／real 皆先用固定佔位值
+  dim: string // 尺寸顯示文字（由 width×height 格式化而成，見 utils/dimensions.ts）；
+  // 舊資料或 Pillow 解不開的檔案後端會回 null，這裡正規化成空字串
+  // （AssetCard 對空字串的處理等同沒有這行 meta）
   type: MediaType // 後端 mediaType
   folderId?: string // 後端 folderId；未歸檔時後端回 null，這裡一律正規化成 undefined
   editable?: boolean // 是否保留可再編輯的圖層資訊（編輯產物專用；純前端概念，後端無對應欄位）
@@ -69,6 +71,11 @@ export interface Material {
   materialName: string
   category: 'background' | 'object' | 'model'
   url: string
+  // 可能是 undefined／null：只有新素材（seed_materials.py 從本地檔案量出來的）
+  // 才有值，既有那批舊資料補不了。用 utils/dimensions.ts 的 formatDimensions()
+  // 轉成卡片下方顯示的文字，兩邊缺一都當作沒有這行 meta。
+  width?: number | null
+  height?: number | null
 }
 
 export interface MaterialListResponse {

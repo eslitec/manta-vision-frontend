@@ -1,3 +1,4 @@
+import { formatDimensions } from '@/utils/dimensions'
 import { http } from './http'
 import { mockApi } from './mock'
 import type {
@@ -99,6 +100,10 @@ interface WireImage {
   folderId: string | null
   isInUse: boolean
   createdAt: string
+  // 可為 null：舊資料與 Pillow 解不開的檔案都是（見後端 migration
+  // 20260904b_image_dimensions）；新上傳的檔案才有值。
+  width: number | null
+  height: number | null
 }
 interface WireImageListResponse {
   total: number
@@ -107,14 +112,12 @@ interface WireImageListResponse {
   counts: ImageCounts
 }
 
-// 後端目前不回寬高（見 docs/api-status.md「請前端評估需不需要縮圖」的留言），
-// 這裡先留空字串，畫面上等同沒有這行 meta；等後端補了欄位再接上。
 function toAsset(row: WireImage): Asset {
   return {
     id: row.imageId,
     name: row.imageName,
     source: row.source,
-    dim: '',
+    dim: formatDimensions(row.width, row.height),
     type: row.mediaType,
     folderId: row.folderId ?? undefined,
     // 後端只有布林值 isInUse，沒有實際引用「筆數」；沿用既有「> 0 視為被引用」
