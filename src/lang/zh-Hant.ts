@@ -505,7 +505,7 @@ export default {
     empty: '沒有符合的素材',
     generatingProgress: '生成中 {progress}%',
     pendingVideoMeta: '影片 · {ratio} · 完成後自動入庫',
-    builtinMaterials: '內建素材（不計入下方筆數）',
+    builtinMaterials: '內建素材',
     totalAssets: '共 {count} 筆素材',
     previousPage: '上一頁',
     nextPage: '下一頁',

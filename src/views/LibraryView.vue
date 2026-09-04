@@ -121,8 +121,8 @@
           @toggle="toggleSelect(a.id)"
         )
 
-      .pagination(v-if="total")
-        span.pagination__total {{ t('library.totalAssets', { count: total }) }}
+      .pagination(v-if="displayTotal")
+        span.pagination__total {{ t('library.totalAssets', { count: displayTotal }) }}
         .pagination__pages
           button.pagination__nav(:aria-label="t('library.previousPage')" :disabled="page === 1" @click="page = page - 1") ‹
           template(v-for="(p, i) in pageItems" :key="i")
@@ -255,6 +255,18 @@ function materialCategoryLabel(category: Material['category']): string {
 // 只在「全部素材」第一頁額外插入顯示；換頁、切資料夾、切系統分類、關鍵字搜尋時都不能出現，
 // 否則會讓使用者誤以為這些素材屬於當下篩選的範圍。
 const showMaterials = computed(() => activeView.value.kind === 'all' && page.value === 1 && materials.value.length > 0)
+
+// 左下角「共 N 筆素材」要跟畫面上看得到的東西一致：使用者自己的圖庫（total，後端分頁的權威值）
+// 加上內建素材（materials 不分頁，永遠整批載入）。只有「全部素材」檢視會混內建素材進畫面，
+// 資料夾／系統分類／關鍵字搜尋這些篩選結果裡不會出現內建素材（見 showMaterials 註解），
+// 這裡的計數也要跟著排除，不然文字會暗示篩選結果裡有內建素材、但畫面上其實看不到。
+//
+// 右下角頁碼（totalPages）刻意不跟著加內建素材：後端沒有「內建素材第二頁」這種東西——
+// GET /materials 每次都是整批回傳、不分頁，永遠只掛在第 1 頁。真正決定「要不要有第 2 頁」
+// 的只有使用者自己圖庫的張數（total），這是後端 GET /images 唯一有分頁能力的資源。
+const displayTotal = computed(() =>
+  activeView.value.kind === 'all' ? total.value + materials.value.length : total.value,
+)
 
 // 素材清單改成伺服器分頁後，assets 只會有「目前這一頁」的內容——批次選取卻允許
 // 跨頁累積（見下方 selectedIds），刪除確認彈窗要秀出所有已選素材的縮圖與名稱，
@@ -1009,7 +1021,7 @@ async function onUpload(e: Event) {
   overflow-y: auto;
 }
 // 內建素材跟使用者自己的素材混在同一個 grid 裡，用一行小字隔開，
-// 提醒這批不算在下方「共 N 筆素材」裡（那個數字對應的是使用者自己的圖庫分頁）
+// 標明這批是內建素材（下方「共 N 筆素材」已經把這批算進去了，見 displayTotal 註解）
 .assets__materialsLabel {
   grid-column: 1 / -1;
   margin: 0;
