@@ -393,10 +393,6 @@ export default {
     addHashtag: '＋ Add hashtag',
     complianceNotice: 'The AI try-on module uses the portrait consent terms below for real-person photos.',
     save: 'Save settings',
-    saveToast: {
-      title: 'Saved',
-      message: 'Brand settings updated successfully',
-    },
     defaults: {
       portraitConsent:
         'I consent to the brand using the provided photo to generate AI try-on content and marketing materials.',

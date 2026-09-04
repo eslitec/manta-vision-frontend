@@ -15,22 +15,27 @@
 
 ## Proposed Solution
 
-在 `BrandSettingsView.vue` 內新增一個外觀與互動比照專案既有 `GenerationToast.vue` 樣式（右上角固定位置、圖示＋標題訊息、自動消失、可手動關閉）的獨立 toast，取代目前頁尾那個容易被忽略的行內小字：
+> **修訂（ingest，2026-09-04）**：第一版做法（右下角 toast）已經實作、瀏覽器實測通過、commit 完成。使用者後續決定改用不同的互動方式，**toast 整個拿掉**，改成「存檔成功後『儲存設定』按鈕維持停用，直到使用者再次修改表單內容才恢復可點擊」——用按鈕本身的狀態當作「目前表單內容跟已存檔的狀態一致」的視覺回饋，不再另外彈提示。以下描述最終定案的行為；toast 版本的實作歷史保留在 tasks.md 供追溯。
 
-- 存檔成功（`store.save()` resolve 後）時顯示 toast，樣式與互動對齊 `GenerationToast.vue`（固定於畫面右上角、`IconCheckCircle` 圖示、標題＋訊息文字、自動消失時間、有手動關閉按鈕）
-- 這個 toast **獨立於 `generationTasks` store**，不重用 `GenerationToast.vue` 元件本身——那支元件的內容、「查看」按鈕（固定跳轉 `/library`）、關閉方法都綁死在 `generationTasks` store 的語意上，不是通用元件，直接重用需要先把它抽成通用元件（連帶改動 `generationTasks` 與 `DefaultLayout.vue` 的既有用法），超出這次要修的問題範圍
-- 存檔失敗時的既有錯誤處理方式不變，這次只處理「成功」路徑的回饋
+在 `BrandSettingsView.vue` 內追蹤表單是否為「未存檔的變更」（dirty）狀態：
+
+- 每次成功存檔（`store.save()` resolve 後）後，「儲存設定」按鈕進入停用狀態——此時表單內容跟後端已存的內容一致，沒有東西可以再存
+- 使用者只要修改表單中任何欄位（品牌基本資料、視覺識別、文案風格、合規與授權四個分頁的任一欄位），按鈕立即恢復可點擊
+- 頁面剛載入、尚未存檔過的初始狀態，按鈕維持可點擊（不受這個機制影響）
+- 存檔失敗時按鈕維持可點擊（沿用既有失敗處理路徑，讓使用者可以直接重試）
+- **不使用 toast**：先前實作的獨立 toast（右下角卡片、`GenerationToast.vue` 對齊樣式、6 秒自動消失、手動關閉）整段移除，包含對應的 template、樣式與 `brandSettings.saveToast.*` i18n key
+- 「取消」按鈕（`store.load(true)`，捨棄本地編輯還原成後端最新內容）之後，表單內容重新對齊後端，按鈕也回到停用狀態——邏輯跟存檔成功後一致：目前顯示的內容等於後端已存的內容，沒有東西可以再存
 
 ## Capabilities
 
 ### Modified Capabilities
 
-- `brand-settings-ui`：新增一個 Requirement，描述「儲存設定成功後 SHALL 提供明顯的視覺回饋」，取代目前隱含在既有 Requirement 之外、幾乎不可見的行內文字提示
+- `brand-settings-ui`：新增一個 Requirement，描述「儲存設定成功後，SHALL 讓『儲存設定』按鈕維持停用直到表單被修改」，取代目前隱含在既有 Requirement 之外、幾乎不可見的行內文字提示（第一版 toast 做法已撤銷，見上方修訂說明）
 
 ## Impact
 
 - Affected specs: brand-settings-ui
 - Affected code:
-  - Modified: src/views/BrandSettingsView.vue（新增獨立 toast 的樣板、狀態與樣式，移除原本頁尾的行內「已儲存」文字）
-  - Modified: src/lang/zh-Hant.ts（新增 toast 標題／訊息專用的 i18n key，不再借用語意不符的 `common.saved`）
+  - Modified: src/views/BrandSettingsView.vue（移除獨立 toast 的樣板／狀態／樣式；新增表單 dirty 狀態追蹤與「儲存設定」按鈕的停用邏輯）
+  - Modified: src/lang/zh-Hant.ts（移除不再使用的 `brandSettings.saveToast.*` key）
   - Modified: src/lang/en.ts（同上，兩邊 key 結構需一致）
