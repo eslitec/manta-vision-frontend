@@ -198,13 +198,22 @@
       input#brand-image-license(v-model="imageLicense" maxlength="200")
 
   footer.brand__foot
-    span(v-if="saved" role="status" aria-live="polite") {{ t('common.saved') }}
     AppButton(variant="outline" @click="store.load(true)") {{ t('common.cancel') }}
     AppButton(:loading="saving" @click="onSave") {{ saving ? t('common.saving') : t('brandSettings.save') }}
+
+Teleport(to="body")
+  .saveToast(v-if="saveToast" role="status" aria-live="polite")
+    span.saveToast__icon
+      IconCheckCircle
+    .saveToast__body
+      .saveToast__title {{ t('brandSettings.saveToast.title') }}
+      .saveToast__msg {{ t('brandSettings.saveToast.message') }}
+    button.saveToast__close(@click="closeSaveToast" :aria-label="t('common.close')")
+      IconClose
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useBrandStore } from '@/stores/brand'
@@ -212,7 +221,7 @@ import { useDismissableMenu } from '@/composables/useDismissableMenu'
 import AppButton from '@/components/AppButton.vue'
 import AppSearchbar from '@/components/AppSearchbar.vue'
 import AppTab from '@/components/AppTab.vue'
-import { IconAlertTriangleFilled, IconCheckCircle, IconChevronDown, IconLogoUpload } from '@/components/icons'
+import { IconAlertTriangleFilled, IconCheckCircle, IconChevronDown, IconClose, IconLogoUpload } from '@/components/icons'
 import { extractColors, type DominantColor } from '@/utils/colors'
 const store = useBrandStore()
 const { profile, saving } = storeToRefs(store)
@@ -221,7 +230,17 @@ const tabs = computed(() =>
   ['basic', 'visual', 'copy', 'compliance'].map((value) => ({ value, label: t(`brandSettings.tabs.${value}`) })),
 )
 const tab = ref('basic')
-const saved = ref(false)
+// 存檔成功提示：獨立於 GenerationToast.vue／generationTasks store，僅供本頁使用
+// （見 design.md 決策 1）；自動消失時間比照 GenerationToast.vue 的 6 秒（決策 4）
+const saveToast = ref(false)
+let saveToastTimer: number | undefined
+watch(saveToast, (v) => {
+  if (saveToastTimer) window.clearTimeout(saveToastTimer)
+  if (v) saveToastTimer = window.setTimeout(() => (saveToast.value = false), 6000)
+})
+function closeSaveToast() {
+  saveToast.value = false
+}
 const toneOptions = computed(() =>
   ['warm', 'literary', 'professional', 'playful', 'minimal', 'luxury'].map((key) => t(`brandSettings.tones.${key}`)),
 )
@@ -406,8 +425,7 @@ function assignColor(index: number) {
 }
 async function onSave() {
   await store.save()
-  saved.value = true
-  setTimeout(() => (saved.value = false), 2000)
+  saveToast.value = true
 }
 </script>
 
@@ -441,11 +459,58 @@ async function onSave() {
     justify-content: flex-end;
     gap: 0.75rem;
     margin-top: 1rem;
+  }
+}
 
-    span {
-      color: #45b85b;
-      font-size: 0.75rem;
+// 存檔成功提示：視覺語言比照 GenerationToast.vue（卡片、陰影、圖示＋標題＋訊息），
+// 固定在右下角而非右上角，避免跟 GenerationToast.vue（右上角、全域單例）同時出現時重疊（決策 2）
+.saveToast {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: flex-start;
+  width: 23.75rem;
+  max-width: calc(100vw - 3rem);
+  padding: 0.875rem 1rem;
+  border-radius: 12px;
+  background: $white;
+  box-shadow: $boxShadowDark;
+  gap: 0.625rem;
+
+  &__icon {
+    flex-shrink: 0;
+    color: $green;
+    font-size: 1.25rem;
+
+    svg {
+      display: block;
     }
+  }
+
+  &__body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__title {
+    margin-bottom: 0.125rem;
+    color: $blue-dark-300;
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+
+  &__msg {
+    color: $gray-400;
+    font-size: 0.78125rem;
+  }
+
+  &__close {
+    flex-shrink: 0;
+    padding-top: 0.125rem;
+    color: $gray-100;
+    font-size: 1rem;
   }
 }
 
