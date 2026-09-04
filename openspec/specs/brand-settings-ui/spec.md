@@ -16,14 +16,15 @@ TBD - created by archiving change 'sync-mv-08-design'. Update Purpose after arch
 - **THEN** 顯示該分段的欄位，其他分段內容不干擾
 
 <!-- @trace
-source: sync-mv-08-design
-updated: 2026-08-21
+source: sync-mv-08-design, brand-real-backend-wiring
+updated: 2026-09-04
 code:
   - src/views/BrandSettingsView.vue
   - src/stores/brand.ts
   - src/utils/colors.ts
   - src/components/AppSearchbar.vue
   - src/api/mock.ts
+  - src/api/real.ts
   - src/types/api.ts
   - src/lang/zh-Hant.ts
   - src/lang/en.ts
@@ -41,14 +42,15 @@ code:
 - **THEN** 系統分析並列出建議色，使用者可單獨或全部加入色票
 
 <!-- @trace
-source: sync-mv-08-design
-updated: 2026-08-21
+source: sync-mv-08-design, brand-real-backend-wiring
+updated: 2026-09-04
 code:
   - src/views/BrandSettingsView.vue
   - src/stores/brand.ts
   - src/utils/colors.ts
   - src/components/AppSearchbar.vue
   - src/api/mock.ts
+  - src/api/real.ts
   - src/types/api.ts
   - src/lang/zh-Hant.ts
   - src/lang/en.ts
@@ -66,14 +68,15 @@ code:
 - **THEN** 這些設定在「套用品牌設定」開啟時會帶入生成內容
 
 <!-- @trace
-source: sync-mv-08-design
-updated: 2026-08-21
+source: sync-mv-08-design, brand-real-backend-wiring
+updated: 2026-09-04
 code:
   - src/views/BrandSettingsView.vue
   - src/stores/brand.ts
   - src/utils/colors.ts
   - src/components/AppSearchbar.vue
   - src/api/mock.ts
+  - src/api/real.ts
   - src/types/api.ts
   - src/lang/zh-Hant.ts
   - src/lang/en.ts
@@ -83,22 +86,28 @@ code:
 
 ### Requirement: 提供合規與授權資訊
 
-品牌設定 SHALL 提供「合規與授權」區塊，記錄授權範圍、使用規範與肖像／素材授權相關資訊。
+品牌設定 SHALL 提供「合規與授權」區塊，記錄授權範圍、使用規範與肖像／素材授權相關資訊，且使用者填寫的內容 SHALL 被存檔、下次進入時原樣帶回。
 
 #### Scenario: 使用者檢視合規與授權
 
 - **WHEN** 使用者切到「合規與授權」
 - **THEN** 顯示授權範圍、使用規範與相關授權紀錄的維護介面
 
+#### Scenario: 使用者編輯肖像權同意條款或圖片授權聲明後存檔
+
+- **WHEN** 使用者修改「肖像權同意條款模板」或「圖片授權／使用聲明」後按下儲存
+- **THEN** 這兩個欄位的內容會隨其餘品牌設定一併存檔，重新載入頁面後維持使用者填寫的內容（而非每次都還原成預設文案）
+
 <!-- @trace
-source: sync-mv-08-design
-updated: 2026-08-21
+source: sync-mv-08-design, brand-real-backend-wiring
+updated: 2026-09-04
 code:
   - src/views/BrandSettingsView.vue
   - src/stores/brand.ts
   - src/utils/colors.ts
   - src/components/AppSearchbar.vue
   - src/api/mock.ts
+  - src/api/real.ts
   - src/types/api.ts
   - src/lang/zh-Hant.ts
   - src/lang/en.ts
