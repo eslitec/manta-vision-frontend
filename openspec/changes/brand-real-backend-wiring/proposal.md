@@ -53,7 +53,7 @@
 
 - `brand-settings-ui`：「提供合規與授權資訊」這個 Requirement 底下，補上「填寫的內容會
   被存檔」這個先前程式碼沒有真正做到、也沒有被 spec 明確要求過的行為說明；四個 Requirement
-  的 `@trace` code 清單加上 `src/api/real.ts`。
+  的 @trace code 清單加上 src/api/real.ts。
 
 ## Impact
 
