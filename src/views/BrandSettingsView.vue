@@ -97,12 +97,12 @@
           @change="onLogo"
         )
         label.logoUpload__drop(v-if="!profile.logoName" for="brand-logo-upload")
-          IconImagePlaceholder
+          IconLogoUpload
           .logoUpload__col
             strong.logoUpload__name {{ t('brandSettings.logoUpload') }}
             p.logoUpload__hint {{ t('brandSettings.logoUsage') }}
         template(v-else)
-          IconImagePlaceholder
+          IconLogoUpload
           .logoUpload__col
             .logoUpload__row
               strong.logoUpload__name {{ profile.logoName }}
@@ -212,7 +212,7 @@ import { useDismissableMenu } from '@/composables/useDismissableMenu'
 import AppButton from '@/components/AppButton.vue'
 import AppSearchbar from '@/components/AppSearchbar.vue'
 import AppTab from '@/components/AppTab.vue'
-import { IconAlertTriangleFilled, IconCheckCircle, IconChevronDown, IconImagePlaceholder } from '@/components/icons'
+import { IconAlertTriangleFilled, IconCheckCircle, IconChevronDown, IconLogoUpload } from '@/components/icons'
 import { extractColors, type DominantColor } from '@/utils/colors'
 const store = useBrandStore()
 const { profile, saving } = storeToRefs(store)
