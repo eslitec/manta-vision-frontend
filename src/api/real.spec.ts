@@ -340,6 +340,172 @@ describe('資料夾（folders）', () => {
   })
 })
 
+const WIRE_BRAND = {
+  brandId: 'brand_1',
+  name: '日安選物',
+  positioning: '質感選物店',
+  industry: 'apparel',
+  website: 'www.rihan-select.com',
+  customerAddress: '你',
+  tone: ['溫暖'],
+  hashtags: ['#日安選物'],
+  avoidWords: ['廉價', '瑕疵'],
+  colorPalette: { primary: '#2e3567', secondary: '#a5c8e6' },
+  logoImageId: 'img_logo',
+  logoUrl: 'https://cdn.example.com/logos/logo_1.png',
+  portraitConsentTemplate: '本人同意…',
+  imageLicense: '僅供本品牌使用。',
+  isComplete: true,
+  updatedAt: '2026-01-01T00:00:00Z',
+}
+
+describe('品牌設定（brand）', () => {
+  it('getBrand 把後端形狀翻成 BrandProfile：avoidWords 併成字串、colorPalette 拆成三個色票', async () => {
+    stubRoutes({ '/brand': { data: WIRE_BRAND } })
+
+    const profile = await realApi.getBrand()
+
+    expect(profile).toMatchObject({
+      name: '日安選物',
+      positioning: '質感選物店',
+      industry: 'apparel',
+      website: 'www.rihan-select.com',
+      addressing: '你',
+      tones: ['溫暖'],
+      hashtags: ['#日安選物'],
+      avoidWords: '廉價、瑕疵',
+      colors: [
+        { label: '主色', hex: '#2E3567' },
+        { label: '輔色', hex: '#A5C8E6' },
+      ],
+      logoUrl: 'https://cdn.example.com/logos/logo_1.png',
+      logoName: 'logo_1.png',
+      portraitConsent: '本人同意…',
+      imageLicense: '僅供本品牌使用。',
+    })
+  })
+
+  it('getBrand 遇到從沒設定過的 null／空殼欄位，會正規化成空字串／空陣列', async () => {
+    stubRoutes({
+      '/brand': {
+        data: {
+          ...WIRE_BRAND,
+          name: null,
+          positioning: null,
+          website: null,
+          customerAddress: null,
+          tone: null,
+          hashtags: null,
+          avoidWords: null,
+          colorPalette: null,
+          logoUrl: null,
+          portraitConsentTemplate: null,
+          imageLicense: null,
+        },
+      },
+    })
+
+    const profile = await realApi.getBrand()
+
+    expect(profile).toMatchObject({
+      name: '',
+      positioning: '',
+      website: '',
+      addressing: '',
+      tones: [],
+      hashtags: [],
+      avoidWords: '',
+      colors: [],
+      logoUrl: '',
+      logoName: '',
+      portraitConsent: '',
+      imageLicense: '',
+    })
+  })
+
+  const BASE_PROFILE = {
+    name: '日安選物',
+    positioning: '質感選物店',
+    website: '',
+    industry: 'apparel',
+    colors: [
+      { label: '主色', hex: '#2e3567' },
+      { label: '輔色', hex: '#a5c8e6' },
+    ],
+    tones: ['溫暖'],
+    hashtags: ['#日安選物'],
+    addressing: '',
+    avoidWords: '廉價、瑕疵',
+    logoName: '',
+    logoUrl: '',
+    portraitConsent: '',
+    imageLicense: '',
+  }
+
+  it('saveBrand 把單一字串 avoidWords 拆成陣列、colors 依索引對到 primary／secondary／accent', async () => {
+    const calls = stubRoutes({ '/brand': { data: WIRE_BRAND } })
+
+    await realApi.saveBrand(BASE_PROFILE)
+
+    expect(calls[0].method).toBe('put')
+    expect(calls[0].body).toMatchObject({
+      name: '日安選物',
+      positioning: '質感選物店',
+      industry: 'apparel',
+      avoidWords: ['廉價', '瑕疵'],
+      colorPalette: { primary: '#2E3567', secondary: '#A5C8E6' },
+    })
+  })
+
+  it('saveBrand 三態語意：空字串欄位送 null（明確清空），不是不送這個 key', async () => {
+    const calls = stubRoutes({ '/brand': { data: WIRE_BRAND } })
+
+    await realApi.saveBrand(BASE_PROFILE)
+
+    const body = calls[0].body as Record<string, unknown>
+    expect(body.website).toBeNull()
+    expect(body.customerAddress).toBeNull()
+    expect(body.portraitConsentTemplate).toBeNull()
+    expect(body.imageLicense).toBeNull()
+  })
+
+  it('saveBrand 的 logoUrl 是 data: URL 時，先 POST /upload 拿 imageId，PUT /brand 才帶 logoImageId', async () => {
+    const calls = stubRoutes({
+      '/upload': { status: 201, data: { ...WIRE_IMAGE, imageId: 'img_new_logo' } },
+      '/brand': { data: WIRE_BRAND },
+    })
+
+    await realApi.saveBrand({ ...BASE_PROFILE, logoName: 'logo.png', logoUrl: 'data:image/png;base64,AAAA' })
+
+    expect(calls.map((c) => c.url)).toEqual(['/upload', '/brand'])
+    expect((calls[1].body as Record<string, unknown>).logoImageId).toBe('img_new_logo')
+  })
+
+  it('saveBrand 的 logoUrl 是空字串（使用者清空 Logo）時，logoImageId 明確送 null', async () => {
+    const calls = stubRoutes({ '/brand': { data: WIRE_BRAND } })
+
+    await realApi.saveBrand({ ...BASE_PROFILE, logoUrl: '' })
+
+    expect((calls[0].body as Record<string, unknown>).logoImageId).toBeNull()
+  })
+
+  it('saveBrand 的 logoUrl 已經是後端網址（沒有換過 Logo）時，body 不會有 logoImageId 這個 key（三態：不動）', async () => {
+    const calls = stubRoutes({ '/brand': { data: WIRE_BRAND } })
+
+    await realApi.saveBrand({ ...BASE_PROFILE, logoUrl: 'https://cdn.example.com/logos/logo_1.png' })
+
+    expect('logoImageId' in (calls[0].body as object)).toBe(false)
+  })
+
+  it('saveBrand 回傳存檔後的最新內容（例如換成真正的 Logo 網址），供呼叫端寫回 store', async () => {
+    stubRoutes({ '/brand': { data: WIRE_BRAND } })
+
+    const saved = await realApi.saveBrand(BASE_PROFILE)
+
+    expect(saved.logoUrl).toBe('https://cdn.example.com/logos/logo_1.png')
+  })
+})
+
 describe('內建素材（materials）', () => {
   it('listMaterials 有帶 category 時放進 params，沒帶就不送', async () => {
     const calls = stubRoutes({

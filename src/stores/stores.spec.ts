@@ -80,14 +80,17 @@ describe('brand store', () => {
     expect(getBrand).toHaveBeenCalledTimes(1)
   })
 
-  it('save 期間切換 saving 狀態並呼叫 saveBrand', async () => {
-    getBrand.mockResolvedValue({ name: '日安選物' })
-    saveBrand.mockResolvedValue(undefined)
+  it('save 期間切換 saving 狀態並呼叫 saveBrand，並用回傳值覆蓋本地 profile', async () => {
+    getBrand.mockResolvedValue({ name: '日安選物', portraitConsent: '本人同意…', imageLicense: '僅供本品牌使用。' })
+    // 真後端會回存檔後的最新內容（例如 Logo 換成真正的網址）；save() 要把它寫回
+    // profile，不能沿用呼叫前的本地值，否則下一次存檔會重複上傳同一張 Logo。
+    saveBrand.mockResolvedValue({ name: '日安選物（已更新）', portraitConsent: '本人同意…', imageLicense: '僅供本品牌使用。' })
     const brand = useBrandStore()
     await brand.load()
     await brand.save()
     expect(saveBrand).toHaveBeenCalledTimes(1)
     expect(brand.saving).toBe(false)
+    expect(brand.profile?.name).toBe('日安選物（已更新）')
   })
 
   it('沒有 profile 時 save 不呼叫 API', async () => {
