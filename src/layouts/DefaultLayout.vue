@@ -321,6 +321,11 @@ async function handleLogout() {
 
 .content {
   flex: 1;
+  // 明確加 min-height:0：沒有這行，.content 這個直向 flex item 不保證會乖乖縮到
+  // .main 分配給它的高度，反而可能被子內容（例如圖庫「快速修飾」選項變多）撐高，
+  // 導致整個「頁面」本身多長出一截、瀏覽器右側跑出原生捲軸——明明 .content 自己
+  // 就有 overflow-y:auto，該在它內部捲動才對，不該讓整頁一起被撐高再捲動。
+  min-height: 0;
   overflow-y: auto;
   padding: 2rem;
   display: flex;
