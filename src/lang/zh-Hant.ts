@@ -384,6 +384,10 @@ export default {
     addHashtag: '＋ 新增標籤',
     complianceNotice: 'AI 試穿模組使用真人照片時，會引用下方肖像權同意條款。',
     save: '儲存設定',
+    saveToast: {
+      title: '已儲存',
+      message: '品牌設定已成功更新',
+    },
     defaults: {
       portraitConsent: '本人同意品牌方將所提供之照片用於 AI 試穿內容之生成與行銷用途…',
       imageLicense: '所有生成圖片僅供本品牌行銷使用，不得轉授權第三方。',
