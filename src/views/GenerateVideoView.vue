@@ -1,61 +1,70 @@
 <template lang="pug">
 .video
+  h1.visuallyHidden {{ t('routeTitles.generateVideo') }}
   section.panel.video__input
-    .step
-      .step__title {{ t('video.steps.source') }}
-      .dropzone
-        i.ti.ti-photo.dropzone__icon
-        span.dropzone__name(v-if="sourceImage") {{ sourceImage.name }}
-      OutlineButton.dropzone__pick(@click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
-    .step
-      .step__title {{ t('video.steps.template') }}
-      .templates
-        button.tpl(v-for="item in templates" :key="item.key" :class="{ 'isActive': template === item.key }" @click="template = item.key")
-          .tpl__thumb
-            i.ti.ti-player-play
-          span.tpl__label {{ item.name }}
-    .step
-      .step__title {{ t('video.steps.ratio') }}
-      .ratios
-        button.ratio(v-for="r in ratios" :key="r" :class="{ 'isActive': ratio === r }" @click="ratio = r") {{ r }}
-    .step
-      .step__head
-        span.step__title {{ t('video.steps.model') }}
-        span.step__hint {{ t('video.modelHint') }}
-      .models
-        button.modelcard(v-for="t in modelTiers" :key="t.key" :class="{ 'isActive': modelTier === t.key }" @click="modelTier = t.key")
-          .modelcard__header
-            span.modelcard__name {{ $t(`modelTiers.${t.key}.label`) }}
-            span.modelcard__badge ×{{ t.multiplier }}
-          span.modelcard__cost {{ $t('units.feedPerVideo', { count: 45 * t.multiplier }) }}
-          span.modelcard__desc {{ $t(`video.modelDescriptions.${t.key}`) }}
+    .video__scroll
+      .video__steps
+        .step
+          .step__title {{ t('video.steps.source') }}
+          .dropzone
+            IconImagePlaceholder.dropzone__icon
+            span.dropzone__name(v-if="sourceImage") {{ sourceImage.name }}
+          AppButton.dropzone__pick(variant="outline" @click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
+        .step
+          .step__title {{ t('video.steps.template') }}
+          .templates
+            button.tpl(v-for="item in templates" :key="item.key" :aria-pressed="template === item.key" :class="{ 'isActive': template === item.key }" @click="template = item.key")
+              .tpl__thumb
+                IconMovie
+              span.tpl__label {{ item.name }}
+        .step
+          .step__title {{ t('video.steps.ratio') }}
+          .ratios
+            button.ratio(v-for="r in ratios" :key="r" :aria-pressed="ratio === r" :class="{ 'isActive': ratio === r }" @click="ratio = r") {{ r }}
+        .step
+          .step__head
+            span.step__title {{ t('video.steps.model') }}
+            span.step__hint {{ t('video.modelHint') }}
+          .models
+            ModelOption(
+              v-for="tier in modelTiers"
+              :key="tier.key"
+              :name="$t(`modelTiers.${tier.key}.label`)"
+              :multiplier="tier.multiplier"
+              :cost="$t('units.feedPerVideo', { count: 45 * tier.multiplier })"
+              :description="$t(`video.modelDescriptions.${tier.key}`)"
+              :selected="modelTier === tier.key"
+              @click="modelTier = tier.key"
+            )
+      span.video__fade(aria-hidden="true")
+      span.video__scrollbarHint(:class="{ isCompact: !!myTask }" aria-hidden="true")
     .video__sticky
-      p.warn
-        i.ti.ti-alert-triangle
+      p.warn(v-if="!myTask")
+        IconAlertTriangleFilled
         span {{ t('video.highCostWarning') }}
-      p.err(v-if="errorMsg") {{ errorMsg }}
+      p.err(v-if="errorMsg" role="alert") {{ errorMsg }}
       .video__footer
         .cost
           .cost__label {{ t('common.estimatedCost') }}
           .cost__value
             IconFeedBottleSmall.cost__icon
             span {{ t('units.feed', { count: estCost }) }}
-        PrimaryButton(:disabled="busy" @click="confirmOpen = true")
-          i.ti.ti-plus
+        AppButton(:disabled="busy" @click="confirmOpen = true")
+          IconAddObject
           span {{ t('video.generate') }}
 
   section.panel.video__preview
     h2.preview__title {{ previewTitle }}
     .preview__box
       template(v-if="myTask?.status === 'failed'")
-        i.ti.ti-alert-triangle
-        span.preview__hint {{ myTask.error === 'MODEL_TIMEOUT' ? t('video.timeoutRefund') : t('common.generationFailed') }}
+        IconAlertTriangleFilled
+        span.preview__hint {{ t('common.generationFailed') }}
       template(v-else)
-        i.ti.ti-player-play
+        IconMovie
         span.preview__hint(v-if="!myTask") {{ t('video.previewHint') }}
 
     //- 生成中：進度狀態區塊（對齊設計稿 MV-04c）
-    .taskstat(v-if="busy")
+    .taskstat(v-if="busy" role="status" aria-live="polite" aria-busy="true")
       .taskstat__head
         span.taskstat__dot
         span.taskstat__label {{ statusLabel }}
@@ -65,15 +74,15 @@
         span.taskstat__pct {{ myTask?.progress ?? 0 }}%
         span.taskstat__eta(v-if="etaText") {{ etaText }}
       p.taskstat__note {{ t('video.backgroundNote') }}
-      OutlineButton.taskstat__cancel(@click="cancelCurrent") {{ t('video.cancelTask') }}
     template(v-if="myTask?.status === 'done'")
+      .visuallyHidden(role="status" aria-live="polite") {{ t('video.completed') }}
       p.result__meta
         span.result__dot
         span {{ t('video.completed') }}
       .result__actions
-        OutlineButton(@click="download") {{ t('common.download') }}
-        OutlineButton(@click="startGenerate") {{ t('common.regenerate') }}
-        PrimaryButton(@click="goLibrary") {{ t('common.openLibrary') }}
+        AppButton(variant="outline" @click="download") {{ t('common.download') }}
+        AppButton(variant="outline" @click="startGenerate") {{ t('common.regenerate') }}
+        AppButton(@click="goLibrary") {{ t('common.openLibrary') }}
       p.result__stat {{ t('video.resultStats', { cost: myTask.cost, elapsed: elapsedText(myTask) }) }}
 
   ImagePickerDialog(v-model:open="pickerOpen" :title="t('video.pickerTitle')" @select="onPick")
@@ -86,9 +95,15 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import ConfirmGenerateDialog from '@/components/ConfirmGenerateDialog.vue'
-import PrimaryButton from '@/components/PrimaryButton.vue'
-import OutlineButton from '@/components/OutlineButton.vue'
-import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
+import AppButton from '@/components/AppButton.vue'
+import ModelOption from '@/components/ModelOption.vue'
+import {
+  IconFeedBottleSmall,
+  IconAddObject,
+  IconAlertTriangleFilled,
+  IconImagePlaceholder,
+  IconMovie,
+} from '@/components/icons'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
 import { isInsufficientFeed } from '@/utils/error'
 import { VIDEO_MODEL_TIERS } from '@/types/api'
@@ -129,7 +144,7 @@ const modelLabelText = computed(() => {
 // 這頁只呈現「這次瀏覽時自己送出的任務」；任務本身在背景持續追蹤，離開頁面不受影響，
 // 完整的任務清單（含離開此頁後仍在跑的任務）另外在頂部工具列的任務中心面板查看。
 const myTask = computed(() => tasksStore.tasks.find((t) => t.id === myTaskId.value))
-const busy = computed(() => myTask.value?.status === 'queued' || myTask.value?.status === 'processing')
+const busy = computed(() => myTask.value?.status === 'pending' || myTask.value?.status === 'processing')
 
 const previewTitle = computed(() =>
   myTask.value?.status === 'done'
@@ -146,8 +161,8 @@ const genStep = computed(() => {
   return p < 35 ? 1 : p < 65 ? 2 : p < 90 ? 3 : 4
 })
 const statusLabel = computed(() =>
-  myTask.value?.status === 'queued'
-    ? t('taskCenter.queued')
+  myTask.value?.status === 'pending'
+    ? t('taskCenter.pending')
     : t('video.processingStep', {
         step: genStep.value,
         phase: t(`video.phases.${GEN_PHASES[genStep.value - 1]}`),
@@ -163,10 +178,6 @@ const etaText = computed(() => {
     ? t('common.remainingMinutesSeconds', { minutes: m, seconds: String(s).padStart(2, '0') })
     : t('common.remainingSeconds', { seconds: s })
 })
-function cancelCurrent() {
-  if (myTask.value) tasksStore.cancelTask(myTask.value.id)
-}
-
 const onPick = (a: Asset) => {
   sourceImage.value = a
 }
@@ -215,6 +226,13 @@ function goLibrary() {
   @include below($bp-lg) {
     grid-template-columns: 1fr;
   }
+  // 設定面板（.video__input）在大螢幕是固定高兩段式結構（捲動區＋sticky footer），
+  // 需要 .video 本身有確定高度才能讓內部捲動生效，否則 .content 的 overflow-y: auto
+  // 會把整頁一起往下捲，而不是只捲動面板內部（見 design.md 2026-08-21 決策）。
+  @media (min-width: $bp-lg) {
+    height: 100%;
+    min-height: 0;
+  }
 }
 .panel {
   background: $white;
@@ -225,6 +243,55 @@ function goLibrary() {
 .video__input {
   display: flex;
   flex-direction: column;
+  @media (min-width: $bp-lg) {
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+  }
+}
+.video__scroll {
+  @media (min-width: $bp-lg) {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+  }
+}
+.video__steps {
+  @media (min-width: $bp-lg) {
+    height: 100%;
+    overflow-y: auto;
+    padding: 1.5rem 1.5rem 0.75rem;
+  }
+}
+.video__fade {
+  display: none;
+  @media (min-width: $bp-lg) {
+    display: block;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 1.75rem;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0), $white);
+    pointer-events: none;
+  }
+}
+.video__scrollbarHint {
+  display: none;
+  @media (min-width: $bp-lg) {
+    display: block;
+    position: absolute;
+    top: 1rem;
+    right: 0.25rem;
+    width: 0.25rem;
+    height: 34.5rem; // 552px：初始狀態（含警示列，footer 133px）
+    border-radius: 2px;
+    background: rgba(180, 185, 196, 0.5);
+    pointer-events: none;
+    &.isCompact {
+      height: 40.25rem; // 644px：送出生成後警示列收合（footer 78px）
+    }
+  }
 }
 .video__preview {
   display: flex;
@@ -333,53 +400,10 @@ function goLibrary() {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
-}
-.modelcard {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1875rem;
-  align-items: flex-start;
-  padding: 0.625rem;
-  border: 1px solid $gray;
-  border-radius: 8px;
-  background: $white;
-  text-align: left;
-  &__header {
-    @include flex(space-between, center, 0.375rem);
-    width: 100%;
-  }
-  &__name {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: $dark-blue-gray;
-  }
-  &__badge {
-    flex-shrink: 0;
-    font-size: 0.6875rem;
-    font-weight: 700;
-    color: #606692;
-    background: $blue-light;
-    padding: 0.0625rem 0.375rem;
-    border-radius: 10px;
-  }
-  &__cost {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: $dark-blue-gray;
-  }
-  &__desc {
-    font-size: 0.6875rem;
-    color: #b4b9c4;
-  }
-  &.isActive {
-    background: $blue-light;
-    border: 1.5px solid $blue-dark-500;
-    .modelcard__name {
-      color: $blue-dark-500;
-    }
-    .modelcard__badge {
-      background: $blue-dark-500;
-      color: $white;
+  @include below($bp-sm) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    :deep(.modelOption:last-child) {
+      grid-column: 1 / -1;
     }
   }
 }
@@ -394,7 +418,7 @@ function goLibrary() {
   color: $dark-blue-gray;
   line-height: 1.4;
   margin: 0;
-  i {
+  svg {
     flex-shrink: 0;
     font-size: 1.25rem;
     color: $orange;
@@ -411,6 +435,12 @@ function goLibrary() {
   display: flex;
   flex-direction: column;
   gap: 0.6875rem;
+  // 大螢幕：.video__input 改成 padding: 0（見上），.video__scroll 用 flex: 1 頂開，
+  // 不再需要負 margin 抵銷面板留白，footer_sticky 固定高不隨內容捲動
+  @media (min-width: $bp-lg) {
+    margin: 0;
+    flex-shrink: 0;
+  }
 }
 .video__footer {
   @include flex(space-between, flex-end);
@@ -508,9 +538,6 @@ function goLibrary() {
     color: #606692;
     text-align: center;
     line-height: 1.5;
-  }
-  &__cancel {
-    margin-top: 0.125rem;
   }
 }
 .preview__spin {

@@ -1,15 +1,15 @@
 <template lang="pug">
 Teleport(to="body")
-  .toast(v-if="toast" :class="`toast--${toast.kind}`")
+  .toast(v-if="toast" :class="`toast--${toast.kind}`" :role="toast.kind === 'failed' ? 'alert' : 'status'" :aria-live="toast.kind === 'failed' ? 'assertive' : 'polite'")
     span.toast__icon
       IconCheckCircle(v-if="toast.kind === 'done'")
-      i.ti.ti-alert-triangle(v-else)
+      IconAlertTriangleFilled(v-else)
     .toast__body
       .toast__title {{ toast.title }}
       .toast__msg {{ toast.message }}
     button.toast__view(@click="view") {{ t('common.view') }}
     button.toast__close(@click="tasksStore.dismissToast()" :aria-label="t('common.close')")
-      i.ti.ti-x
+      IconClose
 </template>
 
 <script setup lang="ts">
@@ -18,7 +18,7 @@ import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
-import IconCheckCircle from '@/components/icons/IconCheckCircle.vue'
+import { IconCheckCircle, IconAlertTriangleFilled, IconClose } from '@/components/icons'
 
 const tasksStore = useGenerationTasksStore()
 const { toast } = storeToRefs(tasksStore)

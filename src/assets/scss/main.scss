@@ -27,9 +27,36 @@ button {
   border: none;
   background: none;
 }
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid $blue;
+  outline-offset: 2px;
+}
+
+.visuallyHidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
 // Firefox 會在 <button> 內部加一層看不見的 focus 框線＋padding（-moz-focus-inner），
 // 沒有清掉的話，點擊按鈕時文字會跟著那層看不見的框線位移 1-2px，其他瀏覽器不會有這個現象。
 button::-moz-focus-inner {
   border: 0;
   padding: 0;
+}
+
+@media (max-width: $bp-md) {
+  :where(button, [role='button']) {
+    min-width: 1.5rem;
+  }
+
+  :where(button, a[href], input, select, textarea, [role='button']) {
+    min-height: 1.5rem;
+  }
 }

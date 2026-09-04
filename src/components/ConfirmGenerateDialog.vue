@@ -1,40 +1,41 @@
 <template lang="pug">
 Teleport(to="body")
   .confirm(v-if="open" @click.self="cancel")
-    .confirm__modal
+    .confirm__modal(ref="dialogRef" role="alertdialog" aria-modal="true" :aria-labelledby="titleId" :aria-describedby="messageId" tabindex="-1")
       .confirm__head
         span.confirm__icon
-          i.ti.ti-alert-triangle
-        h3.confirm__title {{ resolvedTitle }}
-      p.confirm__msg {{ resolvedMessage }}
+          IconAlertTriangleFilled
+        h3.confirm__title(:id="titleId") {{ resolvedTitle }}
+      p.confirm__msg(:id="messageId") {{ resolvedMessage }}
       .confirm__rows
         .confirm__row(v-if="modelLabel")
-          span {{ t('confirmGenerate.model') }}
-          span {{ modelLabel }}
+          span.confirm__label {{ t('confirmGenerate.model') }}
+          span.confirm__value {{ modelLabel }}
         .confirm__row.confirm__row--card
-          span {{ t('confirmGenerate.cost') }}
+          span.confirm__label {{ t('confirmGenerate.cost') }}
           strong.confirm__cost
             IconFeedBottleSmall
             span {{ cost }} {{ t('confirmGenerate.feedUnit') }}
         .confirm__row.confirm__row--sub
-          span {{ t('confirmGenerate.balance') }}
+          span.confirm__label {{ t('confirmGenerate.balance') }}
           span.confirm__balance
             IconFeedBottleSmall
             span {{ balance.toLocaleString() }} {{ t('confirmGenerate.feedUnit') }}
       .confirm__actions
-        DialogButton(@click="cancel") {{ t('confirmGenerate.cancel') }}
-        DialogButton(variant="primary" @click="confirm")
-          i.ti.ti-plus
+        AppButton(data-dialog-initial-focus variant="outline" @click="cancel") {{ t('confirmGenerate.cancel') }}
+        AppButton(variant="primary" @click="confirm")
+          IconAddObject
           span {{ resolvedConfirmText }}
 </template>
 
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFeedStore } from '@/stores/feed'
-import DialogButton from '@/components/DialogButton.vue'
-import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
+import AppButton from '@/components/AppButton.vue'
+import { IconFeedBottleSmall, IconAddObject, IconAlertTriangleFilled } from '@/components/icons'
+import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 
 const props = defineProps<{
   cost: number
@@ -47,6 +48,9 @@ const emit = defineEmits<{
   (e: 'confirm'): void
 }>()
 const open = defineModel<boolean>('open', { required: true })
+const dialogRef = ref<HTMLElement | null>(null)
+const titleId = `confirm-generate-title-${crypto.randomUUID()}`
+const messageId = `confirm-generate-message-${crypto.randomUUID()}`
 
 const { balance } = storeToRefs(useFeedStore())
 const { t } = useI18n()
@@ -56,6 +60,7 @@ const resolvedMessage = computed(() => props.message ?? t('confirmGenerate.messa
 const resolvedConfirmText = computed(() => props.confirmText ?? t('confirmGenerate.confirm'))
 
 const cancel = () => (open.value = false)
+useAccessibleDialog(open, dialogRef, cancel)
 const confirm = () => {
   emit('confirm')
   open.value = false
@@ -75,78 +80,88 @@ const confirm = () => {
     width: 26.25rem;
     max-width: 100%;
     background: $white;
-    border-radius: 16px;
+    border-radius: 10px;
     padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem; // dialog_head／內文／rows 群組／actions 之間統一 16px（對齊 Figma flex-col gap-16）
   }
 
   &__head {
-    @include flex(flex-start, center, 0.625rem);
-    margin-bottom: 0.75rem;
+    @include flex(flex-start, center, 0.75rem);
   }
 
   &__icon {
-    width: 2.125rem;
-    height: 2.125rem;
-    border-radius: 50%;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 8px;
     flex-shrink: 0;
-    background: #faeeda;
-    color: #ba7517;
-    font-size: 1.125rem;
+    background: $blue-light;
+    color: $blue-dark-500;
+    font-size: 1.5rem;
     @include flex(center, center);
   }
 
   &__title {
-    font-size: 1.0625rem;
+    font-size: 1.125rem;
     font-weight: 700;
-    color: $blue-dark-300;
+    color: $dark-blue-gray;
   }
 
   &__msg {
-    margin-bottom: 1.125rem;
-    color: $gray-400;
-    font-size: 0.875rem;
-    line-height: 1.6;
+    color: #606692;
+    font-size: 1rem;
+    line-height: 1.375;
   }
 
   &__rows {
-    margin-bottom: 1.125rem;
-    padding-top: 0.875rem;
-    border-top: 1px solid $lightGray;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem; // model_row／cost_row／bal_row 之間統一 16px；設計稿沒有分隔線，移除原本的 border-top
   }
 
   &__row {
     @include flex(space-between, center);
-    padding: 0.25rem 0;
-    color: $blue-dark-300;
-    font-size: 0.9375rem;
-
-    &--sub {
-      color: $gray-100;
-      font-size: 0.8125rem;
-    }
+    font-size: 0.875rem;
+    line-height: 1.4286;
 
     &--card {
-      margin: 0.375rem 0;
-      padding: 0.625rem 0.75rem;
+      padding: 0.75rem;
       border-radius: 8px;
       background: $blue-light;
     }
   }
 
+  &__label {
+    color: $gray-100;
+  }
+
+  &__value {
+    color: #606692;
+  }
+
   &__cost,
   &__balance {
-    @include flex(flex-start, center, 0.375rem);
+    @include flex(flex-start, center, 0.25rem);
+  }
+
+  &__cost {
     color: $orange;
     font-weight: 700;
+    font-size: 1rem;
   }
 
   &__balance {
-    color: inherit;
-    font-weight: inherit;
+    color: #606692;
+    font-weight: 400;
   }
 
   &__actions {
-    @include flex(flex-end, center, 0.625rem);
+    @include flex(flex-end, center, 0.75rem);
   }
+}
+// cost_row（本次消耗）的標籤色比 model_row／bal_row 深，對齊設計稿 #383c4b
+.confirm__row--card .confirm__label {
+  color: $dark-blue-gray;
 }
 </style>
