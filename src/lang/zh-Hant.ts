@@ -577,7 +577,6 @@ export default {
       suffixes: {
         remove: '去背版',
         object: '加入物件版',
-        fade: '背景淡化版',
         text: '文字編輯版',
         crop: '裁切版',
         retouch: 'AI修圖版',
@@ -619,7 +618,7 @@ export default {
     textSettings: '字重 Bold ・ 字級 20 ・ 對齊 置中 ・ 不透明 100%',
     aiToolsUsed: '本次編輯已使用的 AI 工具',
     total: '合計',
-    costNote: '目前只有背景移除會扣飼料，且在執行當下即扣；加入物件、文字、裁切、淡化皆不扣，另存也不再扣。',
+    costNote: '目前只有背景移除會扣飼料，且在執行當下即扣；加入物件、文字、裁切皆不扣，另存也不再扣。',
     custom: '自訂',
     dimensions: '寬 1080 px・高 1080 px・旋轉 0°',
     dimensionsDynamic: '寬 {width} px ・ 高 {height} px ・ 旋轉 0°',
@@ -636,7 +635,6 @@ export default {
     tools: {
       remove: '背景移除',
       object: '加入物件',
-      fade: '背景淡化',
       text: '文字',
       crop: '裁切',
       removeInProgress: '背景移除中…',
@@ -660,13 +658,11 @@ export default {
     layerItems: {
       text: '文字：春季新品 上市',
       object: '物件：花束',
-      fade: '背景淡化 30%',
       original: '原圖：春季主視覺_01',
     },
     layerDescriptions: {
       text: '文字圖層',
       object: 'AI 生成物件',
-      fade: '背景效果',
     },
     previews: { igPost: 'IG 貼文 1:1', igStory: 'IG 限動 9:16', fbPost: 'FB 貼文 4:5', line: 'LINE 圖文 16:9' },
     retouch: {

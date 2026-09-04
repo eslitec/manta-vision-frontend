@@ -641,7 +641,6 @@ export default {
       suffixes: {
         remove: 'background-removed',
         object: 'object-added',
-        fade: 'background-faded',
         text: 'text-edited',
         crop: 'cropped',
         retouch: 'AI-retouched',
@@ -684,7 +683,7 @@ export default {
     aiToolsUsed: 'AI tools used in this edit',
     total: 'Total',
     costNote:
-      'Only background removal currently uses feed, charged when run. Objects, text, crop, fade, and saving are free.',
+      'Only background removal currently uses feed, charged when run. Objects, text, crop, and saving are free.',
     custom: 'Custom',
     dimensions: 'Width 1080 px · Height 1080 px · Rotation 0°',
     dimensionsDynamic: 'Width {width} px · Height {height} px · Rotation 0°',
@@ -701,7 +700,6 @@ export default {
     tools: {
       remove: 'Remove background',
       object: 'Add object',
-      fade: 'Fade background',
       text: 'Text',
       crop: 'Crop',
       removeInProgress: 'Removing background…',
@@ -725,13 +723,11 @@ export default {
     layerItems: {
       text: 'Text: Spring collection launch',
       object: 'Object: Bouquet',
-      fade: 'Background fade 30%',
       original: 'Original: Spring_key_visual_01',
     },
     layerDescriptions: {
       text: 'Text layer',
       object: 'AI-generated object',
-      fade: 'Background effect',
     },
     previews: { igPost: 'IG Post 1:1', igStory: 'IG Story 9:16', fbPost: 'FB Post 4:5', line: 'LINE Image 16:9' },
     retouch: {

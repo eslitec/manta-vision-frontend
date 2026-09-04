@@ -88,7 +88,6 @@
           IconFeedBottleSmall
           | {{ removeToolCost }}
       button.tool.tool--object(:class="{active: tool==='object'}" :aria-pressed="tool === 'object'" @click="tool = 'object'") #[IconAddObject] #[span {{ t('editor.tools.object') }}]
-      button.tool(:class="{active: tool==='fade'}" :aria-pressed="tool === 'fade'" @click="tool='fade'") #[IconImagePlaceholder] #[span {{ t('editor.tools.fade') }}]
       button.tool(:class="{active: tool==='text'}" :aria-pressed="tool === 'text'" @click="insertTextLayer") #[IconTextDocument] #[span {{ t('editor.tools.text') }}]
       button.tool(:class="{active: tool==='crop'}" :aria-pressed="tool === 'crop'" @click="tool='crop'") #[IconEdit] #[span {{ t('editor.tools.crop') }}]
     section.canvasPanel
@@ -414,7 +413,7 @@ const selectEditorAsset = (asset: Asset) => {
 }
 const suggestedAssetName = computed(() => {
   if (props.mode === 'retouch') return `${selectedAssetName.value}_${t('editor.saveDialog.suffixes.retouch')}`
-  const suffixKey = ['remove', 'object', 'fade', 'text', 'crop'].includes(tool.value) ? tool.value : 'edited'
+  const suffixKey = ['remove', 'object', 'text', 'crop'].includes(tool.value) ? tool.value : 'edited'
   return `${selectedAssetName.value}_${t(`editor.saveDialog.suffixes.${suffixKey}`)}`
 })
 const openSaveDialog = () => {
@@ -630,7 +629,7 @@ async function selectRemoveTool() {
     applyingTool.value = ''
   }
 }
-type EditorLayerType = 'text' | 'object' | 'fade' | 'original'
+type EditorLayerType = 'text' | 'object' | 'original'
 type EditorLayer = {
   key: string
   type: EditorLayerType
@@ -645,10 +644,7 @@ type ObjectEditorLayer = EditorLayer & {
   scale: number
   dragging: boolean
 }
-const layers = reactive<EditorLayer[]>([
-  { key: 'fade', type: 'fade', visible: true, locked: false },
-  { key: 'original', type: 'original', visible: true, locked: true },
-])
+const layers = reactive<EditorLayer[]>([{ key: 'original', type: 'original', visible: true, locked: true }])
 const selectedLayerKey = ref('original')
 const draggedLayerKey = ref('')
 const dropTargetKey = ref('')
@@ -663,9 +659,6 @@ const selectLayer = (key: string) => {
   selectedLayerKey.value = key
   if (layer.type !== 'original') tool.value = layer.type
 }
-watch(tool, (currentTool) => {
-  if (currentTool === 'fade') selectedLayerKey.value = 'fade'
-})
 const textLayer = computed(() => layers.find((layer) => layer.type === 'text'))
 const objectLayers = computed(() => layers.filter((layer): layer is ObjectEditorLayer => layer.type === 'object'))
 const originalLayer = computed(() => layers.find((layer) => layer.key === 'original')!)
