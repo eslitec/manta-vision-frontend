@@ -30,7 +30,7 @@
           span(aria-hidden="true") ＋
       FolderRow(
         :name="unfiledFolderName"
-        :count="unfiledCount"
+        :count="folderImageCount(null)"
         :active="activeView.kind === 'folder' && activeView.folderId === null"
         @click="setView({ kind: 'folder', folderId: null, name: unfiledFolderName })"
       )
@@ -257,24 +257,47 @@ function materialCategoryLabel(category: Material['category']): string {
 // 以為點「物件素材」分類就看得到標「物件素材」的內建素材卡片——所以這裡讓兩者真的合流。
 // 「背景素材」「模特素材」目前沒有對應的系統分類（見 CATEGORY_TAGS），所以只在「全部素材」出現；
 // 資料夾／關鍵字搜尋／其他系統分類仍然不會混入任何內建素材，避免使用者誤以為那些篩選結果裡有它們。
+// 使用者要求「來源」工具列（全部／上傳／AI生成／編輯產物）要照字面篩選：選了「物件素材」
+// 系統分類、又選「上傳」來源，兩個都是 source 欄位、字面上不可能同時成立（一張圖的
+// source 只能是一個值），這種組合就該照字面顯示「沒有符合的素材」，而不是像過去那樣
+// 讓 chip 看起來能點、點了卻完全沒反應。
+const sourceConflictsWithCategory = computed(() => {
+  const v = activeView.value
+  return (
+    v.kind === 'category' && v.dimension === 'source' && activeSource.value !== 'all' && activeSource.value !== v.tag
+  )
+})
 const objectMaterialsCount = computed(() => materials.value.filter((m) => m.category === 'object').length)
+// 會混入內建素材的檢視：「全部素材」、「未分類」資料夾（內建素材本來就沒有資料夾歸屬，
+// 理所當然算未分類）、跟系統分類裡的「物件素材」（見下面 materialsForView 的分類篩選）。
 const mergesMaterials = computed(() => {
   const v = activeView.value
-  return v.kind === 'all' || (v.kind === 'category' && v.dimension === 'source' && v.tag === 'object')
+  if (v.kind === 'all') return true
+  if (v.kind === 'category' && v.dimension === 'source' && v.tag === 'object') return true
+  if (v.kind === 'folder' && v.folderId === null) return true
+  return false
 })
 const materialsForView = computed<Material[]>(() => {
   if (!mergesMaterials.value) return []
-  return activeView.value.kind === 'all' ? materials.value : materials.value.filter((m) => m.category === 'object')
+  // 「來源」工具列選到「全部」以外的值時，內建素材要整批消失：素材字面上沒有「來源」
+  // 這個欄位，不算「上傳」也不算「AI 生成」，選了具體來源卻還看得到內建素材會誤導使用者。
+  if (activeSource.value !== 'all') return []
+  const v = activeView.value
+  // 「物件素材」分類只混同分類的內建素材；「全部素材」跟「未分類」沒有分類限制，全部混進去。
+  if (v.kind === 'category') return materials.value.filter((m) => m.category === 'object')
+  return materials.value
 })
 
 // 內建素材（materialsForView）永遠整批載入、不分頁；使用者自己的圖庫在會合流的檢視裡
 // 也已經整批撈回來（見 fetchAllRealAssets），兩邊在這裡合併成一份虛擬清單，依內建素材
 // 排在前、真實素材排在後的順序，用 PAGE_SIZE 在前端切出目前這一頁。
 const pagedMaterials = computed(() => {
+  if (sourceConflictsWithCategory.value) return []
   const start = (page.value - 1) * PAGE_SIZE
   return materialsForView.value.slice(start, start + PAGE_SIZE)
 })
 const pagedRealAssets = computed(() => {
+  if (sourceConflictsWithCategory.value) return []
   if (!mergesMaterials.value) return assets.value
   const start = (page.value - 1) * PAGE_SIZE
   const end = page.value * PAGE_SIZE
@@ -286,8 +309,11 @@ const showMaterials = computed(() => pagedMaterials.value.length > 0)
 
 // 左下角「共 N 筆素材」、手機版切換列的數字（會合流內建素材的檢視）都要跟畫面上看得到的
 // 東西一致：目前這個檢視查到的使用者圖庫張數（total，query-scoped，換檢視就會變）
-// 加上這個檢視會顯示的內建素材數（materialsForView，非合流檢視時是空陣列，等於沒加）。
-const displayTotal = computed(() => total.value + materialsForView.value.length)
+// 加上這個檢視會顯示的內建素材數（materialsForView，非合流檢視或來源衝突時是空陣列）。
+// sourceConflictsWithCategory 時兩邊字面上都不該有東西，直接歸零。
+const displayTotal = computed(() =>
+  sourceConflictsWithCategory.value ? 0 : total.value + materialsForView.value.length,
+)
 
 // 側欄「全部素材」徽章要跟「目前選哪個檢視」無關、永遠顯示整個圖庫的總數，不能用
 // displayTotal（那個會隨目前檢視變動）——要用 counts.all，這是後端 count_by_bucket()
@@ -379,8 +405,18 @@ function buildQuery(): ImageListQuery {
   const q: ImageListQuery = { page: page.value, pageSize: PAGE_SIZE }
   const v = activeView.value
   if (v.kind === 'category') {
-    if (v.dimension === 'mediaType') q.mediaType = 'video'
-    else q.source = v.tag as AssetSource
+    if (v.dimension === 'mediaType') {
+      // 影片分類跟「來源」是不同欄位（mediaType vs source），兩個可以真的疊起來一起篩，
+      // 不像下面 source 維度的分類那樣會撞欄位——這裡才要真的把來源 chip 送給後端。
+      q.mediaType = 'video'
+      if (activeSource.value !== 'all') q.source = activeSource.value as AssetSource
+    } else {
+      // 物件／AI 生成／編輯產物這幾個系統分類本身就是 source 欄位，跟上面的來源 chip
+      // 是同一個欄位——後端一次只能篩一個值，沒辦法疊出「物件 AND 上傳」的交集，
+      // 這裡維持送分類本身的值；chip 選到別的值時，交集在定義上是空的，交給
+      // sourceConflictsWithCategory 在畫面上照字面清空，而不是在這裡硬塞兩個值。
+      q.source = v.tag as AssetSource
+    }
   } else {
     if (v.kind === 'folder') q.folderId = v.folderId
     if (activeSource.value !== 'all') q.source = activeSource.value as AssetSource
@@ -440,7 +476,9 @@ onMounted(() => {
 
 // 頂部提示文字：檢視「全部素材」／系統分類時顯示機器人情境；檢視某個資料夾時改顯示該資料夾的說明
 function folderImageCount(folderId: string | null): number {
-  if (folderId === null) return unfiledCount.value
+  // 「未分類」不只是使用者自己沒歸檔的圖片——內建素材本來就沒有資料夾這個概念，
+  // 邏輯上也都算「未分類」，所以這裡跟 mergesMaterials／materialsForView 一樣要加進去。
+  if (folderId === null) return unfiledCount.value + materials.value.length
   return folders.value.find((f) => f.folderId === folderId)?.imageCount ?? 0
 }
 
@@ -460,11 +498,10 @@ const activeViewLabel = computed(() => {
 })
 const activeViewCount = computed(() => {
   const view = activeView.value
-  if (view.kind === 'all') return allAssetsTotal.value
-  if (view.kind === 'category') {
-    return view.tag === 'object' ? counts.value.object + objectMaterialsCount.value : counts.value[view.tag]
-  }
-  return folderImageCount(view.folderId)
+  if (view.kind === 'folder') return folderImageCount(view.folderId)
+  // 'all' 跟 'category' 都改用 displayTotal：已經考慮了目前這個檢視混了哪些內建素材、
+  // 以及來源 chip 選到衝突組合時要歸零，跟畫面上實際顯示的東西保持一致。
+  return displayTotal.value
 })
 
 const totalPages = computed(() => Math.max(1, Math.ceil(displayTotal.value / PAGE_SIZE)))
