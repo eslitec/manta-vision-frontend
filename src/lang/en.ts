@@ -572,7 +572,7 @@ export default {
     empty: 'No matching assets',
     generatingProgress: 'Generating {progress}%',
     pendingVideoMeta: 'Video · {ratio} · Saved automatically when complete',
-    builtinMaterials: 'Built-in materials (not counted below)',
+    builtinMaterials: 'Built-in materials',
     totalAssets: '{count} assets',
     previousPage: 'Previous page',
     nextPage: 'Next page',
