@@ -129,6 +129,10 @@ export interface BrandProfile {
   avoidWords: string
   logoName?: string // Logo 檔名（顯示用）
   logoUrl?: string // Logo 圖片來源（mock 為 data URL；後端就緒後改存 R2 URL）
+  /** 肖像權同意條款模板（合規頁）；對齊後端 portraitConsentTemplate */
+  portraitConsent: string
+  /** 圖片授權／使用聲明（合規頁）；對齊後端 imageLicense */
+  imageLicense: string
 }
 
 // ── 圖片編輯與 AI 修圖（MV-09 / MV-09b）──

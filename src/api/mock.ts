@@ -144,6 +144,9 @@ const db = {
     avoidWords: '',
     logoName: '',
     logoUrl: '',
+    // 對齊 zh-Hant.ts 的 brandSettings.defaults，讓假後端與真後端的初始畫面一致
+    portraitConsent: '本人同意品牌方將所提供之照片用於 AI 試穿內容之生成與行銷用途…',
+    imageLicense: '所有生成圖片僅供本品牌行銷使用，不得轉授權第三方。',
   } as BrandProfile,
   consent: false,
   session: null as Session | null,
@@ -535,9 +538,12 @@ export const mockApi = {
     await delay(200)
     return JSON.parse(JSON.stringify(db.brand))
   },
-  async saveBrand(profile: BrandProfile): Promise<void> {
+  async saveBrand(profile: BrandProfile): Promise<BrandProfile> {
     await delay(500)
     db.brand = JSON.parse(JSON.stringify(profile))
+    // 真後端 PUT /brand 會回存檔後的完整物件（例如 Logo 換成真正的 R2 網址）；
+    // 假後端沒有這種轉換，但介面要一致，才不會兩邊呼叫端寫法不同
+    return JSON.parse(JSON.stringify(db.brand))
   },
 
   // GET /consent ・ POST /consent（肖像同意，全站一次生效）

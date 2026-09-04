@@ -12,14 +12,15 @@ import type {
   MaterialListResponse,
   MediaType,
 } from '@/types/asset'
-import type { Session } from '@/types/api'
+import type { BrandProfile, Session } from '@/types/api'
 
 // 打真後端的 API 實作。
 //
-// 後端 33 支端點裡，目前接得上的是身分驗證三支、`GET /bots`，以及
-// `feat/gallery-finish` 分支帶來的圖庫／資料夾／內建素材共 10 支（見
-// docs/api-status.md 的「✅ 可串」清單）。其餘（品牌、行銷、指標、修圖、影片）
-// 都還是空殼，所以這裡把 `mockApi` 展開當底，只覆寫已經接得上的方法。
+// 後端 33 支端點裡，目前接得上的是身分驗證三支、`GET /bots`、
+// `feat/gallery-finish` 分支帶來的圖庫／資料夾／內建素材共 10 支，以及
+// 品牌設定 `GET/PUT /brand` 兩支（見 docs/api-status.md 的「✅ 可串」清單）。
+// 其餘（行銷、指標、修圖、影片）都還是空殼，所以這裡把 `mockApi` 展開當底，
+// 只覆寫已經接得上的方法。
 //
 // 後端每補完一支，就把對應的方法從這裡加上去——展開的假資料會自動被蓋掉，
 // 不必一次全部切換，也不會有「切過去整站空白」的斷崖。
@@ -194,6 +195,154 @@ async function listMaterials(category?: 'background' | 'object' | 'model'): Prom
   return data
 }
 
+// ── 品牌設定（brand）──
+// 對齊後端 `docs/api-status.md` §7（GET /brand #31、PUT /brand #32）。
+//
+// 前後端有三處形狀對不上，這裡把決定記下來，之後回頭看才知道為什麼這樣寫：
+// 1. `avoidWords`：前端是單一字串（textarea），後端是陣列。用「、」join／split。
+// 2. `colors`：前端可以無限新增色票（`addColor()`），後端固定只有
+//    primary／secondary／accent 三個具名欄位。這裡永遠只用陣列前 3 個索引對應
+//    這三個欄位——**第 4 個以後的自訂色票不會存到真後端**，這是已知限制。
+// 3. Logo：前端只會產生本機 `data:` URL（從沒真的上傳過），後端要求先
+//    `POST /upload` 拿 `imageId`，PUT /brand 時再用 `logoImageId` 引用它。
+//    這裡在存檔當下偵測 `data:` URL、幫忙補這一步。
+//
+// PUT /brand 是部分更新，三態語意（後端 `docs/api-status.md` §7）：
+// 不帶這個 key＝不動；`null`／`[]`＝明確清空；有值＝設定。但 name／positioning／
+// industry 這三個必填欄位不接受清空，空字串／null 一律 422——這裡不做前端擋，
+// 交給後端的錯誤訊息（不在這次串接範圍內另外做欄位驗證）。
+interface WireColorPalette {
+  primary?: string
+  secondary?: string
+  accent?: string
+}
+interface WireBrand {
+  brandId: string | null
+  name: string | null
+  positioning: string | null
+  industry: string | null
+  website: string | null
+  customerAddress: string | null
+  tone: string[] | null
+  hashtags: string[] | null
+  avoidWords: string[] | null
+  colorPalette: WireColorPalette | null
+  logoImageId: string | null
+  logoUrl: string | null
+  portraitConsentTemplate: string | null
+  imageLicense: string | null
+  isComplete: boolean
+  updatedAt: string | null
+}
+
+const AVOID_WORDS_SEPARATOR = '、'
+function splitAvoidWords(text: string): string[] {
+  return text
+    .split(/[、,，]/)
+    .map((word) => word.trim())
+    .filter(Boolean)
+}
+function joinAvoidWords(words: string[] | null | undefined): string {
+  return (words ?? []).join(AVOID_WORDS_SEPARATOR)
+}
+
+// 色票欄位名稱是固定的三個角色，`label` 只在畫面上索引 3 以後的自訂色票才會被讀到
+// （BrandSettingsView 的 colorLabels 對前 3 個永遠用 i18n 依索引顯示），這裡給的是
+// 對齊 mock.ts 假資料的中文標籤，純粹是預設顯示字，不影響任何邏輯判斷。
+const COLOR_SLOTS = [
+  { key: 'primary', label: '主色' },
+  { key: 'secondary', label: '輔色' },
+  { key: 'accent', label: '點綴色' },
+] as const
+
+function toColors(palette: WireColorPalette | null): { label: string; hex: string }[] {
+  if (!palette) return []
+  return COLOR_SLOTS.filter((slot) => palette[slot.key]).map((slot) => ({
+    label: slot.label,
+    hex: (palette[slot.key] as string).toUpperCase(),
+  }))
+}
+
+/** 只用陣列前 3 個索引對應 primary／secondary／accent；沒有的欄位就不放進去（三態：不動）。 */
+function buildColorPalette(colors: { hex: string }[]): WireColorPalette | null {
+  const palette: WireColorPalette = {}
+  COLOR_SLOTS.forEach((slot, index) => {
+    if (colors[index]?.hex) palette[slot.key] = colors[index].hex.toUpperCase()
+  })
+  return Object.keys(palette).length ? palette : null
+}
+
+// 後端不回傳 Logo 檔名，只有網址；顯示用的檔名就從網址最後一段猜一個回來。
+function logoNameFromUrl(url: string): string {
+  try {
+    const last = new URL(url).pathname.split('/').pop()
+    return last ? decodeURIComponent(last) : ''
+  } catch {
+    return ''
+  }
+}
+
+function toBrand(wire: WireBrand): BrandProfile {
+  return {
+    name: wire.name ?? '',
+    positioning: wire.positioning ?? '',
+    website: wire.website ?? '',
+    industry: wire.industry ?? '',
+    colors: toColors(wire.colorPalette),
+    tones: wire.tone ?? [],
+    hashtags: wire.hashtags ?? [],
+    addressing: wire.customerAddress ?? '',
+    avoidWords: joinAvoidWords(wire.avoidWords),
+    logoName: wire.logoUrl ? logoNameFromUrl(wire.logoUrl) : '',
+    logoUrl: wire.logoUrl ?? '',
+    portraitConsent: wire.portraitConsentTemplate ?? '',
+    imageLicense: wire.imageLicense ?? '',
+  }
+}
+
+/** data: URL（FileReader 讀出來的本機預覽）轉回 File，才能走既有的 uploadImage()。 */
+async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
+  const blob = await (await fetch(dataUrl)).blob()
+  return new File([blob], filename || 'logo.png', { type: blob.type || 'image/png' })
+}
+
+async function getBrand(): Promise<BrandProfile> {
+  const { data } = await http.get<WireBrand>('/brand')
+  return toBrand(data)
+}
+
+async function saveBrand(profile: BrandProfile): Promise<BrandProfile> {
+  // logoImageId 三態：undefined＝不動（Logo 沒變，沿用已經在後端的那個）；
+  // null＝使用者清空了 Logo；字串＝新上傳（或换過）的 Logo 的 imageId。
+  let logoImageId: string | null | undefined
+  if (profile.logoUrl && profile.logoUrl.startsWith('data:')) {
+    // 還是本機預覽，代表這張還沒真的上傳過——先補這一步再存
+    const file = await dataUrlToFile(profile.logoUrl, profile.logoName ?? 'logo.png')
+    const asset = await uploadImage(file)
+    logoImageId = asset.id
+  } else if (!profile.logoUrl) {
+    logoImageId = null
+  }
+
+  const body: Record<string, unknown> = {
+    name: profile.name,
+    positioning: profile.positioning,
+    industry: profile.industry,
+    website: profile.website || null,
+    customerAddress: profile.addressing || null,
+    tone: profile.tones,
+    hashtags: profile.hashtags,
+    avoidWords: splitAvoidWords(profile.avoidWords),
+    colorPalette: buildColorPalette(profile.colors),
+    portraitConsentTemplate: profile.portraitConsent || null,
+    imageLicense: profile.imageLicense || null,
+  }
+  if (logoImageId !== undefined) body.logoImageId = logoImageId
+
+  const { data } = await http.put<WireBrand>('/brand', body)
+  return toBrand(data)
+}
+
 export const realApi = {
   ...mockApi,
   login,
@@ -209,4 +358,6 @@ export const realApi = {
   renameFolder,
   deleteFolder,
   listMaterials,
+  getBrand,
+  saveBrand,
 }
