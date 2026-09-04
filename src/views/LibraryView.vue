@@ -19,11 +19,11 @@
     aside#library-folders.folders(:class="{ 'isMobileOpen': foldersOpen }")
       button.folders__item(:class="{ 'isActive': activeView.kind === 'all' }" @click="setView({ kind: 'all' })")
         span {{ t('library.allAssets') }}
-        span.folders__count {{ displayTotal }}
+        span.folders__count {{ allAssetsTotal }}
       .folders__section {{ t('library.systemCategories') }}
       button.folders__item(v-for="c in categoryTags" :key="c.tag" :class="{ 'isActive': activeView.kind === 'category' && activeView.tag === c.tag }" @click="setView({ kind: 'category', tag: c.tag, dimension: c.dimension })")
         span {{ t(`sources.${c.tag}`) }}
-        span.folders__count {{ counts[c.tag] }}
+        span.folders__count {{ c.tag === 'object' ? counts[c.tag] + objectMaterialsCount : counts[c.tag] }}
       .folders__section.folders__section--folders
         span {{ t('library.myFolders') }}
         button.folders__addIcon(type="button" @click="startAddFolder" :aria-label="t('library.addFolder')")
@@ -252,43 +252,51 @@ const materialCategoryLabels: Record<Material['category'], string> = {
 function materialCategoryLabel(category: Material['category']): string {
   return materialCategoryLabels[category]
 }
-// 內建素材不屬於任何資料夾／來源／分類（跟下面 pendingTasks 是同樣的道理，見那邊的註解），
-// 只在「全部素材」第一頁額外插入顯示；換頁、切資料夾、切系統分類、關鍵字搜尋時都不能出現，
-// 否則會讓使用者誤以為這些素材屬於當下篩選的範圍。
-// 內建素材（materials）永遠整批載入、不分頁；使用者自己的圖庫在「全部素材」檢視
-// 也已經整批撈回來（見 fetchAllRealAssets），兩邊在這裡合併成一份虛擬清單，
-// 依 materials 排在前、真實素材排在後的順序，用 PAGE_SIZE 在前端切出目前這一頁。
-// 資料夾／系統分類／關鍵字搜尋這些檢視完全不會混入內建素材（見下面 pagedMaterials）。
+// 內建素材不屬於任何資料夾，但「分類」是例外：素材本身有 category（background／object／model），
+// 跟系統分類的「物件素材」（source === 'object'，使用者自己的圖庫）剛好標籤撞名，使用者會很自然
+// 以為點「物件素材」分類就看得到標「物件素材」的內建素材卡片——所以這裡讓兩者真的合流。
+// 「背景素材」「模特素材」目前沒有對應的系統分類（見 CATEGORY_TAGS），所以只在「全部素材」出現；
+// 資料夾／關鍵字搜尋／其他系統分類仍然不會混入任何內建素材，避免使用者誤以為那些篩選結果裡有它們。
+const objectMaterialsCount = computed(() => materials.value.filter((m) => m.category === 'object').length)
+const mergesMaterials = computed(() => {
+  const v = activeView.value
+  return v.kind === 'all' || (v.kind === 'category' && v.dimension === 'source' && v.tag === 'object')
+})
+const materialsForView = computed<Material[]>(() => {
+  if (!mergesMaterials.value) return []
+  return activeView.value.kind === 'all' ? materials.value : materials.value.filter((m) => m.category === 'object')
+})
+
+// 內建素材（materialsForView）永遠整批載入、不分頁；使用者自己的圖庫在會合流的檢視裡
+// 也已經整批撈回來（見 fetchAllRealAssets），兩邊在這裡合併成一份虛擬清單，依內建素材
+// 排在前、真實素材排在後的順序，用 PAGE_SIZE 在前端切出目前這一頁。
 const pagedMaterials = computed(() => {
-  if (activeView.value.kind !== 'all') return []
   const start = (page.value - 1) * PAGE_SIZE
-  return materials.value.slice(start, start + PAGE_SIZE)
+  return materialsForView.value.slice(start, start + PAGE_SIZE)
 })
 const pagedRealAssets = computed(() => {
-  if (activeView.value.kind !== 'all') return assets.value
+  if (!mergesMaterials.value) return assets.value
   const start = (page.value - 1) * PAGE_SIZE
   const end = page.value * PAGE_SIZE
-  const realStart = Math.max(0, start - materials.value.length)
-  const realEnd = Math.max(0, end - materials.value.length)
+  const realStart = Math.max(0, start - materialsForView.value.length)
+  const realEnd = Math.max(0, end - materialsForView.value.length)
   return assets.value.slice(realStart, realEnd)
 })
 const showMaterials = computed(() => pagedMaterials.value.length > 0)
 
-// 側欄「全部素材」徽章、手機版切換列的數字、跟左下角「共 N 筆素材」都要跟畫面上看得到的東西一致：
-// 使用者自己的圖庫（total，後端分頁的權威值）
-// 加上內建素材（materials 不分頁，永遠整批載入）。只有「全部素材」檢視會混內建素材進畫面，
-// 資料夾／系統分類／關鍵字搜尋這些篩選結果裡不會出現內建素材（見 showMaterials 註解），
-// 這裡的計數也要跟著排除，不然文字會暗示篩選結果裡有內建素材、但畫面上其實看不到。
-//
-// 右下角頁碼（totalPages）刻意不跟著加內建素材：後端沒有「內建素材第二頁」這種東西——
-// GET /materials 每次都是整批回傳、不分頁，永遠只掛在第 1 頁。真正決定「要不要有第 2 頁」
-// 的只有使用者自己圖庫的張數（total），這是後端 GET /images 唯一有分頁能力的資源。
-const displayTotal = computed(() =>
-  activeView.value.kind === 'all' ? total.value + materials.value.length : total.value,
-)
+// 左下角「共 N 筆素材」、手機版切換列的數字（會合流內建素材的檢視）都要跟畫面上看得到的
+// 東西一致：目前這個檢視查到的使用者圖庫張數（total，query-scoped，換檢視就會變）
+// 加上這個檢視會顯示的內建素材數（materialsForView，非合流檢視時是空陣列，等於沒加）。
+const displayTotal = computed(() => total.value + materialsForView.value.length)
 
-// 資料夾／系統分類視圖是伺服器分頁，assets 只有「目前這一頁」的內容；「全部素材」視圖
-// 為了跟內建素材合併分頁，assets 改成整批撈回來（見 fetchAllRealAssets）。不管哪種情況，
+// 側欄「全部素材」徽章要跟「目前選哪個檢視」無關、永遠顯示整個圖庫的總數，不能用
+// displayTotal（那個會隨目前檢視變動）——要用 counts.all，這是後端 count_by_bucket()
+// 算出來的，不受目前篩選條件影響的權威值（見 useAssets.ts 的 counts 註解）。
+const allAssetsTotal = computed(() => counts.value.all + materials.value.length)
+
+// 不會合流內建素材的視圖（資料夾／大部分系統分類）是伺服器分頁，assets 只有「目前這一頁」
+// 的內容；會合流內建素材的視圖（見 mergesMaterials）為了合併分頁，assets 改成整批撈回來
+// （見 fetchAllRealAssets）。不管哪種情況，
 // 批次選取都允許跨頁累積（見下方 selectedIds），刪除確認彈窗要秀出所有已選素材的縮圖與
 // 名稱，不能只看目前這頁看得到的。這裡把每次載入過的素材都記下來，選取時就查得到完整資料。
 const assetCache = ref<Record<string, Asset>>({})
@@ -405,7 +413,7 @@ async function fetchAllRealAssets(filters: Omit<ImageListQuery, 'page' | 'pageSi
 }
 
 async function fetchAssets() {
-  if (activeView.value.kind === 'all') {
+  if (mergesMaterials.value) {
     loading.value = true
     try {
       const { page: _page, pageSize: _pageSize, ...filters } = buildQuery()
@@ -452,15 +460,14 @@ const activeViewLabel = computed(() => {
 })
 const activeViewCount = computed(() => {
   const view = activeView.value
-  if (view.kind === 'all') return displayTotal.value
-  if (view.kind === 'category') return counts.value[view.tag]
+  if (view.kind === 'all') return allAssetsTotal.value
+  if (view.kind === 'category') {
+    return view.tag === 'object' ? counts.value.object + objectMaterialsCount.value : counts.value[view.tag]
+  }
   return folderImageCount(view.folderId)
 })
 
-const totalPages = computed(() => {
-  const combined = activeView.value.kind === 'all' ? total.value + materials.value.length : total.value
-  return Math.max(1, Math.ceil(combined / PAGE_SIZE))
-})
+const totalPages = computed(() => Math.max(1, Math.ceil(displayTotal.value / PAGE_SIZE)))
 
 // 篩選條件切換時重回第 1 頁；先前的批次選取多半已經不對應目前畫面上看到的素材，直接清空避免誤操作
 watch([activeView, activeSource], () => {
