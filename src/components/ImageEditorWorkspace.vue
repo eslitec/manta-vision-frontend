@@ -2338,6 +2338,12 @@ const previews = computed(() =>
   display: none;
 }
 .retouchPanel {
+  // 明確加 min-height:0：.retouchPanel 是 .workspace（CSS Grid）裡的一個 grid item，
+  // 「快速修飾」選項變多時內容變高，沒有這行的話這個 cell 可能撐高整個 grid row，
+  // 而不是縮到 row 原本的高度、靠自己的 overflow-y:auto 在內部捲動（配上面
+  // scrollbar-width:none 隱藏捲軸，讓使用者看不出來在捲）。撐高的話，「整個頁面」
+  // 會跟著變長，逼出 DefaultLayout .content 那層的瀏覽器原生捲軸，跑到畫面最右邊。
+  min-height: 0;
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
