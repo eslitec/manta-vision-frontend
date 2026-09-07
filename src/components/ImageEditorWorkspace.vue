@@ -11,7 +11,9 @@
       IconChevronDown(:class="{ isUp: retouchSetupOpen }")
     aside#retouch-setup.retouchPanel(:class="{ 'isMobileOpen': retouchSetupOpen }")
       h3 {{ t('editor.retouch.steps.source') }}
-      .sourceThumb: IconImagePlaceholder
+      .sourceThumb
+        img.editorSourceImg(v-if="selectedAssetUrl" :src="selectedAssetUrl" :alt="selectedAssetName")
+        IconImagePlaceholder(v-else)
       .sourceActions
         AppButton(variant="outline" @click="openEditorPicker") {{ t('common.selectFromLibrary') }}
         span.uploadTip {{ t('common.orDragUpload') }}
@@ -54,7 +56,12 @@
     section.resultPanel
       header.resultHead #[strong {{ t('editor.retouch.result') }}] #[span {{ retouchAppliedLabel }}]
       .compare
-        .compare__item #[span {{ t('editor.original') }}] #[.compare__thumb: IconImagePlaceholder] #[small {{ t('editor.uploadedDate') }}]
+        .compare__item
+          span {{ t('editor.original') }}
+          .compare__thumb
+            img.editorSourceImg(v-if="selectedAssetUrl" :src="selectedAssetUrl" :alt="selectedAssetName")
+            IconImagePlaceholder(v-else)
+          small {{ t('editor.uploadedDate') }}
         .compare__item
           span.active {{ t('editor.afterRetouch') }}
           .compare__thumb(:class="{ isLoading: retouching }")
@@ -107,7 +114,9 @@
         span.visuallyHidden(v-if="saveError" role="alert") {{ t('editor.saveFailed') }}
       .canvas
         .artboard(ref="artboardRef" :class="{cropping: tool==='crop'}" :style="artboardZoomStyle")
-          IconImagePlaceholder(v-if="originalLayer.visible")
+          template(v-if="originalLayer.visible")
+            img.editorSourceImg(v-if="selectedAssetUrl" :src="selectedAssetUrl" :alt="selectedAssetName")
+            IconImagePlaceholder(v-else)
           .textObject(
             v-if="textLayer?.visible"
             :class="{ isDragging: textDragging, isEditing: textEditing, isCropPreview: tool === 'crop' }"
@@ -409,6 +418,10 @@ const editorPickerOpen = ref(false)
 // 所以這顆 picker 現在只服務「選擇要編輯的素材」一種用途。
 const editorPickerTitle = computed(() => t('editor.sourcePickerTitle'))
 const selectedAssetName = ref(t('editor.demoAsset'))
+// demo 素材沒有真實圖檔（mock 的 url 留空，見 types/asset.ts）；從圖庫選了真的素材
+// 之後才有 url 可畫，三處縮圖（retouch 來源、比對面板原圖、主畫布原圖圖層）都共用
+// 這一個 ref，沒有 url 時維持原本的 IconImagePlaceholder 佔位，不強制顯示破圖。
+const selectedAssetUrl = ref('')
 const savingAsset = ref(false)
 const savedAssetId = ref('')
 const saveError = ref(false)
@@ -418,6 +431,7 @@ const openEditorPicker = () => {
 }
 const selectEditorAsset = (asset: Asset) => {
   selectedAssetName.value = asset.name
+  selectedAssetUrl.value = asset.url ?? ''
   savedAssetId.value = ''
   // 換了來源素材＝重新開始，先前的扣款紀錄不再屬於這張圖
   usedTools.value = []
@@ -1390,6 +1404,16 @@ const previews = computed(() =>
   justify-content: center;
   flex-direction: column;
   gap: 0.625rem;
+}
+// 三處縮圖（來源／原圖比對／主畫布）共用：選了真的素材（有 url）就鋪滿容器、
+// 蓋掉裁切／填滿都用 cover；沒有 url（demo 素材、mock 資料）時模板會退回
+// IconImagePlaceholder，這顆 class 不會被用到。
+.editorSourceImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
 }
 .artboard {
   width: min(32.5rem, calc(100% - 2rem));
