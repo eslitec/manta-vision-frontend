@@ -322,7 +322,7 @@
           strong {{ p.name }}
           small(:class="{ warn: p.warn && ratio === 'custom', full: !p.warn }") {{ p.warn ? (ratio === 'custom' ? t('editor.croppedWarning') : t('editor.paddedNote')) : t('editor.fullyVisible') }}
       p.cropNote {{ t('editor.cropNote') }}
-  ImagePickerDialog(v-model:open="editorPickerOpen" :title="editorPickerTitle" @select="selectEditorAsset")
+  ImagePickerDialog(v-model:open="editorPickerOpen" :title="editorPickerTitle" :subtitle="t('editor.sourcePickerSubtitle')" @select="selectEditorAsset")
   SaveAssetDialog(
     v-model:open="saveDialogOpen"
     :default-name="suggestedAssetName"

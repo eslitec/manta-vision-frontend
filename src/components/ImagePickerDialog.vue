@@ -5,7 +5,7 @@ Teleport(to="body")
       header.picker__head
         div
           .picker__title(:id="titleId") {{ resolvedTitle }}
-          .picker__sub(:id="descriptionId") {{ t('imagePicker.subtitle') }}
+          .picker__sub(:id="descriptionId") {{ resolvedSubtitle }}
         button.picker__close(data-dialog-initial-focus @click="close" :aria-label="t('common.close')")
           IconClose
       .picker__toolbar
@@ -40,8 +40,9 @@ import { IconCheck, IconClose, IconImagePlaceholder, IconMovie } from '@/compone
 import type { Asset } from '@/types/asset'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 
-const props = withDefaults(defineProps<{ title?: string; multiple?: boolean }>(), {
+const props = withDefaults(defineProps<{ title?: string; subtitle?: string; multiple?: boolean }>(), {
   title: undefined,
+  subtitle: undefined,
   multiple: false,
 })
 const emit = defineEmits<{
@@ -58,6 +59,7 @@ const { t } = useI18n()
 
 const keyword = ref('')
 const resolvedTitle = computed(() => props.title ?? t('imagePicker.defaultTitle'))
+const resolvedSubtitle = computed(() => props.subtitle ?? t('imagePicker.subtitle'))
 // 設計稿 dlg_filter（node 125:579）只有三個篩選 pill；編輯產物沒有獨立篩選，
 // 但仍會出現在「全部」的清單裡（設計稿的 dlg_grid 就有一張標「編輯產物」）。
 const sources = computed(() => [
