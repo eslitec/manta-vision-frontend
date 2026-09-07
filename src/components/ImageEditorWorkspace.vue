@@ -188,10 +188,10 @@
             button.cropHandle.cropHandle--sw(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'sw')")
             button.cropHandle.cropHandle--se(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'se')")
           .removeOverlay(v-if="applyingTool === 'remove' && !removeOverlayDismissed")
-            IconAiSparkle.removeOverlay__spinner
+            IconSpinnerRing.removeOverlay__spinner
             strong {{ t('editor.tools.removeInProgress') }}
             small {{ t('editor.tools.removeInProgressHint') }}
-            AppButton(variant="outline" size="compact" @click="removeOverlayDismissed = true") {{ t('common.cancel') }}
+            AppButton(variant="outline" @click="removeOverlayDismissed = true") {{ t('common.cancel') }}
         .cropAppliedActions(v-if="tool === 'crop'")
           AppButton(variant="outline" size="compact" @click="undoAppliedCrop") {{ t('editor.cropApplied.undo') }}
           AppButton(variant="outline" size="compact" @click="recropCustom") {{ t('editor.cropApplied.recrop') }}
@@ -1491,8 +1491,9 @@ const previews = computed(() =>
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.375rem;
-  background: rgba(255, 255, 255, 0.92);
+  gap: 0.75rem; // 對齊 Figma node 1311:1042 的 12px 間距，原本 6px 太擠
+  background: rgba(255, 255, 255, 0.96); // 對齊 Figma，原本 0.92 偏透明
+  border-radius: 4px; // 與 .artboard 同角度，避免方角蓋住外層圓角邊框
   text-align: center;
 
   strong {
@@ -1501,13 +1502,13 @@ const previews = computed(() =>
   }
 
   small {
-    color: #9299aa;
+    color: #606692; // 對齊 Figma node 1311:1047，原本 #9299aa 太淺
     font-size: 0.75rem;
   }
 }
 .removeOverlay__spinner {
-  width: 2rem;
-  height: 2rem;
+  width: 2.5rem; // 對齊 Figma 40x40，原本 2rem(32px)偏小
+  height: 2.5rem;
   color: $blue-dark-500;
   animation: editorSpin 0.9s linear infinite;
 }
