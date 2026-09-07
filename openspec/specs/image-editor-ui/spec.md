@@ -87,13 +87,20 @@ AI 修圖 SHALL 提供分項修飾（去除雜物／修復瑕疵／光線校正�
 #### Scenario: AI 修圖執行中顯示處理進度
 
 - **WHEN** 使用者送出修圖後仍在等待結果
-- **THEN** 「修圖後」對比欄位顯示處理中狀態，包含目前處理到第幾個項目與進度條
+- **THEN** 「修圖後」對比欄位顯示處理中狀態，包含目前處理到第幾個項目、一個從 0% 起算並隨時間漸進到 100% 的進度條，以及估計剩餘秒數的倒數文字；進度條與剩餘秒數 SHALL 共用同一份估計總時長，SHALL NOT 各自獨立換算
+
+##### Example:
+
+- **GIVEN** 使用者選了 2 個修圖項目，估計每項耗時 9 秒（估計總時長 18 秒）
+- **WHEN** 修圖開始執行，經過 9 秒
+- **THEN** 進度條顯示約 50%、倒數文字顯示「約剩 9 秒」；SHALL NOT 因為只選了 2 個項目就在開場直接跳到 50%（進度條從 0% 起算，隨秒數推進才到 50%，不是依項目數量直接換算）
 
 <!-- @trace
 source: sync-mv-09-design, fix-mv09-editor-figma-mismatches, fix-mv09-retouch-method-style
-updated: 2026-09-01
+updated: 2026-09-07
 code:
   - src/components/ImageEditorWorkspace.vue
+  - src/components/icons/IconSpinnerRing.vue
   - src/components/SaveAssetDialog.vue
   - src/components/ImagePickerDialog.vue
   - src/composables/useAssets.ts
