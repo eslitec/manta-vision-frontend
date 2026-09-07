@@ -564,13 +564,19 @@ watch(
     retouchSetupOpen.value = false
   },
 )
-// 對齊 Figma（1311:580／1311:814）修圖結果面板的 loading_box：用實際選取的項目模擬逐步進度。
-// 「約剩 X 秒」目前是估計值：每步驟抓 9 秒，對齊 Figma 範例「步驟 2/3・約剩 18 秒」
-//（還剩 2 步 × 9 秒）。mock 本身 900ms 就回來，這個倒數只是先把畫面感覺做出來——
-// 等後端 /edit 真的接上、有實際生成耗時後，要換成後端回傳（或至少量測過）的秒數，
-// 不能一直用這個猜的常數。
+// 對齊 Figma（1311:580／1311:814／1311:820）修圖結果面板的 loading_box。
+// 步驟文字（stepLabel）仍用實際選取的項目模擬逐步進度；但進度條與「約剩 X 秒」
+// 兩者要對得上同一份時間軸，所以改成共用同一個估計總秒數：每步驟抓 9 秒，
+// 對齊 Figma 範例「步驟 2/3・約剩 18 秒」（還剩 2 步 × 9 秒）。進度條寬度＝
+// 已過秒數 ÷ 估計總秒數，從 0% 開始隨秒數真的慢慢變滿，不是原本那種只依
+// 步驟數跳格子（例如只選 2 個項目時，進度條會直接從 50% 起跳，看起來像是
+// 「已經做了一半」而非「才剛開始」）。
+// mock 本身 900ms 就回來，這組秒數只是先把畫面感覺做出來——等後端 /edit
+// 真的接上、有實際生成耗時後，要換成後端回傳（或至少量測過）的秒數，不能
+// 一直用這個猜的常數。
 const RETOUCH_SECONDS_PER_STEP = 9
 const retouchStepIndex = ref(0)
+const retouchTotalSeconds = ref(1)
 const retouchSecondsRemaining = ref(0)
 const retouchStepNames = computed(() =>
   retouchMethod.value === 'quick'
@@ -584,8 +590,9 @@ const retouchStepLabel = computed(() => {
   return t('editor.retouch.stepLabel', { current: current + 1, total: names.length, name: names[current] })
 })
 const retouchProgressPercent = computed(() => {
-  const total = retouchStepNames.value.length || 1
-  return Math.min(100, Math.round(((retouchStepIndex.value + 1) / total) * 100))
+  const total = retouchTotalSeconds.value || 1
+  const elapsed = total - retouchSecondsRemaining.value
+  return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)))
 })
 const retouchTimeRemainingLabel = computed(() =>
   t('editor.retouch.timeRemaining', { seconds: retouchSecondsRemaining.value }),
@@ -598,7 +605,8 @@ async function startRetouch() {
   retouchError.value = ''
   retouchStepIndex.value = 0
   const totalSteps = retouchStepNames.value.length || 1
-  retouchSecondsRemaining.value = totalSteps * RETOUCH_SECONDS_PER_STEP
+  retouchTotalSeconds.value = totalSteps * RETOUCH_SECONDS_PER_STEP
+  retouchSecondsRemaining.value = retouchTotalSeconds.value
   const stepTimer = setInterval(() => {
     if (retouchStepIndex.value < totalSteps - 1) retouchStepIndex.value += 1
   }, Math.max(200, 900 / totalSteps))
@@ -1531,7 +1539,7 @@ const previews = computed(() =>
   width: 8rem;
   height: 0.375rem;
   border-radius: 0.1875rem;
-  background: #d2d5dd;
+  background: #eff2fa; // 對齊 Figma node 1311:820 的軌道色，不是既有的 #d2d5dd
   overflow: hidden;
 }
 .retouchProgress__fill {
