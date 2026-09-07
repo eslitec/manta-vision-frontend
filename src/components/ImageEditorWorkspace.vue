@@ -64,6 +64,7 @@
               small {{ retouchStepLabel }}
               .retouchProgress__bar
                 .retouchProgress__fill(:style="{ width: `${retouchProgressPercent}%` }")
+              small.retouchProgress__eta {{ retouchTimeRemainingLabel }}
             IconImagePlaceholder(v-else)
           small(v-if="!retouching") {{ t('editor.consumed', { count: lastRetouchCost }) }}
       footer.resultActions
@@ -562,9 +563,14 @@ watch(
     retouchSetupOpen.value = false
   },
 )
-// 對齊 Figma（1311:580）修圖結果面板的 loading_box：用實際選取的項目模擬逐步進度，
-// 不虛構「約剩 X 秒」這種 mock 沒辦法保證準確的倒數文字。
+// 對齊 Figma（1311:580／1311:814）修圖結果面板的 loading_box：用實際選取的項目模擬逐步進度。
+// 「約剩 X 秒」目前是估計值：每步驟抓 9 秒，對齊 Figma 範例「步驟 2/3・約剩 18 秒」
+//（還剩 2 步 × 9 秒）。mock 本身 900ms 就回來，這個倒數只是先把畫面感覺做出來——
+// 等後端 /edit 真的接上、有實際生成耗時後，要換成後端回傳（或至少量測過）的秒數，
+// 不能一直用這個猜的常數。
+const RETOUCH_SECONDS_PER_STEP = 9
 const retouchStepIndex = ref(0)
+const retouchSecondsRemaining = ref(0)
 const retouchStepNames = computed(() =>
   retouchMethod.value === 'quick'
     ? retouchOptionsForMethod.value.filter((option) => option.on).map((option) => t(`editor.retouch.options.${option.key}.name`))
@@ -580,6 +586,9 @@ const retouchProgressPercent = computed(() => {
   const total = retouchStepNames.value.length || 1
   return Math.min(100, Math.round(((retouchStepIndex.value + 1) / total) * 100))
 })
+const retouchTimeRemainingLabel = computed(() =>
+  t('editor.retouch.timeRemaining', { seconds: retouchSecondsRemaining.value }),
+)
 // 送出修圖：扣款與最終金額都以後端為準，畫面上的預估只是預估。
 // 送出的項目取 retouchOptionsForMethod（而非全部），否則指令式修圖會把沒收費的快速項目也列進結果。
 async function startRetouch() {
@@ -588,9 +597,13 @@ async function startRetouch() {
   retouchError.value = ''
   retouchStepIndex.value = 0
   const totalSteps = retouchStepNames.value.length || 1
+  retouchSecondsRemaining.value = totalSteps * RETOUCH_SECONDS_PER_STEP
   const stepTimer = setInterval(() => {
     if (retouchStepIndex.value < totalSteps - 1) retouchStepIndex.value += 1
   }, Math.max(200, 900 / totalSteps))
+  const secondsTimer = setInterval(() => {
+    if (retouchSecondsRemaining.value > 1) retouchSecondsRemaining.value -= 1
+  }, 1000)
   try {
     const result = await api.retouchImage({
       method: retouchMethod.value,
@@ -606,6 +619,7 @@ async function startRetouch() {
     retouchError.value = isInsufficientFeed(error) ? t('errors.insufficientFeed') : t('errors.generationFailed')
   } finally {
     clearInterval(stepTimer)
+    clearInterval(secondsTimer)
     retouching.value = false
   }
 }
