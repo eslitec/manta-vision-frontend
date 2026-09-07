@@ -59,7 +59,7 @@
           span.active {{ t('editor.afterRetouch') }}
           .compare__thumb(:class="{ isLoading: retouching }")
             .retouchProgress(v-if="retouching")
-              IconAiSparkle.retouchProgress__spinner
+              IconSpinnerRing.retouchProgress__spinner
               strong {{ t('editor.retouch.inProgress') }}
               small {{ retouchStepLabel }}
               .retouchProgress__bar
@@ -346,6 +346,7 @@ import { usePercentDrag } from '@/composables/usePercentDrag'
 import { useDismissableMenu } from '@/composables/useDismissableMenu'
 import {
   IconAiSparkle,
+  IconSpinnerRing,
   IconAddObject,
   IconImagePlaceholder,
   IconLayerSort,
