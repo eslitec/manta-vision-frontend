@@ -190,7 +190,7 @@
             .objectSelection__handle.objectSelection__handle--sw
             .objectSelection__handle.objectSelection__handle--se
             span.objectSelection__tip {{ t('editor.addObject.selectionTip') }}
-          .cropFrame(v-if="tool === 'crop'" :style="cropFrameStyle")
+          .cropFrame(v-if="tool === 'crop'" :style="cropFrameStyle" :class="{ isDragging: cropDragging }" @pointerdown="startCropMove")
             .cropAppliedBadge(v-if="ratio !== 'custom'") {{ t('editor.cropApplied.badge', { ratio: cropRatioLabel, width: cropOutputDimensions.width, height: cropOutputDimensions.height }) }}
             button.cropHandle.cropHandle--nw(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'nw')")
             button.cropHandle.cropHandle--ne(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'ne')")
@@ -1158,9 +1158,35 @@ const startCropResize = (event: PointerEvent, corner: CropCorner) => {
     }
   })
 }
+const cropMoveDrag = usePointerDrag()
+const cropDragging = ref(false)
+// 使用者需求：點在裁切框「白色可見範圍」內、按住滑鼠左鍵拖曳時，整個取景框要跟著滑鼠
+// 上下左右移動，放開左鍵才停止——不論目前是自訂還是固定比例，都只改變框的位置（x/y），
+// 不改變寬高／比例。四個角落把手的 pointerdown 都有 .stop，不會冒泡到這裡，
+// 「移動」跟「縮放」兩種拖曳互不干擾。
+const startCropMove = (event: PointerEvent) => {
+  if (event.button !== 0 || !artboardRef.value) return
+  event.preventDefault()
+  const bounds = artboardRef.value.getBoundingClientRect()
+  const start = { pointerX: event.clientX, pointerY: event.clientY, x: cropRect.x, y: cropRect.y }
+  cropDragging.value = true
+  cropMoveDrag.start(
+    (moveEvent) => {
+      const dx = ((moveEvent.clientX - start.pointerX) / bounds.width) * 100
+      const dy = ((moveEvent.clientY - start.pointerY) / bounds.height) * 100
+      cropRect.x = Math.max(0, Math.min(100 - cropRect.width, start.x + dx))
+      cropRect.y = Math.max(0, Math.min(100 - cropRect.height, start.y + dy))
+    },
+    () => {
+      cropDragging.value = false
+    },
+  )
+}
+
 onBeforeUnmount(() => {
   artboardResizeObserver?.disconnect()
   cropResizeDrag.stop()
+  cropMoveDrag.stop()
   textDrag.stop()
   textResizeDrag.stop()
   objectPointerDrag.stop()
@@ -1390,6 +1416,12 @@ const previews = computed(() =>
   z-index: 100;
   border: 2px dashed #2e3567;
   box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.32);
+  cursor: grab;
+  touch-action: none;
+
+  &.isDragging {
+    cursor: grabbing;
+  }
 }
 .cropHandle {
   position: absolute;
