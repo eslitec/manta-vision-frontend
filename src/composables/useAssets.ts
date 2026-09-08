@@ -80,9 +80,11 @@ export function useAssets() {
     }
   }
 
-  // 上傳素材（來源＝上傳）；可指定落到哪個資料夾
-  async function upload(file: File, folderId?: string) {
-    return api.uploadImage(file, folderId)
+  // 上傳素材（來源＝上傳）；可指定落到哪個資料夾。
+  // sourceImageId：編輯器「另存為新素材」帶原圖 id 時才有值，後端依此標 source=edit、
+  // derivedFrom 指回原圖（非破壞性）。
+  async function upload(file: File, folderId?: string, sourceImageId?: string) {
+    return api.uploadImage(file, folderId, sourceImageId)
   }
 
   // 批次把選取素材移至資料夾（1:N＝替換歸屬，會離開原資料夾）；後端沒有批次端點，逐筆呼叫 PUT /images/{id}
