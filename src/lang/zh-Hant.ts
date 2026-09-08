@@ -581,6 +581,9 @@ export default {
       keepLayers: '保留圖層資訊，之後可再編輯',
       alsoDownload: '同時下載一份到本機',
       noCost: '儲存不消耗飼料',
+      errorNoSourceImage: '目前的素材沒有真實圖檔可以裁切，請先從圖庫選擇一張真的素材再試一次。',
+      errorImageAccess: '無法讀取原圖，可能是網路問題或圖片伺服器的跨網域設定擋下讀取，請稍後再試；如果持續發生，麻煩回報開發人員。',
+      errorGeneric: '儲存失敗，請稍後再試一次。',
       suffixes: {
         remove: '去背版',
         object: '加入物件版',
