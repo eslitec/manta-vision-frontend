@@ -69,6 +69,8 @@ Teleport(to="body")
         AppCheckbox(v-model="alsoDownload")
           span.saveAssetDialog__optionText {{ t('editor.saveDialog.alsoDownload') }}
 
+      p.saveAssetDialog__banner(v-if="error" role="alert") {{ error }}
+
       .saveAssetDialog__actions
         span.saveAssetDialog__nocost {{ t('editor.saveDialog.noCost') }}
         span.saveAssetDialog__grow
@@ -99,6 +101,9 @@ const props = defineProps<{
   appliedSummary?: string // 「已套用：…」的編輯摘要
   metaLine?: string // 尺寸／格式／檔案大小，例如 1024 × 768 px ・ PNG ・ 約 1.4 MB
   previewSrc?: string // 縮圖來源；沒有時顯示佔位圖示
+  // 使用者反饋：另存失敗時畫面完全沒有反應——之前沒有任何看得到的錯誤訊息（只有螢幕報讀器
+  // 聽得到的 aria-live alert），這裡補一個看得到的錯誤橫幅；有值才顯示，對話框繼續開著讓使用者重試。
+  error?: string
 }>()
 const emit = defineEmits<{
   (event: 'save', payload: { name: string; folder: string; keepLayers: boolean; alsoDownload: boolean }): void
@@ -422,6 +427,15 @@ useAccessibleDialog(open, dialogRef, cancel)
   &__optionText {
     color: $blue-dark-500;
     font-size: 0.75rem;
+  }
+
+  &__banner {
+    border-radius: 8px;
+    background: rgba(214, 68, 68, 0.1);
+    padding: 0.5rem 0.75rem;
+    color: $red;
+    font-size: 0.75rem;
+    line-height: 1.4;
   }
 
   &__actions {

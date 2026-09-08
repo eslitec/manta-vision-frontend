@@ -645,6 +645,9 @@ export default {
       keepLayers: 'Keep layer data so you can edit it again later',
       alsoDownload: 'Also download a copy to this device',
       noCost: 'Saving costs no feed',
+      errorNoSourceImage: 'This asset has no real image to crop yet — pick a real asset from the library first and try again.',
+      errorImageAccess: 'Could not read the original image. This may be a network issue or a cross-origin restriction on the image server — please try again later, or report it if it keeps happening.',
+      errorGeneric: 'Save failed. Please try again.',
       suffixes: {
         remove: 'background-removed',
         object: 'object-added',
