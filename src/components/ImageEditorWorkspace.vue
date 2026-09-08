@@ -338,6 +338,7 @@
     :original-name="selectedAssetName"
     :folders="folders"
     :loading="savingAsset"
+    :error="saveErrorMessage"
     @save="saveAsNewAsset"
   )
 </template>
@@ -418,6 +419,10 @@ const selectedAssetId = ref('')
 const savingAsset = ref(false)
 const savedAssetId = ref('')
 const saveError = ref(false)
+// 使用者反饋：另存失敗時畫面完全沒有反應——SaveAssetDialog 之前沒有任何顯示失敗原因的地方，
+// 只有一個 visuallyHidden 的 aria-live alert（螢幕報讀器聽得到，肉眼看不到）。這裡補一個
+// 看得到的錯誤訊息，並依錯誤類型給比「儲存失敗」更具體的原因（例如原圖跨網域讀取被擋）。
+const saveErrorMessage = ref('')
 const saveDialogOpen = ref(false)
 const openEditorPicker = () => {
   editorPickerOpen.value = true
@@ -439,6 +444,7 @@ const suggestedAssetName = computed(() => {
 const openSaveDialog = () => {
   if (savingAsset.value || savedAssetId.value) return
   saveError.value = false
+  saveErrorMessage.value = ''
   loadFolders() // 讓「存放位置」下拉能列出使用者資料夾
   saveDialogOpen.value = true
 }
@@ -487,12 +493,15 @@ function downloadEditedCopy(name: string) {
 // 這裡先算出那塊 cover 範圍在原圖座標系裡的實際位置，使用者的裁切框才是這塊範圍裡的子區域。
 async function buildCroppedFile(name: string): Promise<File> {
   const sourceUrl = selectedAssetUrl.value
-  if (!sourceUrl) throw new Error('no-real-source-image')
+  if (!sourceUrl) throw new Error('CROP_NO_SOURCE_IMAGE')
   const img = new Image()
   img.crossOrigin = 'anonymous'
   await new Promise<void>((resolve, reject) => {
     img.onload = () => resolve()
-    img.onerror = () => reject(new Error('image-load-failed'))
+    // 常見原因：原圖伺服器（R2／CDN）沒有針對匿名跨網域讀取開放 CORS——單純 <img> 顯示不需要
+    // CORS，但畫進 canvas 再匯出就會被瀏覽器擋下，img 會直接觸發 onerror（不會是 onload 後
+    // canvas 才失敗）。
+    img.onerror = () => reject(new Error('CROP_IMAGE_LOAD_FAILED'))
     img.src = sourceUrl
   })
   const ARTBOARD_ASPECT = 4 / 3
@@ -520,8 +529,17 @@ async function buildCroppedFile(name: string): Promise<File> {
   if (!ctx) throw new Error('canvas-context-unavailable')
   ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height)
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-  if (!blob) throw new Error('canvas-export-failed')
+  // canvas 被跨網域圖片「污染」時，toBlob 不一定會拋錯，很多瀏覽器只是靜靜回 null——
+  // 這裡當作另一種「跨網域讀取被擋」來分類，跟上面 img.onerror 給使用者一樣的錯誤訊息。
+  if (!blob) throw new Error('CROP_EXPORT_BLOCKED')
   return new File([blob], `${name}.png`, { type: 'image/png' })
+}
+// 把捕捉到的錯誤換成使用者看得懂、且看得到（不再只有螢幕報讀器聽得到）的訊息。
+function classifySaveError(err: unknown): string {
+  const code = err instanceof Error ? err.message : ''
+  if (code === 'CROP_NO_SOURCE_IMAGE') return t('editor.saveDialog.errorNoSourceImage')
+  if (code === 'CROP_IMAGE_LOAD_FAILED' || code === 'CROP_EXPORT_BLOCKED') return t('editor.saveDialog.errorImageAccess')
+  return t('editor.saveDialog.errorGeneric')
 }
 function downloadRealFile(file: File) {
   const url = URL.createObjectURL(file)
@@ -537,6 +555,7 @@ const saveAsNewAsset = async (payload: SaveAssetPayload) => {
   if (savingAsset.value || savedAssetId.value) return
   savingAsset.value = true
   saveError.value = false
+  saveErrorMessage.value = ''
   try {
     // 只有「裁切」工具、且目前載入的是圖庫裡的真實素材（有 url）時，才有真的像素可以裁切、
     // 上傳到真後端；demo 素材沒有真實圖檔來源，或其他三個工具，維持原本 mock 的另存行為。
@@ -551,8 +570,9 @@ const saveAsNewAsset = async (payload: SaveAssetPayload) => {
       if (payload.alsoDownload) downloadEditedCopy(payload.name)
     }
     saveDialogOpen.value = false
-  } catch {
+  } catch (err) {
     saveError.value = true
+    saveErrorMessage.value = classifySaveError(err)
   } finally {
     savingAsset.value = false
   }
@@ -1117,6 +1137,7 @@ watch(
   () => {
     savedAssetId.value = ''
     saveError.value = false
+    saveErrorMessage.value = ''
   },
 )
 const ratioOptions = computed<Array<{ id: Exclude<CropRatioId, 'custom'>; label: string; aspect: number }>>(() => [
