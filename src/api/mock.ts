@@ -320,7 +320,10 @@ export const mockApi = {
   },
 
   // POST /upload（上傳；落到指定資料夾，未指定則進「未分類」）
-  async uploadImage(file: File, folderId?: string): Promise<Asset> {
+  // sourceImageId：編輯器「另存為新素材」帶原圖 id 時才有值——跟真後端一樣，來源改標
+  // source=edit，且用 object URL 讓假資料模式下縮圖也看得到真的裁切結果，不是永遠佔位圖示；
+  // 一般上傳（不帶 sourceImageId）維持原本行為不變。
+  async uploadImage(file: File, folderId?: string, sourceImageId?: string): Promise<Asset> {
     await delay(400)
     if (file.size > MAX_UPLOAD_MB * 1024 * 1024) throw new Error('FILE_TOO_LARGE')
     const extension = file.name.split('.').pop()?.toLowerCase() ?? ''
@@ -329,10 +332,11 @@ export const mockApi = {
     const a: Asset = {
       id: uid('a'),
       name: file.name,
-      source: 'upload',
+      source: sourceImageId ? 'edit' : 'upload',
       dim: '1024×768',
       type: 'image',
       folderId,
+      ...(sourceImageId ? { url: URL.createObjectURL(file) } : {}),
     }
     db.assets.unshift(a)
     return a

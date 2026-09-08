@@ -148,10 +148,13 @@ async function listImages(query: ImageListQuery = {}): Promise<ImageListResponse
   return { total: data.total, page: data.page, items: data.items.map(toAsset), counts: data.counts }
 }
 
-async function uploadImage(file: File, folderId?: string): Promise<Asset> {
+// sourceImageId：編輯器「另存為新素材」帶原圖 id 時才有值，後端依此標 source=edit、
+// derivedFrom 指回原圖（非破壞性）；見 manta-vision-backend docs/api/v7.md §4。
+async function uploadImage(file: File, folderId?: string, sourceImageId?: string): Promise<Asset> {
   const form = new FormData()
   form.append('file', file)
   if (folderId) form.append('folderId', folderId)
+  if (sourceImageId) form.append('sourceImageId', sourceImageId)
   const { data } = await http.post<WireImage>('/upload', form)
   return toAsset(data)
 }
