@@ -1935,9 +1935,10 @@ const previews = computed(() =>
 }
 // 對齊 Figma（1157:619 props）：面板本身要有 16px 內距、上方要有一條分隔線，
 // 跟 .aiCost／.objectGenerator 同一組樣式規則，原本漏掉造成內容貼齊面板邊界。
+// 原本 top 沒補（padding: 0 1rem 1rem），標題會貼齊分隔線；Figma 量出來上方同樣要留 16px。
 .properties {
   border-top: 1px solid #d2d5dd;
-  padding: 0 1rem 1rem;
+  padding: 1rem;
 }
 .aiCost {
   border-top: 1px solid #d2d5dd;
@@ -2002,6 +2003,15 @@ const previews = computed(() =>
 // 對齊 Figma（1142:795）：「加入物件」標題是 13px Bold、正常行高，不是繼承 .layers h3
 // 的 15px／1.375rem 行高（後者會讓文字框比實際文字高出一截，變相多出上下空間）。
 .objectGenerator h3 {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: normal;
+}
+// 對齊 Figma（1157:619／1157:620）：「文字屬性」標題是 13px Bold、正常行高，同樣不是
+// 繼承 .layers h3 的 15px／1.375rem 行高；標題底下要留 10px 才接到輸入框，原本沒補
+// margin，兩者會直接貼在一起。
+.properties h3 {
+  margin: 0 0 0.625rem;
   font-size: 0.8125rem;
   font-weight: 700;
   line-height: normal;
