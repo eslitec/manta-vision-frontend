@@ -1025,7 +1025,9 @@ async function onUpload(e: Event) {
 }
 .modal__desc {
   font-size: 0.8125rem;
-  color: $gray-400;
+  // 對齊 Figma「移至資料夾」對話框（node 442:2868）：這段說明文字是 #606692，
+  // 跟 $gray-400（#606472）很像但不是同一個色號，原本誤用了 $gray-400。
+  color: #606692;
   margin-bottom: 0.875rem;
 }
 .modal__list {
