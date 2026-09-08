@@ -626,7 +626,6 @@ async function onUpload(e: Event) {
   padding: 0.125rem 0.75rem;
   border-radius: 16px;
   font-size: 0.8125rem;
-  line-height: 1;
   color: $dark-blue-gray;
   border: 1px solid $gray;
   background: $white;
