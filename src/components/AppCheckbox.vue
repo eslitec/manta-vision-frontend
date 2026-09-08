@@ -9,7 +9,8 @@ label.appCheckbox
   )
   span.appCheckbox__box(aria-hidden="true")
     span.appCheckbox__mark(v-if="indeterminate") −
-    span.appCheckbox__check(v-else-if="model") ✓
+    svg.appCheckbox__check(v-else-if="model" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg")
+      path(d="M7.013 13.753C6.84433 13.2837 6.661 12.8437 6.463 12.433C6.27233 12.015 6.06333 11.6117 5.836 11.223C5.60867 10.8343 5.352 10.4383 5.066 10.035L6.1 9.353C6.44467 9.859 6.74533 10.3833 7.002 10.926C7.25867 11.4613 7.48967 11.993 7.695 12.521H7.739C7.959 11.773 8.21933 11.0433 8.52 10.332C8.828 9.61333 9.16167 8.92767 9.521 8.275C9.88767 7.615 10.2763 7.00267 10.687 6.438C11.105 5.87333 11.534 5.371 11.974 4.931L12.975 5.811C12.3883 6.361 11.82 7.01367 11.27 7.769C10.72 8.52433 10.2103 9.386 9.741 10.354C9.279 11.3147 8.883 12.3853 8.553 13.566L7.013 13.753Z" fill="currentColor")
   span.appCheckbox__label(v-if="$slots.default")
     slot
 </template>
@@ -89,11 +90,13 @@ watch(() => props.indeterminate, syncIndeterminate)
     line-height: 1;
   }
 
-  // 對齊 Figma checkbox（node 441:2640 的 chk 元件）：打勾本來就是純文字「✓」字元
-  // （Noto Sans TC Bold），不是向量圖示，粗體字重才會跟設計稿一樣厚實
+  // 使用者提供圖庫管理中心用的打勾 SVG（18x18，viewBox 對齊這顆 box 本身的 1.125rem
+  // 尺寸），改用向量圖示取代原本的純文字「✓」字元（原本對齊 Figma node 441:2640 的
+  // 決定），各瀏覽器／字型渲染更一致、線條粗細也更接近設計稿。
   &__check {
-    font-weight: 700;
-    line-height: 1;
+    width: 100%;
+    height: 100%;
+    display: block;
   }
 }
 </style>
