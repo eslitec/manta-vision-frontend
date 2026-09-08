@@ -379,7 +379,7 @@ import type { AppliedEditTool, EditorPricing, RetouchOptionKey } from '@/types/a
 import type { Asset } from '@/types/asset'
 const props = defineProps<{ mode: string }>()
 const { t } = useI18n()
-const { saveEdited, folders, loadFolders } = useAssets()
+const { saveEdited, folders, loadFolders, upload } = useAssets()
 const feed = useFeedStore()
 
 // 價目表一律問後端，前端不寫死金額（CLAUDE.md：前端不得硬寫範例數字）
@@ -422,6 +422,9 @@ const selectedAssetName = ref(t('editor.demoAsset'))
 // 之後才有 url 可畫，三處縮圖（retouch 來源、比對面板原圖、主畫布原圖圖層）都共用
 // 這一個 ref，沒有 url 時維持原本的 IconImagePlaceholder 佔位，不強制顯示破圖。
 const selectedAssetUrl = ref('')
+// 「另存為新素材」要真的把裁切結果傳給後端（POST /upload 帶 sourceImageId）才能讓後端
+// 標成 source=edit、非破壞性關聯回原圖，所以要記住目前選的是圖庫裡哪一張真實素材。
+const selectedAssetId = ref('')
 const savingAsset = ref(false)
 const savedAssetId = ref('')
 const saveError = ref(false)
@@ -432,6 +435,7 @@ const openEditorPicker = () => {
 const selectEditorAsset = (asset: Asset) => {
   selectedAssetName.value = asset.name
   selectedAssetUrl.value = asset.url ?? ''
+  selectedAssetId.value = asset.id
   savedAssetId.value = ''
   // 換了來源素材＝重新開始，先前的扣款紀錄不再屬於這張圖
   usedTools.value = []
@@ -479,14 +483,83 @@ function downloadEditedCopy(name: string) {
   }, 'image/png')
 }
 
+// 使用者反饋：裁切完「另存為新素材」，回圖庫選圖器（GET /images 打真後端）卻找不到
+// 剛存的那張。追下去發現 saveEdited() 呼叫的是 mock 版 editImage——realApi 沒有覆寫它，
+// 切到真後端模式時新素材只寫進瀏覽器本機的假資料，根本沒送到真後端，圖庫當然找不到。
+// 後端已經有對應的正式路徑（見 manta-vision-backend docs/api/v7.md §4 POST /upload）：
+// 帶 sourceImageId 時後端會標 source=edit、derivedFrom 指回原圖（非破壞性）。
+// 這裡先只補「裁切」這個工具：真的用 canvas 把目前的取景範圍畫成真正的圖檔，再打真的
+// 上傳 API。背景移除／加入物件／文字這三個工具還沒有真正的像素合成邏輯，暫時維持原本
+// saveEdited()（mock）的另存行為，留到之後再一起補上真後端。
+//
+// 取景範圍換算：畫布用 object-fit: cover 顯示原圖（4:3 置中裁切滿版），所以 cropRect 的
+// 百分比是相對「原圖被 cover 裁掉後、實際塞進 4:3 框的那塊範圍」，不是相對整張原圖——
+// 這裡先算出那塊 cover 範圍在原圖座標系裡的實際位置，使用者的裁切框才是這塊範圍裡的子區域。
+async function buildCroppedFile(name: string): Promise<File> {
+  const sourceUrl = selectedAssetUrl.value
+  if (!sourceUrl) throw new Error('no-real-source-image')
+  const img = new Image()
+  img.crossOrigin = 'anonymous'
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve()
+    img.onerror = () => reject(new Error('image-load-failed'))
+    img.src = sourceUrl
+  })
+  const ARTBOARD_ASPECT = 4 / 3
+  const naturalWidth = img.naturalWidth
+  const naturalHeight = img.naturalHeight
+  let coverX = 0
+  let coverY = 0
+  let coverWidth = naturalWidth
+  let coverHeight = naturalHeight
+  if (naturalWidth / naturalHeight > ARTBOARD_ASPECT) {
+    coverWidth = naturalHeight * ARTBOARD_ASPECT
+    coverX = (naturalWidth - coverWidth) / 2
+  } else {
+    coverHeight = naturalWidth / ARTBOARD_ASPECT
+    coverY = (naturalHeight - coverHeight) / 2
+  }
+  const sx = coverX + (cropRect.x / 100) * coverWidth
+  const sy = coverY + (cropRect.y / 100) * coverHeight
+  const sWidth = (cropRect.width / 100) * coverWidth
+  const sHeight = (cropRect.height / 100) * coverHeight
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(sWidth))
+  canvas.height = Math.max(1, Math.round(sHeight))
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('canvas-context-unavailable')
+  ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height)
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+  if (!blob) throw new Error('canvas-export-failed')
+  return new File([blob], `${name}.png`, { type: 'image/png' })
+}
+function downloadRealFile(file: File) {
+  const url = URL.createObjectURL(file)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = file.name
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
 const saveAsNewAsset = async (payload: SaveAssetPayload) => {
   if (savingAsset.value || savedAssetId.value) return
   savingAsset.value = true
   saveError.value = false
   try {
-    const saved = await saveEdited(payload.name, { folder: payload.folder, keepLayers: payload.keepLayers })
-    savedAssetId.value = saved.id
-    if (payload.alsoDownload) downloadEditedCopy(payload.name)
+    // 只有「裁切」工具、且目前載入的是圖庫裡的真實素材（有 url）時，才有真的像素可以裁切、
+    // 上傳到真後端；demo 素材沒有真實圖檔來源，或其他三個工具，維持原本 mock 的另存行為。
+    if (tool.value === 'crop' && selectedAssetUrl.value) {
+      const file = await buildCroppedFile(payload.name)
+      const saved = await upload(file, payload.folder || undefined, selectedAssetId.value || undefined)
+      savedAssetId.value = saved.id
+      if (payload.alsoDownload) downloadRealFile(file)
+    } else {
+      const saved = await saveEdited(payload.name, { folder: payload.folder, keepLayers: payload.keepLayers })
+      savedAssetId.value = saved.id
+      if (payload.alsoDownload) downloadEditedCopy(payload.name)
+    }
     saveDialogOpen.value = false
   } catch {
     saveError.value = true
