@@ -696,9 +696,9 @@ export default {
       recrop: 'Recrop',
     },
     layerItems: {
-      text: 'Text: Spring collection launch',
+      text: 'Text: {text}',
       object: 'Object: Bouquet',
-      original: 'Original: Spring_key_visual_01',
+      original: 'Original: {name}',
     },
     layerDescriptions: {
       text: 'Text layer',

@@ -631,9 +631,9 @@ export default {
       recrop: '重新裁切',
     },
     layerItems: {
-      text: '文字：春季新品 上市',
+      text: '文字：{text}',
       object: '物件：花束',
-      original: '原圖：春季主視覺_01',
+      original: '原圖：{name}',
     },
     layerDescriptions: {
       text: '文字圖層',
