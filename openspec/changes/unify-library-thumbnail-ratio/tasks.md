@@ -19,4 +19,10 @@
 - [x] 3.4 對齊 Requirement「刪除確認彈窗的縮圖預覽跟主清單比例一致」——原始碼層級確認 `.modal__previewThumb` 的 `aspect-ratio` 已改為 `1 / 1`；這個測試帳號（qa_brand_test）目前圖庫前幾頁清一色是不可選取的內建素材（材料筆數剛好鋪滿分頁），沒有可勾選的真實素材可以實際觸發刪除確認彈窗做 DOM 層級驗證，改以程式碼比對確認：`.modal__previewThumb` 與已經實測驗證過的 `.assetCard__thumb` 套用同一個 `aspect-ratio: 1 / 1` 數值、同樣是純 CSS 靜態屬性，不受內容或資料影響，可視為等效驗證
 - [x] 3.5 瀏覽器手動驗證：骨架屏載入狀態（觸發切換分類重新查詢）的 `.assetSkeleton__thumb` 實測 `width: 244px`、`height: 244px`，與 `.assetCard__thumb` 一致；`.assetSkeleton` 外層卡片尺寸 252×300.6px 與實際 `.assetCard` 卡片 252×306.6px 相差僅 6px（文字行高造成的正常誤差），無明顯版面跳動。這個帳號目前沒有進行中的生成任務，`.pending` 佔位卡片（生成中任務）的正方形調整已在原始碼確認（`aspect-ratio: 1 / 1`），但沒有進行中任務可供即時 DOM 驗證
 - [x] 3.6 執行 `spectra validate unify-library-thumbnail-ratio --strict` 與 `spectra analyze unify-library-thumbnail-ratio`，確認沒有 CRITICAL／WARNING 級別的發現
-- [ ] 3.7 PR 合併並確認畫面驗收無誤後執行 `spectra archive unify-library-thumbnail-ratio`
+
+## 4. Bug 修正：直向素材縮圖被 flex automatic minimum size 撐高破版
+
+- [x] 4.1 落地設計決策「決策 5：`.assetCard__thumb` 補上 `overflow: hidden`，修正直向素材縮圖被 flex automatic minimum size 撐高破版」：`src/components/AssetCard.vue` 的 `.assetCard__thumb` 加上 `overflow: hidden`（並附中文註解說明 flex item 的 automatic minimum size 為何會蓋過 `aspect-ratio`），修正圖庫新增直向構圖真實素材（狗的人像照）後，縮圖框被撐高成長方形、`aspect-ratio: 1 / 1` 名存實亡的問題
+- [x] 4.2 對齊 Requirement「每個素材卡片顯示型別與來源標籤」的 Scenario「不同原生比例的素材縮圖呈現一致的框架比例」：瀏覽器手動驗證（Playwright，真後端帳號 qa_brand_test，物件素材分類下的 8 張直向狗照片，原生比例涵蓋 3543×5000 至 5014×7358）——修正前 `getBoundingClientRect()` 量到 `width:244` 但 `height` 依各張原生比例落在 275～376px 之間（長方形），`getComputedStyle().aspectRatio` 誤報為 `"1 / 1"`；修正後全部 8 張與混合全部素材檢視分頁裡的背景素材，`getBoundingClientRect()` 一致量到 `width:244, height:244`
+- [x] 4.3 確認 `npx vue-tsc --noEmit`、`npm run lint`、`npx prettier --check src/components/AssetCard.vue` 皆通過，無因這次 `overflow: hidden` 調整產生的型別或格式問題
+- [ ] 4.4 PR 合併並確認畫面驗收無誤後執行 `spectra archive unify-library-thumbnail-ratio`

@@ -36,6 +36,14 @@
 
 `add-library-loading-skeleton` 這個 change 目前仍在進行中（尚未歸檔），它的骨架屏佔位卡片（`.assetSkeleton__thumb`）尺寸是對齊 Figma node `1309:7676` 的靜態稿（244:152），跟這次要改的正方形比例衝突。因為骨架屏佔位卡片的規格（含 Figma 對齊理由、決策 5 的最短顯示時間、決策 6 的清空邏輯）完整記錄在那個 change 自己的 design.md／spec.md 裡，這裡不重複貼一份，而是等這個 change 的 delta spec 定案後，用 `/spectra-ingest` 把「佔位卡片改成正方形、不再對齊 Figma `1309:7676` 的原始橫向比例（因為老闆的正方形要求覆蓋了原本的 Figma 靜態稿）」這個異動同步過去。兩個 change 的實作（`.vue` 檔案改動）會在同一輪 apply 一起完成，只是規格文件分開記錄，避免同一件事在兩份文件裡各寫一次、之後容易對不齊。
 
+### 決策 5：`.assetCard__thumb` 補上 `overflow: hidden`，修正直向素材縮圖被 flex automatic minimum size 撐高破版
+
+apply 階段完成、任務 3.3／3.4 也手動驗證通過之後，qa_brand_test 這個真後端測試帳號的圖庫新增了直向構圖的真實物件素材照片（狗的人像照，原生比例涵蓋 3543×5000 到 5014×7358），才讓一個先前沒有踩到的既有疏漏浮現：`.assetCard__thumb` 同時是 `.assetCard`（`display:flex; flex-direction:column`）底下的 flex item，也是自己置中 `IconMovie` 用的 flex 容器（`@include flex(center, center)`），但只設定了 `width: 100%` 與 `aspect-ratio: 1 / 1`，沒有 `overflow` 或 `min-height`。
+
+Flex item 預設 `min-height: auto`，瀏覽器會用內容（`<img class="assetCard__thumbImage">`，雖設了 `height:100%; object-fit:cover`）的 min-content 高度當作沿主軸（`.assetCard` 是 column 方向，主軸即垂直高度）不能再縮小的下限（automatic minimum size）。寬度=244px 時：橫向原生圖片（寬>高）的 min-content 高度天生 ≤244px，`aspect-ratio: 1/1` 算出的 244px 勝出，縮圖正確呈現正方形；但直向原生圖片（高>寬）在同樣 244px 寬度下的 min-content 高度反而 >244px，automatic minimum size 把 flex item 撐高、蓋過 `aspect-ratio: 1/1` 原本要求的 244px，縮圖變成長方形。這也解釋了為什麼任務 3.3／3.4 當時只用清一色橫向構圖的內建漸層背景素材驗證，沒有踩到這個問題——測試帳號當時圖庫裡還沒有直向構圖的真實素材。
+
+修法：在 `.assetCard__thumb` 加上 `overflow: hidden`。`overflow` 設為非 `visible` 的值會讓瀏覽器把該 flex item 的 automatic minimum size 視為 0，不再被子內容的 min-content 尺寸撐開，`aspect-ratio: 1/1` 因此確實生效；`overflow: hidden` 本身也對縮圖裁切更保險。`.pending`（生成中佔位卡片）與 `.modal__previewThumb`（刪除確認彈窗預覽）內部顯示的是固定尺寸的 icon 元件，不是可變原生比例的 `<img>`，不會觸發同樣的問題，這次不需要修改。
+
 ## Implementation Contract
 
 **行為**：使用者瀏覽 `/library` 時看到的素材縮圖，不論是主格線的素材卡片、生成中任務的佔位卡片，一律呈現 1:1 正方形的裁切滿版縮圖（`object-fit: cover`），取代原本偏橫的 244:152 比例；使用者選取素材並開啟刪除確認彈窗時，預覽縮圖同樣呈現 1:1 正方形，取代原本的 4:3 比例。素材原始檔案內容、尺寸資料、顯示的尺寸文字（例如「1024×768」）皆不受影響——只有縮圖框本身呈現的裁切比例改變。
@@ -58,3 +66,4 @@
 
 - [風險] 正方形框對「背景素材」這種原生就偏橫的內容，裁切幅度會比現況更大（現況的 1.6:1 框本來就比較適合背景素材，正方形框反而讓背景素材裁掉的左右範圍變多）→ [緩解] 這是決策 1 已經權衡過的取捨：沒有一種比例能同時公平對待三種類型，1:1 是三者裁切幅度加總最平均的選擇；如果之後背景素材的裁切問題明顯到需要處理，可以之後再評估依類別呈現不同比例，但那會改變「圖庫長寬都一樣」的原始需求，需要跟老闆重新確認
 - [風險] 這次只統一「顯示層」的比例，素材本身的原始檔案比例仍然五花八門，如果未來這些素材要被程式化用在生成流程（例如當背景圖或模特底圖），原始檔案的比例落差不會因為這次修改而消失 → [緩解] proposal.md 的 Non-Goals 已明確排除這個範圍；這次只解決老闆提出的「圖庫瀏覽視覺一致」，不是「生成用途的素材規格標準化」，兩者是不同問題，需要的話應該另外開一個 change 處理
+- [風險，已發生並修正] `aspect-ratio: 1 / 1` 只在子內容的 min-content 尺寸不超過該比例算出的高度時才會確實生效；`.assetCard__thumb` 身為 flex item 卻缺少 `overflow` 或 `min-height` 設定，直向原生比例的真實照片素材（狗的人像照）會讓 flex 的 automatic minimum size 蓋過 `aspect-ratio`，縮圖框被撐成長方形，任務 3.3／3.4 當時只用橫向構圖的內建素材驗證因而沒有踩到 → [緩解] 詳見決策 5：`.assetCard__thumb` 加上 `overflow: hidden`，已用 Playwright 對 qa_brand_test 帳號的直向物件素材（3543×5000 至 5014×7358 等極端直向比例）重新驗證，縮圖框全部量到 244×244
