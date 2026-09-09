@@ -167,6 +167,13 @@ const EDITOR_PRICING: EditorPricing = {
 }
 const COMMAND_RETOUCH_OPTIONS = ['lighting', 'upscale']
 
+// 行銷 PO 文輸出類型的飼料成本，對齊前端 MarketingPostView 的 OUTPUT_TYPE_OPTIONS 顯示顆數
+const POST_OUTPUT_TYPE_COST: Record<GeneratePostReq['outputType'], number> = {
+  both: 5,
+  textOnly: 2,
+  imageOnly: 3,
+}
+
 function deduct(cost: number) {
   // 錯誤碼跟後端碼表對齊：INSUFFICIENT_FEEDS（有 S，複數形）
   if (db.feedBalance < cost) throw new Error('INSUFFICIENT_FEEDS')
@@ -425,18 +432,20 @@ export const mockApi = {
     return Array.from({ length: req.count }, () => ({ id: uid('g'), adopted: false }))
   },
 
-  // POST /generate/post（貼圖＋文案，一次扣一次）
+  // POST /generate/post（依 outputType 分流回傳內容與扣款：文案＋配圖 5 顆／只要文案 2 顆／只要配圖 3 顆）
   async generatePost(req: GeneratePostReq): Promise<GeneratedPost> {
-    deduct(12)
+    const cost = POST_OUTPUT_TYPE_COST[req.outputType]
+    deduct(cost)
     db.totalGen += 1
     db.generatedThisMonth += 1
     db.successGen += 1
     await delay(1000)
     const tags = req.applyBrand ? db.brand.hashtags.slice(0, 3) : ['#新品', '#日常']
-    return {
-      copy: '🌿 春天就是要換上最舒服的自己\n\n全新純棉系列，透氣不悶熱，五種溫柔色調任你搭配。現在下單享春夏限時 8 折，把好天氣穿在身上 ☀',
-      hashtags: tags,
-    }
+    const copy =
+      '🌿 春天就是要換上最舒服的自己\n\n全新純棉系列，透氣不悶熱，五種溫柔色調任你搭配。現在下單享春夏限時 8 折，把好天氣穿在身上 ☀'
+    if (req.outputType === 'textOnly') return { copy, hashtags: tags }
+    if (req.outputType === 'imageOnly') return { posterUrl: 'mock://poster', copy: '', hashtags: [] }
+    return { posterUrl: 'mock://poster', copy, hashtags: tags }
   },
 
   // POST /generate/video → 建立非同步任務；扣款依生成模型倍率（標準×1／進階×2／專業×4）

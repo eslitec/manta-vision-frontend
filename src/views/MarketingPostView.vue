@@ -3,6 +3,15 @@
   h1.visuallyHidden {{ t('routeTitles.generatePost') }}
   section.panel.post__input
     .step
+      .step__title {{ t('marketing.outputType.title') }}
+      .outputTypes
+        button.outputTypeCard(v-for="o in outputTypeOptions" :key="o.value" :aria-pressed="outputType === o.value" :class="{ isActive: outputType === o.value }" @click="outputType = o.value")
+          span.outputTypeCard__label {{ o.label }}
+          span.outputTypeCard__cost
+            IconFeedBottleSmall.outputTypeCard__icon
+            span {{ t('units.feed', { count: o.cost }) }}
+      p.outputTypeHint {{ t('marketing.outputType.hint') }}
+    .step
       .step__title {{ t('marketing.steps.image') }}
       .dropzone
         IconImagePlaceholder.dropzone__icon
@@ -35,7 +44,7 @@
         .cost__label {{ t('common.estimatedCost') }}
         .cost__value
           IconFeedBottleSmall.cost__icon
-          span {{ t('units.feed', { count: 5 }) }}
+          span {{ t('units.feed', { count: outputTypeCost }) }}
       AppButton(:disabled="generating" @click="generate")
         component(:is="generating ? IconLoader : IconAddObject" :class="{ spin: generating }")
         span {{ generating ? t('common.generating') : t('marketing.generate') }}
@@ -46,13 +55,13 @@
     template(v-else)
       .visuallyHidden(role="status" aria-live="polite") {{ t('common.generationResult') }}
       .postresult
-        .postresult__col
+        .postresult__col(v-if="result.posterUrl")
           .poster(:class="{ isPortrait: ratio === '9:16' }" :style="{ aspectRatio: aspect }")
             IconImagePlaceholder
           .postresult__act
             button.linkbtn(@click="generate") {{ t('marketing.changeImage') }}
             button.linkbtn(@click="downloadPoster") {{ t('common.download') }}
-        .postresult__col
+        .postresult__col(v-if="result.copy")
           .copy
             p.copy__text(v-for="(line, i) in copyLines" :key="i") {{ line }}
             p.copy__tags {{ result.hashtags.join(' ') }}
@@ -80,7 +89,7 @@ import postNextStepIconUrl from '@/assets/images/marketing-next-step-alert.svg'
 import { useFeedStore } from '@/stores/feed'
 import { api } from '@/api'
 import { isInsufficientFeed } from '@/utils/error'
-import type { Asset, GeneratedPost } from '@/types/api'
+import type { Asset, GeneratedPost, PostOutputType } from '@/types/api'
 
 const router = useRouter()
 const feed = useFeedStore()
@@ -95,6 +104,16 @@ const generating = ref(false)
 const errorMsg = ref('')
 const result = ref<GeneratedPost | null>(null)
 const copied = ref(false)
+
+// 要產出什麼：輸出內容類型，決定生成內容與飼料成本（5／2／3 顆），同一份常數供分段選擇器與底部預估消耗顯示使用
+const OUTPUT_TYPE_OPTIONS: { value: PostOutputType; labelKey: string; cost: number }[] = [
+  { value: 'both', labelKey: 'marketing.outputType.options.both', cost: 5 },
+  { value: 'textOnly', labelKey: 'marketing.outputType.options.textOnly', cost: 2 },
+  { value: 'imageOnly', labelKey: 'marketing.outputType.options.imageOnly', cost: 3 },
+]
+const outputType = ref<PostOutputType>('both')
+const outputTypeOptions = computed(() => OUTPUT_TYPE_OPTIONS.map((o) => ({ ...o, label: t(o.labelKey) })))
+const outputTypeCost = computed(() => OUTPUT_TYPE_OPTIONS.find((o) => o.value === outputType.value)?.cost ?? 5)
 
 // 輸出比例（生成前於設定區選定，影響構圖與結果預覽比例）
 const ratios = computed(() => [
@@ -121,6 +140,7 @@ async function generate() {
       intro: intro.value,
       applyBrand: applyBrand.value,
       ratio: ratio.value, // 版位比例一併送給後端，影響構圖
+      outputType: outputType.value,
     })
     await feed.refresh()
   } catch (e: unknown) {
@@ -240,6 +260,49 @@ async function copyText() {
 }
 .post__brand {
   margin: 1rem 0;
+}
+.outputTypes {
+  @include flex(flex-start, stretch, 0.5rem);
+  flex-wrap: wrap;
+}
+.outputTypeCard {
+  @include flex(center, center, 0.25rem);
+  flex-direction: column;
+  min-width: 6.5rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid #d2d5dd;
+  border-radius: 8px;
+  background: $white;
+  &__label {
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1.375;
+    color: $dark-blue-gray;
+  }
+  &__cost {
+    @include flex(center, center, 0.25rem);
+    font-size: 0.75rem;
+    line-height: 1.333;
+    color: #606692;
+  }
+  &__icon {
+    width: 0.875rem;
+    height: 0.875rem;
+    flex-shrink: 0;
+  }
+  &.isActive {
+    background: $blue-light;
+    border: 1.5px solid $blue-dark-500;
+    .outputTypeCard__label,
+    .outputTypeCard__cost {
+      color: $blue-dark-500;
+    }
+  }
+}
+.outputTypeHint {
+  font-size: 0.75rem;
+  color: $gray-100;
+  margin-top: 0.5rem;
 }
 .ratios {
   @include flex(flex-start, stretch, 0.5rem);
@@ -361,6 +424,14 @@ async function copyText() {
   @include below($bp-sm) {
     &:first-child {
       width: 100%;
+    }
+  }
+  // 只選「只要文案」或「只要配圖」時，結果區只渲染一欄——該欄獨佔整個結果區寬度，不維持雙欄骨架
+  &:only-child {
+    width: 100%;
+    flex: 1 1 auto;
+    @media (min-width: $bp-lg) {
+      flex: 1 1 auto;
     }
   }
 }
