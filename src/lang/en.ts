@@ -193,6 +193,11 @@ export default {
     nextStep: 'Next: Add directly to a broadcast draft (requires main-product integration; roadmap item)',
     pickerTitle: 'Select product image',
     ratios: { post: 'Post', banner: 'Banner', story: 'Story / Reels' },
+    outputType: {
+      title: 'What to generate',
+      options: { both: 'Copy + visual', textOnly: 'Copy only', imageOnly: 'Visual only' },
+      hint: 'Why split it up: redo just one part later without re-spending on both.',
+    },
   },
   image: {
     steps: { reference: '1. Reference image', prompt: '2. Describe the image you want', model: '3. Generation model' },

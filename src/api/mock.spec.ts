@@ -29,10 +29,31 @@ describe('計費與扣點', () => {
     expect((await api.getFeed()).balance).toBe(before)
   })
 
-  it('generatePost 固定扣 12 顆', async () => {
+  it('generatePost 預設輸出類型「文案＋配圖」扣 5 顆飼料', async () => {
     const before = (await api.getFeed()).balance
-    await api.generatePost({ intro: 'x', applyBrand: true })
-    expect((await api.getFeed()).balance).toBe(before - 12)
+    await api.generatePost({ intro: 'x', applyBrand: true, outputType: 'both' })
+    expect((await api.getFeed()).balance).toBe(before - 5)
+  })
+
+  it.each([
+    { outputType: 'both', cost: 5 },
+    { outputType: 'textOnly', cost: 2 },
+    { outputType: 'imageOnly', cost: 3 },
+  ] as const)('generatePost outputType=$outputType 回傳對應內容並扣 $cost 顆飼料', async ({ outputType, cost }) => {
+    const before = (await api.getFeed()).balance
+    const post = await api.generatePost({ intro: 'x', applyBrand: true, outputType })
+    expect((await api.getFeed()).balance).toBe(before - cost)
+    if (outputType === 'both') {
+      expect(post.posterUrl).toBeTruthy()
+      expect(post.copy).not.toBe('')
+    } else if (outputType === 'textOnly') {
+      expect(post.posterUrl).toBeUndefined()
+      expect(post.copy).not.toBe('')
+    } else {
+      expect(post.posterUrl).toBeTruthy()
+      expect(post.copy).toBe('')
+      expect(post.hashtags).toEqual([])
+    }
   })
 
   it('tryOn 固定扣 15 顆', async () => {
@@ -143,12 +164,12 @@ describe('AI 輔助描述', () => {
 
 describe('品牌套用（行銷 PO 文）', () => {
   it('applyBrand=true 帶入品牌 hashtag', async () => {
-    const post = await api.generatePost({ intro: 'x', applyBrand: true })
+    const post = await api.generatePost({ intro: 'x', applyBrand: true, outputType: 'both' })
     expect(post.hashtags).toEqual(['#日安選物', '#選物日常', '#質感生活'])
   })
 
   it('applyBrand=false 使用預設 hashtag', async () => {
-    const post = await api.generatePost({ intro: 'x', applyBrand: false })
+    const post = await api.generatePost({ intro: 'x', applyBrand: false, outputType: 'both' })
     expect(post.hashtags).toEqual(['#新品', '#日常'])
   })
 })

@@ -172,6 +172,11 @@ export default {
     nextStep: '下一步：一鍵帶入群發訊息草稿（需與主產品介接，roadmap 項目）',
     pickerTitle: '選擇商品圖片',
     ratios: { post: '貼文', banner: '橫幅', story: '限動 / Reels' },
+    outputType: {
+      title: '要產出什麼',
+      options: { both: '文案＋配圖', textOnly: '只要文案', imageOnly: '只要配圖' },
+      hint: '分開產出的好處：之後只重做其中一項，不必兩項都重扣。',
+    },
   },
   image: {
     steps: { reference: '1. 參考圖', prompt: '2. 描述你想要的圖片', model: '3. 生成模型' },

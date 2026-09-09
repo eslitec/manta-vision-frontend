@@ -25,11 +25,14 @@ export interface GeneratedImage {
   savedAssetId?: string // 存入圖庫後的素材 id
 }
 
+// 輸出內容類型：文案＋配圖／只要文案／只要配圖，三者飼料成本不同（見 MarketingPostView OUTPUT_TYPE_OPTIONS）
+export type PostOutputType = 'both' | 'textOnly' | 'imageOnly'
 export interface GeneratePostReq {
   productImageId?: string // 商品圖＝產圖時的「錨」（去背後合成，商品本身不被改）
   intro: string // 商品描述＝主題來源
   applyBrand: boolean // 套用品牌設定（色票／Logo／語氣，由後端依 bot_id 讀取）
   ratio?: string // 版位比例（'1:1'｜'4:5'｜'9:16'｜'16:9'），影響構圖與輸出
+  outputType: PostOutputType // 輸出內容類型；決定回傳內容與扣款數（5／2／3 顆）
 }
 export interface GeneratedPost {
   posterUrl?: string
