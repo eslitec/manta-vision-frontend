@@ -19,4 +19,23 @@
 - [x] 3.3 `npm run lint` 通過
 - [x] 3.4 `npx vue-tsc --noEmit` 通過
 - [x] 3.5 執行 `spectra validate add-library-loading-skeleton --strict` 與 `spectra analyze add-library-loading-skeleton`，確認沒有 CRITICAL／WARNING 級別的發現
-- [ ] 3.6 PR 合併並確認畫面驗收無誤後執行 `spectra archive add-library-loading-skeleton`
+
+## 4. 骨架屏最短顯示時間（修正動畫不可感知問題）
+
+- [x] 4.1 落地設計決策「決策 5：骨架屏套用最短顯示時間（500ms），避免真實環境下一閃即逝看不到 shimmer 動畫」：`LibraryView.vue` 新增最短顯示時間計時邏輯——`showLoadingSkeleton` 從 true 變 true 那一刻記錄時間戳，查詢完成（`loading` 變 false）時若未滿 500ms 則延後切換，滿 500ms 或原本就超過 500ms 則立即切換
+- [x] 4.2 對齊 Requirement 新增內容「骨架屏 SHALL 至少維持顯示 500 毫秒，即使查詢在 500 毫秒內就已完成，也 SHALL NOT 提前切換成實際內容；查詢耗時超過 500 毫秒時，SHALL 在查詢完成當下立即切換，SHALL NOT 額外延遲」：確認兩種情境（查詢 <500ms／查詢 >500ms）都符合上述行為
+- [x] 4.3 瀏覽器手動驗證（Playwright，真後端帳號 qa_brand_test）：切換到「AI 生成」分類觸發重新查詢，實測 `firstSeen: 16.7ms`、`lastSeen: 508ms`、`durationVisible: 491.3ms`——骨架屏確實延後到接近滿 500ms 才消失，而不是原本本機真後端 ~36ms 就一閃而過，shimmer 掃光位移在這段時間內可被實際觀察到
+- [x] 4.4 `npm run lint` 與 `npx vue-tsc --noEmit` 通過
+- [x] 4.5 執行 `spectra validate add-library-loading-skeleton --strict` 與 `spectra analyze add-library-loading-skeleton`，確認沒有 CRITICAL／WARNING 級別的發現
+
+## 5. 骨架屏正確重新觸發（修正單頁伺服器分頁檢視翻頁／切換分類完全不出現的問題）
+
+- [x] 5.1 落地設計決策「決策 6：非合流檢視（單頁伺服器分頁）翻頁／切換篩選時清空 `assets.value`；合流檢視刻意不清空」：`LibraryView.vue` 的 `fetchAssets()` 只在非合流分支（`await load(buildQuery())` 之前）同步執行 `assets.value = []`；合流分支（`mergesMaterials.value` 為真）維持原樣不清空；不修改 `useAssets.ts`
+- [x] 5.2 對齊 Requirement 新增內容「單頁伺服器分頁的檢視（資料夾、`aiGenerate`／`edit`／`video` 分類）切換頁碼或篩選分類觸發新查詢時，即使切換前的頁面已經顯示素材，骨架屏 SHALL 仍正確觸發，SHALL NOT 因為沿用切換前那一頁已顯示的舊資料而完全不出現骨架屏」與「整批預先撈取、前端自行切頁的合流檢視（全部素材、物件素材、未分類）在資料已經完整存在本地快取時，SHALL NOT 為了視覺一致性而人為插入骨架屏」
+- [x] 5.3 瀏覽器手動驗證（Playwright，真後端帳號 qa_brand_test）：用 debug log 逐項確認過「全部素材」（合流檢視）內建素材共 32 筆、`PAGE_SIZE = 8`，翻到第 2～4 頁時 `showMaterials` 為真、`wouldShowEmptySkeleton` 為假；移除 debug log 後重新實測，連續切換第 2、3、4、1 頁，`sawSkeleton` 皆為 `false`、每頁 `materialCount` 皆為 8，確認合流檢視維持即時切換、沒有為此修正引入新的閃爍。非合流路徑：切換到「AI 生成」分類（0 筆，這個測試帳號目前所有非合流分類皆為 0 筆、未建立資料夾，沒有多頁真實資料可驗證翻頁情境），實測骨架屏正確觸發且套用決策 5 的最短顯示時間（見 4.3 的 `firstSeen`／`lastSeen`），確認 `assets.value = []` 清空與 `wouldShowEmptySkeleton` 判斷正確銜接；`pagedRealAssets` 在非合流分支直接回傳 `assets.value` 已經過程式碼檢視確認
+- [x] 5.4 `npm run lint` 與 `npx vue-tsc --noEmit` 通過
+- [x] 5.5 執行 `spectra validate add-library-loading-skeleton --strict` 與 `spectra analyze add-library-loading-skeleton`，確認沒有 CRITICAL／WARNING 級別的發現
+
+## 6. 收尾
+
+- [ ] 6.1 PR 合併並確認畫面驗收無誤後執行 `spectra archive add-library-loading-skeleton`

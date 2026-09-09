@@ -194,7 +194,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useAssets } from '@/composables/useAssets'
@@ -364,8 +364,45 @@ const pendingTasks = computed(() =>
 )
 // 對齊 Figma（1309:7666 panel_assets）：素材清單載入中（尚無已顯示的素材／pending 任務／
 // 內建素材）時，骨架卡片、工具列、頁碼列三者一起呈現載入中的視覺，不是只有卡片格線變化。
+const wouldShowEmptySkeleton = computed(
+  () => !pagedRealAssets.value.length && !pendingTasks.value.length && !showMaterials.value,
+)
+
+// 決策 5（add-library-loading-skeleton）：真後端本機查詢實測只需約 36ms，遠短於 shimmer
+// 動畫一個週期（1.5s），骨架屏一閃即逝、掃光動畫來不及被看見。這裡讓骨架屏至少維持顯示
+// MIN_SKELETON_DURATION_MS，查詢提早完成也延後到滿這個時間才切換成實際內容；查詢本來就
+// 比這個時間久，則資料一回來就照常立即切換，不額外拖慢。
+const MIN_SKELETON_DURATION_MS = 500
+const skeletonHoldActive = ref(false)
+let skeletonHoldTimer: ReturnType<typeof setTimeout> | undefined
+let skeletonLoadStartedAt = 0
+
+watch(loading, (isLoading) => {
+  if (isLoading) {
+    if (wouldShowEmptySkeleton.value) {
+      skeletonLoadStartedAt = performance.now()
+      if (skeletonHoldTimer) clearTimeout(skeletonHoldTimer)
+      skeletonHoldActive.value = true
+    }
+    return
+  }
+  if (!skeletonHoldActive.value) return
+  const remaining = MIN_SKELETON_DURATION_MS - (performance.now() - skeletonLoadStartedAt)
+  if (remaining <= 0) {
+    skeletonHoldActive.value = false
+    return
+  }
+  skeletonHoldTimer = setTimeout(() => {
+    skeletonHoldActive.value = false
+  }, remaining)
+})
+
+onUnmounted(() => {
+  if (skeletonHoldTimer) clearTimeout(skeletonHoldTimer)
+})
+
 const showLoadingSkeleton = computed(
-  () => loading.value && !pagedRealAssets.value.length && !pendingTasks.value.length && !showMaterials.value,
+  () => skeletonHoldActive.value || (loading.value && wouldShowEmptySkeleton.value),
 )
 
 const categoryTags = CATEGORY_TAGS
@@ -462,6 +499,14 @@ async function fetchAllRealAssets(filters: Omit<ImageListQuery, 'page' | 'pageSi
   return { items: collected, total, counts: counts! }
 }
 
+// 決策 6（add-library-loading-skeleton）：只在「非合流」查詢（單頁伺服器分頁：資料夾、
+// 分類為 aiGenerate／edit／video 等）清空 assets.value 再查詢。這種檢視每次翻頁／切換
+// 篩選拿到的都是「目前這一頁真正還沒有的新資料」，不清空的話舊頁殘留的素材會在整段等待
+// 期間被誤判成「已經有素材」，骨架屏完全不會觸發，等新資料回來又會整批瞬間替換成別的
+// 內容，體感是「畫面內容莫名其妙跳一下」而不是「先顯示載入中再顯示新內容」。
+// 合流檢視（mergesMaterials，例如「全部素材」）刻意不清空：fetchAllRealAssets 一次就把
+// 使用者圖庫整批全部撈回來、不分頁，翻頁只是把同一份已快取的完整資料重新切一次，資料本
+// 身沒有變、也沒有真的在等待新內容，清空只會讓每次翻頁都多閃一次骨架屏，是不必要的退步。
 async function fetchAssets() {
   if (mergesMaterials.value) {
     loading.value = true
@@ -477,6 +522,7 @@ async function fetchAssets() {
     }
     return
   }
+  assets.value = []
   await load(buildQuery())
 }
 
