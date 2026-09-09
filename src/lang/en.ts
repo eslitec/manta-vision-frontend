@@ -278,13 +278,8 @@ export default {
     },
     steps: { model: '1. Select model', apparel: '2. Select apparel asset' },
     tabs: { builtIn: 'Built-in models', upload: 'Upload model photo' },
-    models: {
-      femaleCasual: 'Woman · Casual',
-      maleFormal: 'Man · Formal',
-      femaleSport: 'Woman · Sport',
-      femaleElegant: 'Woman · Elegant',
-    },
-    viewFullLibrary: 'View full model library (12 included)',
+    viewFullLibrary: 'View full model library ({count} included)',
+    noBuiltInModels: 'No built-in models available right now',
     upload: {
       title: 'Drag a model photo here or click to upload',
       hint: 'JPG/PNG · Up to 10 MB · 1024px or larger recommended',
@@ -788,5 +783,15 @@ export default {
     feedUnit: 'feed',
     cancel: 'Cancel',
     confirm: 'Generate',
+  },
+  topUpDialog: {
+    title: 'Top Up Feed',
+    packageAriaLabel: '{count} feed package',
+    confirm: 'Confirm Top-up',
+    done: 'Done',
+    successTitle: 'Top-up successful!',
+    successMessage: 'Topped up {count} feed!',
+    errorMessage: 'Top-up failed. Please try again.',
+    unsupported: 'Simulated top-up is not supported in this environment.',
   },
 }

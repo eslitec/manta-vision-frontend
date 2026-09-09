@@ -17,12 +17,14 @@
             .subtabs(role="tablist" :aria-label="t('tryOn.steps.model')")
               button.subtab(v-for="s in modelTabs" :key="s.value" role="tab" :aria-selected="modelTab === s.value" :class="{ 'isActive': modelTab === s.value }" @click="modelTab = s.value") {{ s.label }}
             template(v-if="modelTab === 'builtIn'")
-              .models
-                button.model(v-for="m in models" :key="m.value" :aria-pressed="model === m.value" :class="{ 'isActive': model === m.value }" @click="model = m.value")
-                  span.model__thumb
-                    IconImagePlaceholder
-                  span.model__label {{ m.label }}
-              button.link {{ t('tryOn.viewFullLibrary') }}
+              p.models__empty(v-if="!models.length") {{ t('tryOn.noBuiltInModels') }}
+              Swiper.models(v-else :modules="[Navigation]" :slides-per-view="4" :space-between="10" navigation)
+                SwiperSlide(v-for="m in models" :key="m.materialId")
+                  button.model(:aria-pressed="model === m.materialId" :class="{ 'isActive': model === m.materialId }" @click="model = m.materialId")
+                    span.model__thumb
+                      img.model__thumbImage(:src="m.url" :alt="m.materialName")
+                    span.model__label {{ m.materialName }}
+              button.link {{ t('tryOn.viewFullLibrary', { count: models.length }) }}
             template(v-else)
               label.mdrop
                 input.mdrop__input(type="file" accept="image/*" @change="onModelUpload")
@@ -114,6 +116,10 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
+import { Swiper, SwiperSlide } from 'swiper/vue'
+import { Navigation } from 'swiper/modules'
+import 'swiper/css'
+import 'swiper/css/navigation'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import TopUpDialog from '@/components/TopUpDialog.vue'
 import AppButton from '@/components/AppButton.vue'
@@ -134,7 +140,7 @@ import { useFeedStore } from '@/stores/feed'
 import { useAssets } from '@/composables/useAssets'
 import { api } from '@/api'
 import { isInsufficientFeed } from '@/utils/error'
-import type { Asset } from '@/types/api'
+import type { Asset, Material } from '@/types/api'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 
 const router = useRouter()
@@ -149,13 +155,9 @@ const modelTabs = computed(() => [
   { value: 'upload', label: t('tryOn.tabs.upload') },
 ])
 const modelTab = ref('builtIn')
-const models = computed(() =>
-  ['femaleCasual', 'maleFormal', 'femaleSport', 'femaleElegant'].map((value) => ({
-    value,
-    label: t(`tryOn.models.${value}`),
-  })),
-)
-const model = ref('femaleCasual')
+// 內建模特庫：改為呼叫 api.listMaterials('model') 載入真實素材，取代原本寫死的四個字串
+const models = ref<Material[]>([])
+const model = ref('')
 
 type UploadedModel = { id: string; name: string; status: 'available' | 'reupload'; noteKey: string }
 // 前端示範資料：對應設計稿「已上傳模特」兩種審核狀態；實際上傳會 push 新項目
@@ -179,6 +181,16 @@ const savedId = ref('')
 
 onMounted(() => {
   consentStore.load()
+  api
+    .listMaterials('model')
+    .then((res) => {
+      models.value = res.items
+      if (res.items.length) model.value = res.items[0].materialId
+    })
+    .catch(() => {
+      // 失敗模式：載入失敗時比照空陣列處理，畫面顯示空狀態文字，不渲染壞掉的 Swiper
+      models.value = []
+    })
 })
 
 const onPick = (a: Asset) => {
@@ -352,29 +364,49 @@ async function onGenerate() {
   }
 }
 .models {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.75rem 0.625rem;
+  position: relative;
   margin-bottom: 0.625rem;
-  @include below($bp-sm) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0 1.25rem;
+  :deep(.swiper-button-prev),
+  :deep(.swiper-button-next) {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: $blue-dark-500;
+    &::after {
+      font-size: 0.75rem;
+    }
   }
+  :deep(.swiper-button-disabled) {
+    opacity: 0.35;
+  }
+}
+.models__empty {
+  font-size: 0.8125rem;
+  color: $gray-100;
+  margin-bottom: 0.625rem;
 }
 .model {
   @include flex(center, center, 0.5rem);
   flex-direction: column;
+  width: 100%;
   padding: 0;
   border: none;
   background: transparent;
   &__thumb {
     width: 100%;
     aspect-ratio: 4 / 5;
+    overflow: hidden;
     border-radius: 8px;
     background: #eef1f7;
     color: $babyBlue;
     font-size: 1.75rem;
     border: 2px solid transparent;
     @include flex(center, center);
+  }
+  &__thumbImage {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
   &__label {
     font-size: 0.75rem;

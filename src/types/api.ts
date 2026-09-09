@@ -199,8 +199,6 @@ export interface Session {
   expiresAt: number
 }
 
-export type { Asset }
-
 // ── 飼料儲值（MV「儲值」彈窗，mock-only）──
 // 套餐識別碼；套餐的顆數與顯示文字定義在 TopUpDialog.vue 的常數陣列，這裡只約束 id 格式。
 export type FeedPackageId = 'pkg-500' | 'pkg-1500' | 'pkg-3000'
@@ -211,6 +209,7 @@ export type FeedPackageId = 'pkg-500' | 'pkg-1500' | 'pkg-3000'
  * `api.topUpFeed?.(...)` 選擇性呼叫，避免真後端環境下呼叫到不存在的方法。
  */
 export type TopUpFeedFn = (packageId: string) => Promise<{ balance: number }>
+
 export type {
   Asset,
   BatchResult,
