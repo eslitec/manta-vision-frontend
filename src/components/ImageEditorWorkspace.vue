@@ -1940,9 +1940,11 @@ const previews = computed(() =>
   border-top: 1px solid #d2d5dd;
   padding: 1rem;
 }
+// 對齊 Figma（1311:887 ai_cost）：上方 padding 應為 14px，原本漏寫成 0，
+// 導致標題貼齊上方分隔線；左右／下方的 16px 維持不變。
 .aiCost {
   border-top: 1px solid #d2d5dd;
-  padding: 0 1rem 1rem;
+  padding: 0.875rem 1rem 1rem;
 }
 // 對齊 Figma（1141:952 props_object）：六個子項目（標題／描述框／字數／預設列／提示文字／
 // 按鈕）之間統一是 10px 間距，原本用 8px。
