@@ -33,5 +33,5 @@
 
 - Affected specs: library-management-ui
 - Affected code:
-  - Modified: src/components/AssetCard.vue（縮圖框 `aspect-ratio` 改為 `1 / 1`）
+  - Modified: src/components/AssetCard.vue（縮圖框 `aspect-ratio` 改為 `1 / 1`；另見決策 5，補上 `overflow: hidden` 修正直向真實素材照片撐高破版的問題）
   - Modified: src/views/LibraryView.vue（生成中佔位卡片縮圖框、刪除確認彈窗預覽框，`aspect-ratio` 皆改為 `1 / 1`）

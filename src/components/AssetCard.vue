@@ -75,6 +75,11 @@ watch(
     @include flex(center, center);
     width: 100%;
     aspect-ratio: 1 / 1;
+    // 縮圖是 .assetCard 這個 column flex 容器裡的 flex item，預設 min-height: auto
+    // 會讓 flex item 不能縮到比內容（直式照片的原生高度）還矮，蓋掉上面的 aspect-ratio，
+    // 導致直式照片的縮圖框變高變成長方形。overflow: hidden 讓它的 automatic minimum
+    // size 歸零，aspect-ratio 才會真正生效；同時也裁掉超出框外的圖片內容。
+    overflow: hidden;
     border-radius: 8px;
     background: #eef1f7;
     color: $babyBlue;
