@@ -76,6 +76,22 @@ Figma 是靜態設計工具，沒有、也無法標註動畫時序——畫出�
 
 這是老闆的正方形要求主動覆蓋原本的 Figma 靜態稿比例，不是實作疏漏——`unify-library-thumbnail-ratio` 的 design.md 決策 1 已經記錄了選擇正方形而非維持橫向比例的完整理由（背景／物件／模特三種素材類別原生比例不同，正方形是裁切幅度最平均的中性選擇）。這裡不重複那份理由，只記錄骨架卡片需要跟著同步調整、以及為什麼——避免之後有人對照 Figma `1309:7676` 發現骨架卡片「跟設計稿不一致」時，誤以為是實作疏漏而想要「修正」回橫向比例。
 
+### 決策 8：翻轉決策 6——合流檢視也一律固定觸發骨架屏，不管資料是否已在本地快取
+
+決策 6 的判斷（合流檢視資料已經整批快取在本地，翻頁不是真的在等待網路回應，SHALL NOT 為了視覺一致性人為插入骨架屏）在邏輯上仍然成立，且已經用 Playwright 實測驗證過（見決策 6 內文與 tasks.md 第 5 節）。但使用者實際使用後，明確要求反過來：不管資料有沒有在本地快取，切換分類或翻頁都要固定閃一下骨架屏，理由是視覺一致性——使用者希望每次切換都有統一的載入中過場動畫，而不是「有時候瞬間切換、有時候有動畫」這種不一致的體感。這是使用者在看過決策 6 的實際行為後做出的產品決策覆蓋，不是決策 6 的推論有錯。
+
+做法（第一版嘗試，經實測發現不夠）：`LibraryView.vue` 的 `fetchAssets()` 不再區分合流／非合流分支決定要不要清空 `assets.value`——兩個分支都在一開始同步執行 `assets.value = []`。合流分支原本「維持原樣不清空」的做法（決策 6 的做法段落）整段廢止；非合流分支既有的清空邏輯不變。
+
+**實測後發現只清空 `assets.value` 不夠**：`showLoadingSkeleton` 的觸發時機（`skeletonHoldActive` 何時被設成 `true`）原本寫在 `watch(loading, ...)` 裡，只有當 `wouldShowEmptySkeleton.value`（`!pagedRealAssets.value.length && !pendingTasks.value.length && !showMaterials.value`）為真時才會開始這次的骨架屏顯示。「全部素材」這類合流檢視翻頁時，即使清空了 `assets.value`，如果目標頁面本來就有內建素材可以顯示（`showMaterials` 為真，例如這個測試帳號的內建素材筆數剛好鋪滿前幾頁），`wouldShowEmptySkeleton` 依然是 false，骨架屏根本不會開始這次的 hold，等於第一版做法在有內建素材的頁面完全沒有效果——用 Playwright 實測「全部素材」連續翻頁確認骨架屏仍然完全沒有出現。
+
+**正確做法**：把「要不要開始這次骨架屏顯示」的判斷，從「目標內容是否為空」（`wouldShowEmptySkeleton`）改成「是否有一次新的查詢正在進行」——只要 `loading` 由 false 變 true，就無條件開始 `skeletonHoldActive`，不再檢查 `wouldShowEmptySkeleton`。`showLoadingSkeleton` 的計算式也同步簡化成 `skeletonHoldActive.value || loading.value`，拿掉原本疊加的 `&& wouldShowEmptySkeleton.value` 條件。`wouldShowEmptySkeleton` 這個 computed 不整個刪除，仍然保留給 `.assets__empty`（查詢完成但確實沒有任何素材時顯示的純文字提示）判斷用；只是不再拿它來決定骨架屏要不要開始顯示。
+
+這樣一來，不管目標頁面／分類最終有沒有內容可以顯示，骨架屏都會在查詢一開始就固定出現，並維持決策 5 的最短顯示時間（500ms），之後才依照查詢完成後的實際資料（`pagedRealAssets`／`pendingTasks`／`showMaterials`）切換成實際內容或「圖庫是空的」文字提示。
+
+不選擇讓合流分支也清空就結束（僅第一版做法）：已經實測證明不夠，記錄在這裡避免之後重蹈覆轍。
+
+這個翻轉的代價（決策 6 原本想避免的問題）：合流檢視（全部素材／物件素材／未分類）翻頁時，即使資料已經整批快取在本地、`fetchAllRealAssets` 其實不需要再打一次網路請求就能秒開，畫面還是會固定延遲到滿 500ms 才顯示，比原本「秒開」的體感慢了將近半秒。這是使用者明確要的取捨（視覺一致性優先於「快就直接顯示」），記錄在這裡供之後回頭檢視。
+
 ## Implementation Contract
 
 **行為**：使用者進入 `/library`、或變更左側篩選／來源 chip／關鍵字搜尋／頁碼，只要 `loading` 為真且目前沒有已顯示的素材（`!pagedRealAssets.length && !pendingTasks.length && !showMaterials`，沿用既有判斷條件，以下稱這個條件為「骨架屏狀態」），畫面顯示：
@@ -97,7 +113,9 @@ Figma 是靜態設計工具，沒有、也無法標註動畫時序——畫出�
 - 手動驗證決策 7：骨架卡片的縮圖佔位（`.assetSkeleton__thumb`）SHALL 呈現正方形，跟資料載入完成後 `AssetCard.vue` 的正方形縮圖框（`.assetCard__thumb`）外觀尺寸一致；觸發骨架屏載入狀態時，SHALL NOT 因為骨架卡片跟實際卡片比例不同而出現明顯的版面高度跳動
 - 確認頁碼列在骨架屏狀態下不會出現 Figma mockup 裡那組固定的「1 2 3 … 16」字樣（除非剛好使用者原本就在瀏覽第 16 頁附近、恰巧算出一樣的數字）
 - 手動驗證決策 5：模擬查詢在 500ms 內完成時（例如本機真後端，通常 30～50ms），骨架屏應維持顯示滿 500ms 才切換，能實際看到 shimmer 掃光位移；模擬查詢超過 500ms 才完成時，資料一回來應立刻切換，不應該有額外延遲
-- 手動驗證決策 6：確認「全部素材」（合流檢視）在材料鋪滿的頁面之間翻頁時維持原本的即時切換、SHALL NOT 額外閃一次骨架屏（不能為了這次修正引入新的閃爍）；非合流檢視（資料夾／`aiGenerate`／`edit`／`video` 分類）的 `fetchAssets()` 在呼叫 `load()` 前 SHALL 清空 `assets.value`，經程式碼檢視確認 `pagedRealAssets` 在非合流分支會正確反映清空後的空陣列，讓 `wouldShowEmptySkeleton` 在這些檢視翻頁／切換篩選時能正確判斷為真
+- ~~手動驗證決策 6：確認「全部素材」（合流檢視）在材料鋪滿的頁面之間翻頁時維持原本的即時切換、SHALL NOT 額外閃一次骨架屏~~ **（決策 8 已翻轉此驗收標準，見下）**
+- 非合流檢視（資料夾／`aiGenerate`／`edit`／`video` 分類）的 `fetchAssets()` 在呼叫 `load()` 前 SHALL 清空 `assets.value`，經程式碼檢視確認 `pagedRealAssets` 在非合流分支會正確反映清空後的空陣列，讓 `wouldShowEmptySkeleton` 在這些檢視翻頁／切換篩選時能正確判斷為真
+- 手動驗證決策 8：「全部素材」「物件素材」「未分類」等合流檢視翻頁或切換分類時，即使目標頁面本來就有內建素材可以顯示，骨架屏 SHALL 仍固定觸發並維持決策 5 的最短顯示時間（500ms）；不再要求合流檢視翻頁維持即時切換
 - `npm run lint` 與 `npx vue-tsc --noEmit` 通過
 - 既有圖庫相關測試（若有）維持全過；這次改動不影響 `useAssets.ts`／`api` 層，預期不需要新增測試
 

@@ -375,13 +375,16 @@ const skeletonHoldActive = ref(false)
 let skeletonHoldTimer: ReturnType<typeof setTimeout> | undefined
 let skeletonLoadStartedAt = 0
 
+// 決策 8（add-library-loading-skeleton）：骨架屏開始顯示的判斷，從「目標內容是否為空」
+// （wouldShowEmptySkeleton）改成「是否有新查詢正在進行」——不管切換後的頁面／分類本來
+// 就有內建素材可以顯示，只要查詢一開始，骨架屏就固定出現，維持視覺一致性。
+// wouldShowEmptySkeleton 仍保留給下面 .assets__empty 分支使用，只是不再用來決定骨架屏
+// 要不要開始這次的顯示。
 watch(loading, (isLoading) => {
   if (isLoading) {
-    if (wouldShowEmptySkeleton.value) {
-      skeletonLoadStartedAt = performance.now()
-      if (skeletonHoldTimer) clearTimeout(skeletonHoldTimer)
-      skeletonHoldActive.value = true
-    }
+    skeletonLoadStartedAt = performance.now()
+    if (skeletonHoldTimer) clearTimeout(skeletonHoldTimer)
+    skeletonHoldActive.value = true
     return
   }
   if (!skeletonHoldActive.value) return
@@ -399,9 +402,7 @@ onUnmounted(() => {
   if (skeletonHoldTimer) clearTimeout(skeletonHoldTimer)
 })
 
-const showLoadingSkeleton = computed(
-  () => skeletonHoldActive.value || (loading.value && wouldShowEmptySkeleton.value),
-)
+const showLoadingSkeleton = computed(() => skeletonHoldActive.value || loading.value)
 
 const categoryTags = CATEGORY_TAGS
 // 「未分類」不是後端 folders 清單裡的一員，是用 unfiledCount 組裝的固定置頂虛擬項目

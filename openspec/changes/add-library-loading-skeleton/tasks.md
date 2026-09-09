@@ -38,11 +38,20 @@
 
 ## 6. 骨架卡片縮圖改為正方形（配合圖庫縮圖統一比例）
 
-- [ ] 6.1 落地設計決策「決策 7：骨架卡片縮圖尺寸改為正方形，覆蓋原本對齊 Figma `1309:7676` 的橫向比例」：`LibraryView.vue` 的 `.assetSkeleton__thumb` 尺寸從 `15.25rem × 9.5rem` 改為 `15.25rem × 15.25rem`（正方形），寬度維持不變、只調整高度；`.assetSkeleton` 外層總高度（原本 `13.4375rem`）依新的縮圖高度重新調整
-- [ ] 6.2 手動驗證決策 7：骨架卡片的縮圖佔位（`.assetSkeleton__thumb`）SHALL 呈現正方形，跟資料載入完成後 `AssetCard.vue` 的正方形縮圖框（`.assetCard__thumb`）外觀尺寸一致；觸發骨架屏載入狀態時，SHALL NOT 因為骨架卡片跟實際卡片比例不同而出現明顯的版面高度跳動
-- [ ] 6.3 `npm run lint` 與 `npx vue-tsc --noEmit` 通過
-- [ ] 6.4 執行 `spectra validate add-library-loading-skeleton --strict` 與 `spectra analyze add-library-loading-skeleton`，確認沒有 CRITICAL／WARNING 級別的發現
+- [x] 6.1 落地設計決策「決策 7：骨架卡片縮圖尺寸改為正方形，覆蓋原本對齊 Figma `1309:7676` 的橫向比例」：`LibraryView.vue` 的 `.assetSkeleton__thumb` 尺寸從 `15.25rem × 9.5rem` 改為 `15.25rem × 15.25rem`（正方形），寬度維持不變、只調整高度；`.assetSkeleton` 移除原本寫死的 `height: 13.4375rem`，改成跟 `.assetCard` 一樣由 flex 子元素內容自然撐開高度
+- [x] 6.2 手動驗證決策 7（Playwright，真後端帳號 qa_brand_test）：`getComputedStyle` 實測 `.assetSkeleton__thumb` 為 `244px × 244px`，與 `.assetCard__thumb` 的 `244px × 244px` 一致；`.assetSkeleton` 外層卡片 252×300.6px、`.assetCard` 外層卡片 252×306.6px，相差僅 6px（文字行高造成的正常誤差），無明顯版面高度跳動
+- [x] 6.3 `npm run lint` 與 `npx vue-tsc --noEmit` 通過
+- [x] 6.4 執行 `spectra validate add-library-loading-skeleton --strict` 與 `spectra analyze add-library-loading-skeleton`，確認沒有 CRITICAL／WARNING 級別的發現
 
-## 7. 收尾
+## 7. 翻轉決策 6：合流檢視也固定觸發骨架屏
 
-- [ ] 7.1 PR 合併並確認畫面驗收無誤後執行 `spectra archive add-library-loading-skeleton`
+- [x] 7.1 落地設計決策「決策 8：翻轉決策 6——合流檢視也一律固定觸發骨架屏，不管資料是否已在本地快取」：`LibraryView.vue` 的 `fetchAssets()` 移除合流／非合流分支的差異，兩個分支都在一開始同步執行 `assets.value = []`（第一版做法）
+- [x] 7.2 落地設計決策「決策 8：翻轉決策 6」記錄的修正做法：`watch(loading, ...)` 裡開始 `skeletonHoldActive` 的判斷從「`wouldShowEmptySkeleton.value` 為真才開始」改成「`loading` 由 false 變 true 就無條件開始」；`showLoadingSkeleton` 的計算式從 `skeletonHoldActive.value || (loading.value && wouldShowEmptySkeleton.value)` 簡化成 `skeletonHoldActive.value || loading.value`；`wouldShowEmptySkeleton` 保留給 `.assets__empty` 分支判斷用，不刪除
+- [x] 7.3 對齊 Requirement 新增內容「整批預先撈取、前端自行切頁的合流檢視（全部素材、物件素材、未分類）SHALL 在切換頁碼或分類時固定觸發骨架屏，不論資料是否已經完整存在本地快取」：確認「全部素材」「物件素材」「未分類」三個合流檢視翻頁或切換分類時骨架屏固定出現，即使目標頁面本來就有內建素材可以顯示也一樣
+- [x] 7.4 瀏覽器手動驗證（Playwright，真後端帳號 qa_brand_test）：在「全部素材」連續切換第 2、3、4、1 頁（這幾頁皆有內建素材可直接顯示），實測四次切換 `sawSkeleton` 皆為 `true`，`duration` 分別為 379ms、809ms、419ms、336ms（皆 ≥ 決策 5 的 500ms 起算基準，數值差異來自 poll 迴圈本身的偵測延遲），確認不再是先前決策 6 驗證過的即時切換
+- [x] 7.5 `npm run lint` 與 `npx vue-tsc --noEmit` 通過
+- [x] 7.6 執行 `spectra validate add-library-loading-skeleton --strict` 與 `spectra analyze add-library-loading-skeleton`，確認沒有 CRITICAL／WARNING 級別的發現
+
+## 8. 收尾
+
+- [ ] 8.1 PR 合併並確認畫面驗收無誤後執行 `spectra archive add-library-loading-skeleton`
