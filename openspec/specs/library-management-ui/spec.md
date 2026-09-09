@@ -84,7 +84,7 @@ code:
 
 ### Requirement: 素材可依來源與關鍵字篩選
 
-圖庫管理中心 SHALL 提供來源篩選（全部／上傳／AI 生成／編輯產物）與關鍵字搜尋，兩者可與資料夾篩選同時套用。
+圖庫管理中心 SHALL 提供來源篩選（全部／上傳／AI 生成／編輯產物）與關鍵字搜尋，兩者可與資料夾篩選同時套用。來源篩選 chip SHALL NOT 覆寫 `line-height: 1`，維持與其他 chip／pill 元件一致的預設行高。
 
 #### Scenario: 使用者篩選來源
 
@@ -102,8 +102,8 @@ code:
 - **THEN** 素材清單區域顯示「沒有符合的素材」的空狀態提示
 
 <!-- @trace
-source: sync-mv-01-design
-updated: 2026-08-21
+source: sync-mv-01-design, fix-library-filter-chip-line-height
+updated: 2026-09-09
 code:
   - src/views/LibraryView.vue
   - src/components/AssetCard.vue
