@@ -395,7 +395,7 @@ export default {
     logoRedetect: 'Detect again',
     logoReplace: 'Replace logo',
     logoRemove: 'Remove',
-    color: { primary: 'Primary', secondary: 'Secondary', accent: 'Accent', new: 'New' },
+    color: { primary: 'Primary', secondary: 'Secondary', accent: 'Accent', new: 'New', extra: 'Accent {n}', customName: 'Custom color name' },
     palette: {
       analyzing: 'Detecting logo colors…',
       title: 'Colors extracted from the logo',

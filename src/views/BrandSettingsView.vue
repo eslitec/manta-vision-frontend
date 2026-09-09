@@ -148,13 +148,14 @@
               @click="assignColor(index)"
             ) {{ t('brandSettings.palette.setAs', { role: label }) }}
     .field
-      label {{ t('brandSettings.fields.colors') }}
+      label {{ t('brandSettings.fields.colors') }} #[small {{ profile.colors.length }} / {{ MAX_COLORS }}]
       .swatches
         .swatch(v-for="(c, i) in profile.colors" :key="i")
-          input(type="color" v-model="c.hex" :aria-label="colorLabels[i] || t('brandSettings.color.new')")
-          span.swatch__name {{ colorLabels[i] || t('brandSettings.color.new') }}
+          input(type="color" v-model="c.hex" :aria-label="colorLabels[i] || c.label || t('brandSettings.color.new')")
+          span.swatch__name(v-if="i < colorLabels.length") {{ colorLabels[i] }}
+          input.swatch__nameInput(v-else v-model="c.label" :aria-label="t('brandSettings.color.customName')" :placeholder="t('brandSettings.color.new')")
           span {{ c.hex.toUpperCase() }}
-        button.swatch.swatch--add(type="button" :aria-label="t('common.add')" @click="addColor")
+        button.swatch.swatch--add(v-if="profile.colors.length < MAX_COLORS" type="button" :aria-label="t('common.add')" @click="addColor")
           span.swatch__color(aria-hidden="true")
           span.swatch__name {{ t('common.add') }}
 
@@ -228,6 +229,15 @@ const toneOptions = computed(() =>
   ['warm', 'literary', 'professional', 'playful', 'minimal', 'luxury'].map((key) => t(`brandSettings.tones.${key}`)),
 )
 const colorLabels = computed(() => ['primary', 'secondary', 'accent'].map((key) => t(`brandSettings.color.${key}`)))
+// 品牌色票上限（★ 產品定案）：全部套用／手動新增合計最多 10 色，避免使用者套用顏色特別
+// 雜的 Logo 時色票被塞爆，也預留之後這批顏色若要拼進生成 prompt 時不會把訊號稀釋掉。
+const MAX_COLORS = 10
+// 第 4 筆以後的色票沒有固定角色（非主色／輔色／點綴色），預設命名「點綴色2」「點綴色3」…，
+// 使用者可在 swatch 的自訂輸入框自行改名。
+function nextColorLabel(index: number) {
+  if (index < colorLabels.value.length) return colorLabels.value[index]
+  return t('brandSettings.color.extra', { n: index - colorLabels.value.length + 2 })
+}
 // 22 個產業別分五組，逐項對齊 Figma dropdown_產業別（node 1139:716）。
 // 存進 BrandProfile.industry 的是這裡的英文 id，不是翻譯後的標籤，避免語系切換改變資料。
 const industryGroups = [
@@ -308,7 +318,9 @@ function confirmAddTag() {
   newTag.value = ''
 }
 function addColor() {
-  profile.value?.colors.push({ label: t('brandSettings.color.new'), hex: '#ffffff' })
+  const current = profile.value
+  if (!current || current.colors.length >= MAX_COLORS) return
+  current.colors.push({ label: nextColorLabel(current.colors.length), hex: '#ffffff' })
 }
 function resetPalette() {
   paletteError.value = ''
@@ -376,9 +388,11 @@ function assignedRole(hex: string) {
 function applyAllColors() {
   const current = profile.value
   if (!current || !detectedPalette.value.length) return
-  detectedPalette.value.slice(0, colorLabels.value.length).forEach((item, index) => {
+  // ★ 產品定案：全部套用不再只抓前 3 色——偵測到幾種顏色就全部塞進色票（上限 MAX_COLORS），
+  // 前 3 筆維持指派主色／輔色／點綴色，第 4 筆以後自動命名點綴色2、點綴色3…
+  detectedPalette.value.slice(0, MAX_COLORS).forEach((item, index) => {
     while (current.colors.length <= index) {
-      current.colors.push({ label: colorLabels.value[current.colors.length] ?? '', hex: '#FFFFFF' })
+      current.colors.push({ label: nextColorLabel(current.colors.length), hex: '#FFFFFF' })
     }
     current.colors[index].hex = item.hex
   })
@@ -1113,6 +1127,32 @@ async function onCancel() {
   &__name {
     color: #606692;
     font-weight: 400;
+  }
+
+  // 第 4 個以後的自訂色票：讓使用者自己輸入名稱（例如「點綴色2」改成別的名字），
+  // 樣式對齊 &__name（同色、同字重），只在 hover／focus 時才露出底線，平常看起來像純文字
+  &__nameInput {
+    width: 100%;
+    padding: 0;
+    border: 0;
+    border-bottom: 1px solid transparent;
+    background: transparent;
+    color: #606692;
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1rem;
+    text-align: center;
+
+    &:hover,
+    &:focus {
+      border-bottom-color: $blue-light;
+    }
+
+    &:focus-visible {
+      outline: 2px solid $yellow;
+      outline-offset: 2px;
+    }
   }
 
   > span:last-child:not(.swatch__name) {
