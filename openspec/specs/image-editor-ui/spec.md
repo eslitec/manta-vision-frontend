@@ -51,12 +51,17 @@ code:
 
 ### Requirement: AI 工具即時扣款並顯示成本
 
-編輯畫布與 AI 修圖的每個 AI 工具 SHALL 顯示其飼料成本，且在執行當下即時扣款。
+編輯畫布與 AI 修圖的每個 AI 工具 SHALL 顯示其飼料成本，且在執行當下即時扣款。「本次編輯已使用的 AI 工具」面板（`ai_cost`）SHALL 有 `14px` 上方內距、`16px` 左右與下方內距。
 
 #### Scenario: 使用者套用背景移除
 
 - **WHEN** 使用者對素材套用「背景移除」
 - **THEN** 顯示該工具成本並在執行時扣除對應飼料
+
+#### Scenario: AI 工具成本面板的內距對齊 Figma
+
+- **WHEN** 使用者查看「本次編輯已使用的 AI 工具」面板
+- **THEN** 面板上方內距為 `14px`，左右與下方內距為 `16px`，標題不貼齊上方分隔線
 
 #### Scenario: 背景移除執行中顯示處理覆蓋層
 
@@ -65,7 +70,7 @@ code:
 
 <!-- @trace
 source: sync-mv-09-design, fix-mv09-editor-figma-mismatches
-updated: 2026-09-08
+updated: 2026-09-09
 code:
   - src/components/ImageEditorWorkspace.vue
   - src/components/icons/IconSpinnerRing.vue

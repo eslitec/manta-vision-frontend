@@ -41,6 +41,13 @@ AI 修圖 loading box（MV-09b3，Figma node `1311:580`／`1311:814`／`1311:815
 - 取消按鈕從 `size="compact"` 改回 `AppButton` 預設 medium 尺寸（對齊節點 `1311:1048` 量出來的 36px 高／18px 圓角／9px·16px padding）
 - 疊層背景 `rgba(255,255,255,0.92)` → `0.96`、元素間距 `6px` → `12px`、副標文字色 `#9299aa` → `#606692`，皆為量測 Figma 後的訂正；補上 `border-radius: 4px` 避免疊層方角蓋住外層 `.artboard` 既有的圓角邊框
 
+## 後續調整三（ingest，2026-09-09）：AI 工具成本面板內距對齊 Figma
+
+任務 1.5 當初做的「本次編輯已使用的 AI 工具」面板（`.aiCost`）也沒有比對過自己的 Figma node，`padding: 0 1rem 1rem` 漏寫了上方內距，標題貼齊上方分隔線，跟先前「文字屬性面板」（`fix-mv09-properties-panel-spacing`）漏寫上方 padding 是同一種疏漏模式。用 Figma MCP 取得 node `1311:887`（`ai_cost`）確認精確數值：
+
+- `padding-top` 應為 `14px`（不是 0），`padding-right`／`padding-bottom`／`padding-left` 維持 `16px` 不變
+- 子項目（標題／每個工具列／合計列／說明文字）之間的間距 SHALL 為 `8px`——這部分程式碼原本靠 `.aiCost__row` 的 `margin: 0.5rem 0` 疊加相鄰兄弟元素的 margin collapse 已經得到 8px，跟 Figma 一致，不需要調整，只需要修正上方 padding
+
 ## 待確認
 
 - 裁切「已套用」狀態的觸發條件（固定比例 vs 自訂拖曳）是依現有程式碼與設計稿結構推斷的合理對應，Figma 本身沒有明確標示觸發時機，若跟設計師確認後有出入可再調整。

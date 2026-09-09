@@ -35,7 +35,15 @@
 - [x] 5.2 `openspec/specs/image-editor-ui/spec.md`：「背景移除執行中顯示處理覆蓋層」Scenario 補上覆蓋層背景透明度、圓角、spinner 圖示與尺寸、取消按鈕尺寸的具體規格，trace 加上 `src/components/icons/IconSpinnerRing.vue`、日期更新
 - [x] 5.3 `npx vue-tsc --noEmit` 確認無錯誤
 
-## 6. 驗證（第二輪，2026-09-08）
+## 6. AI 工具成本面板內距對齊 Figma（ingest，2026-09-09）
 
-- [ ] 6.1 執行 `spectra validate fix-mv09-editor-figma-mismatches --strict` 與 `spectra analyze fix-mv09-editor-figma-mismatches`，確認沒有 CRITICAL／WARNING 級別的發現
-- [ ] 6.2 PR 合併並確認畫面驗收無誤後執行 `spectra archive fix-mv09-editor-figma-mismatches`
+> 任務 1.5 當初做的「本次編輯已使用的 AI 工具」面板（`.aiCost`）沒有比對過自己的 Figma node，`padding: 0 1rem 1rem` 漏寫了上方內距，標題貼齊上方分隔線。用 Figma MCP 取得 node `1311:887`（`ai_cost`）確認精確數值後修正。
+
+- [x] 6.1 對齊 Requirement「AI 工具即時扣款並顯示成本」：用 Figma MCP 取得 node `1311:887`（`ai_cost`）確認 `padding-top: 14px`、`padding-right/bottom/left: 16px`、子項目間 `gap: 8px`；`.aiCost` 的 `padding` 從 `0 1rem 1rem` 改成 `0.875rem 1rem 1rem`（左右／下方 16px 不變，只補上 14px 的上方內距）；子項目間距（`.aiCost__row` 的 `margin: 0.5rem 0` 造成的 margin collapse）已經是 8px，跟 Figma 一致，不需要調整
+- [x] 6.2 `openspec/specs/image-editor-ui/spec.md`：「AI 工具即時扣款並顯示成本」Requirement 補上面板內距規格與新 Scenario，trace 日期更新
+- [x] 6.3 `npx vue-tsc --noEmit` 確認無錯誤
+
+## 7. 驗證（第三輪，2026-09-09）
+
+- [x] 7.1 執行 `spectra validate fix-mv09-editor-figma-mismatches --strict` 與 `spectra analyze fix-mv09-editor-figma-mismatches`，確認沒有 CRITICAL／WARNING 級別的發現（`validate` 通過，`analyze` Coverage／Gaps Clean，僅剩 9 個既有的非阻斷 SUGGEST）；`npm run lint` 也一併確認通過
+- [ ] 7.2 PR 合併並確認畫面驗收無誤後執行 `spectra archive fix-mv09-editor-figma-mismatches`
