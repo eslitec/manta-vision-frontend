@@ -56,7 +56,7 @@
         small.folders__error(v-if="folderError" role="alert") {{ folderError }}
       p.folders__hint {{ t('library.folderHint') }}
     section.assets
-      .assets__toolbar
+      .assets__toolbar(:class="{ isLoading: showLoadingSkeleton }")
         AppSearchbar.assets__search(v-model="keyword" :label="t('imagePicker.searchPlaceholder')" :placeholder="t('imagePicker.searchPlaceholder')")
         .sources
           span.sources__label {{ t('library.source') }}
@@ -83,7 +83,13 @@
             IconDelete
             | {{ t('common.delete') }}
 
-      .assets__empty(v-if="loading && !pagedRealAssets.length && !pendingTasks.length && !showMaterials") {{ t('common.loading') }}
+      .assets__grid(v-if="showLoadingSkeleton")
+        .assetSkeleton(v-for="n in 8" :key="n")
+          .assetSkeleton__thumb
+          .assetSkeleton__title
+          .assetSkeleton__meta
+            .assetSkeleton__chip
+            .assetSkeleton__dim
       .assets__empty(v-else-if="!pagedRealAssets.length && !pendingTasks.length && !showMaterials") {{ t('library.empty') }}
       .assets__grid(v-else)
         .asset.asset--pending(v-for="t in pendingTasks" :key="t.id")
@@ -121,14 +127,14 @@
           @toggle="toggleSelect(a.id)"
         )
 
-      .pagination(v-if="displayTotal")
-        span.pagination__total {{ t('library.totalAssets', { count: displayTotal }) }}
+      .pagination(v-if="displayTotal || showLoadingSkeleton" :class="{ isLoading: showLoadingSkeleton }")
+        span.pagination__total {{ showLoadingSkeleton ? t('common.loading') : t('library.totalAssets', { count: displayTotal }) }}
         .pagination__pages
-          button.pagination__nav(:aria-label="t('library.previousPage')" :disabled="page === 1" @click="page = page - 1") ‹
+          button.pagination__nav(:aria-label="t('library.previousPage')" :disabled="showLoadingSkeleton || page === 1" @click="page = page - 1") ‹
           template(v-for="(p, i) in pageItems" :key="i")
             span.pagination__ellipsis(v-if="p === '…'") …
-            button.pagination__page(v-else :aria-current="p === page ? 'page' : undefined" :aria-label="t('library.pageNumber', { page: p })" :class="{ 'isActive': p === page }" :disabled="p === page" @click="page = p") {{ p }}
-          button.pagination__nav(:aria-label="t('library.nextPage')" :disabled="page === totalPages" @click="page = page + 1") ›
+            button.pagination__page(v-else :aria-current="p === page ? 'page' : undefined" :aria-label="t('library.pageNumber', { page: p })" :class="{ 'isActive': p === page }" :disabled="showLoadingSkeleton || p === page" @click="page = p") {{ p }}
+          button.pagination__nav(:aria-label="t('library.nextPage')" :disabled="showLoadingSkeleton || page === totalPages" @click="page = page + 1") ›
 
   ImageEditorWorkspace(v-else :mode="activeTab")
 
@@ -353,6 +359,11 @@ const pendingTasks = computed(() =>
   activeView.value.kind === 'all' && page.value === 1
     ? generationTasks.value.filter((t) => t.kind === 'video' && (t.status === 'pending' || t.status === 'processing'))
     : [],
+)
+// 對齊 Figma（1309:7666 panel_assets）：素材清單載入中（尚無已顯示的素材／pending 任務／
+// 內建素材）時，骨架卡片、工具列、頁碼列三者一起呈現載入中的視覺，不是只有卡片格線變化。
+const showLoadingSkeleton = computed(
+  () => loading.value && !pagedRealAssets.value.length && !pendingTasks.value.length && !showMaterials.value,
 )
 
 const categoryTags = CATEGORY_TAGS
@@ -913,6 +924,11 @@ async function onUpload(e: Event) {
       flex: 1;
     }
   }
+  // 對齊 Figma（1309:7666 panel_assets）：載入中骨架屏狀態下，工具列降到 50% 透明度並停用互動
+  &.isLoading {
+    opacity: 0.5;
+    pointer-events: none;
+  }
 }
 .assets__actions {
   @include flex(flex-start, center, 0.75rem);
@@ -1135,6 +1151,68 @@ async function onUpload(e: Event) {
   color: $gray-100;
   font-size: 0.75rem;
 }
+// 對齊 Figma（1309:7676 grid_assets）：素材清單載入中顯示的骨架卡片，取代純文字「載入中…」。
+// 佔位色塊統一用同一組漸層＋掃光動畫（決策 3：Figma 靜態稿本身無法標註動畫時序，
+// 掃光效果是延伸設計意圖的實作選擇，不是 Figma 標註值）。
+@keyframes assetSkeletonShimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+.assetSkeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 15.75rem;
+  height: 13.4375rem;
+  padding: 0.25rem;
+  border: 1px solid $gray;
+  border-radius: 10px;
+  background: $white;
+
+  &__thumb,
+  &__title,
+  &__chip,
+  &__dim {
+    flex-shrink: 0;
+    background: linear-gradient(to right, #e4e8f2 0%, #f2f5fb 50%, #e4e8f2 100%);
+    background-size: 200% 100%;
+    animation: assetSkeletonShimmer 1.5s ease-in-out infinite;
+  }
+
+  &__thumb {
+    width: 15.25rem;
+    height: 9.5rem;
+    border-radius: 8px;
+  }
+
+  &__title {
+    width: 8.6875rem;
+    height: 0.8125rem;
+    border-radius: 6px;
+  }
+
+  &__meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  &__chip {
+    width: 3.625rem;
+    height: 1.125rem;
+    border-radius: 10px;
+  }
+
+  &__dim {
+    width: 4rem;
+    height: 0.6875rem;
+    border-radius: 6px;
+  }
+}
 .asset {
   position: relative;
   padding: 0.25rem;
@@ -1273,6 +1351,12 @@ async function onUpload(e: Event) {
     flex-direction: column;
     justify-content: center;
     gap: 0.5rem;
+  }
+  // 對齊 Figma（1309:7666 panel_assets）：載入中骨架屏狀態下，頁碼列維持顯示但降到 40% 透明度、
+  // 停用互動（決策 4：右側頁碼數字沿用既有計算結果，不套用 Figma 畫的固定示意頁碼）
+  &.isLoading {
+    opacity: 0.4;
+    pointer-events: none;
   }
   &__total {
     font-size: 0.875rem;
