@@ -25,13 +25,15 @@
 
   h2.home__sectionTitle {{ t('home.sectionTitle') }}
   .cards
-    router-link.card(v-for="t in genTools" :key="t.key" :to="t.to")
-      .card__icon
-        component(:is="t.icon")
-      .card__body
-        .card__title {{ t.title }}
-        .card__desc {{ t.desc }}
-      IconFeedBottleBadge.card__feedBadge
+    .card(v-for="tool in genTools" :key="tool.key")
+      router-link.card__link(:to="tool.to")
+        .card__icon
+          component(:is="tool.icon")
+        .card__body
+          .card__title {{ tool.title }}
+          .card__desc {{ tool.desc }}
+      button.card__feedBadgeBtn(type="button" @click.stop="topUpOpen = true" :aria-label="t('feedBadge.topup')")
+        IconFeedBottleBadge.card__feedBadge
 
   router-link.card.card--wide(to="/library")
     .card__icon
@@ -245,7 +247,6 @@ const genTools = computed(() => [
 }
 
 .card {
-  @include flex(flex-start, flex-start, 0.75rem);
   background: $white;
   border-radius: 10px;
   box-shadow: 0px 4px 7px 0px rgba(96, 100, 114, 0.2);
@@ -259,16 +260,31 @@ const genTools = computed(() => [
   &:hover {
     transform: translateY(-0.0625rem);
   }
+  &__link {
+    @include flex(flex-start, flex-start, 0.75rem);
+    width: 100%;
+    height: 100%;
+    color: inherit;
+    text-decoration: none;
+  }
   &__icon {
     width: 2.5rem;
     height: 2.5rem;
     flex-shrink: 0;
     @include flex(center, center);
   }
-  :deep(.card__feedBadge) {
+  &__feedBadgeBtn {
     position: absolute;
     top: 1.25rem;
     right: 1.25rem;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    line-height: 0;
+    cursor: pointer;
+  }
+  :deep(.card__feedBadge) {
     width: 1.75rem;
     height: 1.75rem;
   }
@@ -287,6 +303,8 @@ const genTools = computed(() => [
     line-height: 1.5;
   }
   &--wide {
+    display: flex;
+    gap: 0.75rem;
     grid-column: 1 / -1;
     align-items: center;
     min-height: 0;
@@ -294,6 +312,8 @@ const genTools = computed(() => [
     padding: 1.25rem 0.75rem;
     border: 1px solid $gray;
     box-shadow: none;
+    text-decoration: none;
+    color: inherit;
   }
 }
 </style>

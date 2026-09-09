@@ -82,5 +82,25 @@
 
 #### Scenario: 巢狀在既有互動元素內的圖示維持原本行為，不變成獨立按鈕
 
-- **WHEN** 使用者點擊 `HomeView` 工具卡片右上角的飼料徽章、`MarketingPostView` 輸出類型選項卡片內的飼料圖示、`ImageEditorWorkspace` 工具按鈕或修圖選項清單內的飼料圖示、`DefaultLayout` 側邊導覽「飼料用量」連結
-- **THEN** SHALL 維持原本各自的既有行為（導覽到對應生成頁面／選取輸出類型／選取工具或選項／導覽到 `/usage`），SHALL NOT 額外開啟 `TopUpDialog`
+- **WHEN** 使用者點擊 `MarketingPostView` 輸出類型選項卡片內的飼料圖示、`ImageEditorWorkspace` 工具按鈕或修圖選項清單內的飼料圖示、`DefaultLayout` 側邊導覽「飼料用量」連結
+- **THEN** SHALL 維持原本各自的既有行為（選取輸出類型／選取工具或選項／導覽到 `/usage`），SHALL NOT 額外開啟 `TopUpDialog`
+
+### Requirement: 首頁工具卡片的飼料徽章可以點擊儲值，不影響卡片本身的導覽
+
+`src/views/HomeView.vue` 每張工具卡片右上角的 `IconFeedBottleBadge.card__feedBadge` 徽章 SHALL 可以點擊並開啟 `TopUpDialog`。卡片其餘區域（圖示、標題、說明文字）SHALL 維持原本導覽到對應生成頁面的行為，SHALL NOT 因為徽章變成按鈕而失去可點擊導覽的能力。
+
+#### Scenario: 點擊卡片徽章開啟儲值彈窗
+
+- **WHEN** 使用者點擊工具卡片右上角的飼料徽章
+- **THEN** 畫面開啟 `TopUpDialog`，SHALL NOT 導航到該卡片對應的生成頁面
+
+##### Example:
+
+- **GIVEN** 使用者在首頁看到「AI 生成行銷 PO 文」卡片，右上角有飼料徽章
+- **WHEN** 使用者點擊該徽章
+- **THEN** `TopUpDialog` 開啟，網址列仍然是首頁（不是 `/generate/post`）
+
+#### Scenario: 點擊卡片其餘區域維持原本的導覽行為
+
+- **WHEN** 使用者點擊工具卡片的圖示、標題或說明文字（徽章以外的區域）
+- **THEN** SHALL 導航到該卡片對應的生成頁面，SHALL NOT 開啟 `TopUpDialog`

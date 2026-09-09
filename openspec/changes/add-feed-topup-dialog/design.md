@@ -57,7 +57,29 @@ proposal.md 的 Non-Goal 反轉後，以下每個檔案都要：(a) 在圖示外
 
 ### 決策 8（2026-09-09 ingest）：例外清單裡的圖示維持不可點擊，不做替代方案
 
-proposal.md Non-Goals 列出的四個例外（`DefaultLayout.vue` 導覽連結、`HomeView.vue` 卡片徽章、`MarketingPostView.vue` 的 `outputTypeCard__icon`、`ImageEditorWorkspace.vue` 的工具按鈕內成本標籤與 `label.option` 內的選項成本標籤）SHALL NOT 額外做「點擊卡片/按鈕本身也觸發儲值」之類的替代方案——這些既有互動元素各自已經有明確、不該被覆蓋的既有點擊行為（導覽、選取生成類型、選取工具、勾選選項），這次需求的範圍是「圖示本身可點擊」，不是「重新設計這些既有元件的互動」。
+proposal.md Non-Goals 列出的例外（`DefaultLayout.vue` 導覽連結、`MarketingPostView.vue` 的 `outputTypeCard__icon`、`ImageEditorWorkspace.vue` 的工具按鈕內成本標籤與 `label.option` 內的選項成本標籤）SHALL NOT 額外做「點擊卡片/按鈕本身也觸發儲值」之類的替代方案——這些既有互動元素各自已經有明確、不該被覆蓋的既有點擊行為（導覽、選取生成類型、選取工具、勾選選項），這次需求的範圍是「圖示本身可點擊」，不是「重新設計這些既有元件的互動」。
+
+**（2026-09-10 ingest：`HomeView.vue` 卡片徽章已從這份例外清單移除，改用決策 9 的「伸展連結」寫法讓它可點擊，不再是不可解的巢狀按鈕問題。）**
+
+### 決策 9（2026-09-10 ingest）：`HomeView.vue` 卡片徽章改用「伸展連結」（stretched link）拆解巢狀按鈕問題
+
+使用者事後追加需求：`HomeView.vue` 工具卡片右上角的 `IconFeedBottleBadge.card__feedBadge` 徽章也要能點擊開啟 `TopUpDialog`，推翻決策 8 原本因為「巢狀在 `router-link.card` 內，HTML 不允許按鈕巢狀連結」而列入例外的判斷。
+
+解法不是硬把 `button` 塞進 `router-link` 裡面（那仍然是無效標記），而是把原本「整張卡片都是一個 `router-link`」的結構，拆成「卡片本身是普通 `div`，內部有一個貼齊卡片內容區、負責導覽的 `router-link.card__link`，飼料徽章則獨立變成同層級的 `button.card__feedBadgeBtn`」：
+
+```
+.card
+  router-link.card__link(:to="t.to")
+    .card__icon
+      component(:is="t.icon")
+    .card__body
+      .card__title {{ t.title }}
+      .card__desc {{ t.desc }}
+  button.card__feedBadgeBtn(type="button" @click.stop="topUpOpen = true" :aria-label="t('feedBadge.topup')")
+    IconFeedBottleBadge.card__feedBadge
+```
+
+`.card` 維持原本的背景／圓角／陰影／`position: relative`；`.card__link` 接手原本 `.card` 的 `flex` 排版屬性並填滿卡片內容區，可及名稱一樣是圖示＋標題＋說明文字組成，跟改版前用同一段文字導覽的行為相同；`.card__feedBadgeBtn` 維持原本 `.card__feedBadge` 的 `position: absolute; top: 1.25rem; right: 1.25rem` 座標，因為是絕對定位元素會自然疊在同層的 `.card__link` 之上，點擊徽章只會觸發按鈕本身、不會落到底下的連結，點擊卡片其他區域則維持原本的導覽行為不變。
 
 ## Implementation Contract
 
