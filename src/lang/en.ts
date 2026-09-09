@@ -730,6 +730,10 @@ export default {
       object: 'Object: Bouquet',
       original: 'Original: {name}',
     },
+    emptyState: {
+      title: 'No asset selected',
+      canvasHint: 'Click "Select from library" above to start editing',
+    },
     layerDescriptions: {
       text: 'Text layer',
       object: 'AI-generated object',

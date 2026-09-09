@@ -74,7 +74,7 @@
               small.retouchProgress__eta {{ retouchTimeRemainingLabel }}
             IconImagePlaceholder(v-else)
           small(v-if="!retouching") {{ t('editor.consumed', { count: lastRetouchCost }) }}
-      footer.resultActions
+      footer.resultActions(v-if="hasSelectedAsset")
         span {{ t('editor.saveHint') }}
         AppButton(variant="outline" @click="retouchSetupOpen = true") {{ t('editor.retouch.again') }}
         AppButton(variant="outline") {{ t('common.download') }}
@@ -87,7 +87,7 @@
       button.tool(
         :class="{active: tool==='remove'}"
         :aria-pressed="tool === 'remove'"
-        :disabled="applyingTool === 'remove'"
+        :disabled="applyingTool === 'remove' || !hasSelectedAsset"
         @click="selectRemoveTool"
       )
         IconAiSparkle
@@ -95,26 +95,30 @@
         small.tool__cost(v-if="removeToolCost")
           IconFeedBottleSmall
           | {{ removeToolCost }}
-      button.tool.tool--object(:class="{active: tool==='object'}" :aria-pressed="tool === 'object'" @click="tool = 'object'") #[IconAddObject] #[span {{ t('editor.tools.object') }}]
-      button.tool(:class="{active: tool==='text'}" :aria-pressed="tool === 'text'" @click="insertTextLayer") #[IconTextDocument] #[span {{ t('editor.tools.text') }}]
-      button.tool(:class="{active: tool==='crop'}" :aria-pressed="tool === 'crop'" @click="tool='crop'") #[IconEdit] #[span {{ t('editor.tools.crop') }}]
+      button.tool.tool--object(:class="{active: tool==='object'}" :aria-pressed="tool === 'object'" :disabled="!hasSelectedAsset" @click="tool = 'object'") #[IconAddObject] #[span {{ t('editor.tools.object') }}]
+      button.tool(:class="{active: tool==='text'}" :aria-pressed="tool === 'text'" :disabled="!hasSelectedAsset" @click="insertTextLayer") #[IconTextDocument] #[span {{ t('editor.tools.text') }}]
+      button.tool(:class="{active: tool==='crop'}" :aria-pressed="tool === 'crop'" :disabled="!hasSelectedAsset" @click="tool='crop'") #[IconEdit] #[span {{ t('editor.tools.crop') }}]
     section.canvasPanel
       header.canvasHead
-        strong #[IconImagePlaceholder] {{ selectedAssetName }}
-        span {{ t('editor.status', { status: tool === 'crop' ? t('editor.cropping') : t('editor.edited') }) }}
+        strong(v-if="hasSelectedAsset") #[IconImagePlaceholder] {{ selectedAssetName }}
+        strong(v-else) {{ t('editor.emptyState.title') }}
+        span(v-if="hasSelectedAsset") {{ t('editor.status', { status: tool === 'crop' ? t('editor.cropping') : t('editor.edited') }) }}
         AppButton.canvasHead__libraryButton(variant="outline" @click="openEditorPicker") {{ t('common.selectFromLibrary') }}
-        .canvasActions
+        .canvasActions(v-if="hasSelectedAsset")
           button.canvasActions__zoom(type="button" :disabled="!canZoomOut" :aria-label="t('editor.zoomOut')" @click="zoomOut")
             IconBack
           button.canvasActions__zoom(type="button" :disabled="!canZoomIn" :aria-label="t('editor.zoomIn')" @click="zoomIn")
             IconNext
           output.canvasActions__value(aria-live="polite") {{ zoomPercent }}%
-        AppButton(:disabled="Boolean(savedAssetId)" @click="openSaveDialog") {{ savedAssetId ? t('common.saved') : t('editor.saveAsNew') }}
+        AppButton(v-if="hasSelectedAsset" :disabled="Boolean(savedAssetId)" @click="openSaveDialog") {{ savedAssetId ? t('common.saved') : t('editor.saveAsNew') }}
         span.visuallyHidden(v-if="savedAssetId" role="status" aria-live="polite") {{ t('common.saved') }}
         span.visuallyHidden(v-if="saveError" role="alert") {{ t('editor.saveFailed') }}
       .canvas
         .artboard(ref="artboardRef" :class="{cropping: tool==='crop'}" :style="artboardZoomStyle")
-          template(v-if="originalLayer.visible")
+          .canvasEmpty(v-if="!originalLayer")
+            IconImagePlaceholder
+            span.canvasEmpty__hint {{ t('editor.emptyState.canvasHint') }}
+          template(v-else-if="originalLayer.visible")
             img.editorSourceImg(v-if="selectedAssetUrl" :src="selectedAssetUrl" :alt="selectedAssetName")
             IconImagePlaceholder(v-else)
           .textObject(
@@ -418,10 +422,10 @@ const editorPickerOpen = ref(false)
 // 「加入物件」對齊 Figma（1141:906）後改成 AI 生成流程，不再是從圖庫挑素材疊圖，
 // 所以這顆 picker 現在只服務「選擇要編輯的素材」一種用途。
 const editorPickerTitle = computed(() => t('editor.sourcePickerTitle'))
-const selectedAssetName = ref(t('editor.demoAsset'))
-// demo 素材沒有真實圖檔（mock 的 url 留空，見 types/asset.ts）；從圖庫選了真的素材
-// 之後才有 url 可畫，三處縮圖（retouch 來源、比對面板原圖、主畫布原圖圖層）都共用
-// 這一個 ref，沒有 url 時維持原本的 IconImagePlaceholder 佔位，不強制顯示破圖。
+// 尚未從圖庫選定素材時，名稱與網址都 SHALL 維持真的空字串，不能用示範資料頂替
+// （decision 1，fix-editor-empty-state-before-asset-selected）——畫面上是否顯示
+// 標題／圖層／工具列一律看這兩個 ref 是否有值，不是看它們「看起來像不像」有值。
+const selectedAssetName = ref('')
 const selectedAssetUrl = ref('')
 // 「另存為新素材」要真的把裁切結果傳給後端（POST /upload 帶 sourceImageId）才能讓後端
 // 標成 source=edit、非破壞性關聯回原圖，所以要記住目前選的是圖庫裡哪一張真實素材。
@@ -437,6 +441,10 @@ const saveDialogOpen = ref(false)
 const openEditorPicker = () => {
   editorPickerOpen.value = true
 }
+// 空狀態判斷（decision 5，fix-editor-empty-state-before-asset-selected）：
+// selectedAssetUrl 已經是既有、正確代表「有沒有真的選定素材」的 ref（見上方
+// selectedAssetUrl 宣告處的說明），沿用它，不重複定義語意相同的旗標。
+const hasSelectedAsset = computed(() => Boolean(selectedAssetUrl.value))
 const selectEditorAsset = (asset: Asset) => {
   selectedAssetName.value = asset.name
   selectedAssetUrl.value = asset.url ?? ''
@@ -445,6 +453,14 @@ const selectEditorAsset = (asset: Asset) => {
   // 換了來源素材＝重新開始，先前的扣款紀錄不再屬於這張圖
   usedTools.value = []
   toolError.value = ''
+  // 原圖圖層只在真的選定素材後才存在（decision 2）：第一次選定時新增一筆，
+  // 之後在同一次編輯工作階段重新選擇別的素材，就地更新這一筆而不是疊加新的。
+  if (originalLayer.value) {
+    originalLayer.value.visible = true
+  } else {
+    layers.push({ key: 'original', type: 'original', visible: true, locked: true })
+  }
+  selectedLayerKey.value = 'original'
 }
 const suggestedAssetName = computed(() => {
   if (props.mode === 'retouch') return `${selectedAssetName.value}_${t('editor.saveDialog.suffixes.retouch')}`
@@ -784,8 +800,10 @@ type ObjectEditorLayer = EditorLayer & {
   scale: number
   dragging: boolean
 }
-const layers = reactive<EditorLayer[]>([{ key: 'original', type: 'original', visible: true, locked: true }])
-const selectedLayerKey = ref('original')
+// 圖層清單初始為空（decision 2）：原圖圖層只在 selectEditorAsset() 真的選定素材
+// 之後才會被 push 進來，元件掛載當下沒有任何圖層，也就沒有任何圖層被選取。
+const layers = reactive<EditorLayer[]>([])
+const selectedLayerKey = ref('')
 const draggedLayerKey = ref('')
 const dropTargetKey = ref('')
 const layerLabel = (layer: EditorLayer) => {
@@ -805,7 +823,7 @@ const selectLayer = (key: string) => {
 }
 const textLayer = computed(() => layers.find((layer) => layer.type === 'text'))
 const objectLayers = computed(() => layers.filter((layer): layer is ObjectEditorLayer => layer.type === 'object'))
-const originalLayer = computed(() => layers.find((layer) => layer.key === 'original')!)
+const originalLayer = computed(() => layers.find((layer) => layer.key === 'original'))
 const selectedLayer = computed(() => layers.find((layer) => layer.key === selectedLayerKey.value))
 const canDuplicateSelectedLayer = computed(() => selectedLayer.value?.type === 'object')
 const layerZIndex = (key: string) => {
@@ -929,8 +947,13 @@ async function generateObjectFromDescription() {
   }
 }
 const toggleOriginalLock = () => {
-  originalLayer.value.locked = !originalLayer.value.locked
-  if (originalLayer.value.locked) originalLayer.value.visible = true
+  // 這個函式只會被圖層清單裡「原圖」那一列的鎖定按鈕觸發，該按鈕本身只在
+  // originalLayer 存在時才會被渲染出來，但型別上 originalLayer 仍然可能是
+  // undefined（decision 3），這裡用區域變數做一次防呆，滿足型別檢查。
+  const layer = originalLayer.value
+  if (!layer) return
+  layer.locked = !layer.locked
+  if (layer.locked) layer.visible = true
 }
 const RETOUCH_OPTION_KEYS: RetouchOptionKey[] = ['removeObjects', 'repair', 'lighting', 'upscale']
 // cost／free 由 getEditorPricing 填入，這裡只保留預設勾選狀態
@@ -954,7 +977,9 @@ const estimatedRetouchCost = computed(
     (retouchMethod.value === 'command' ? commandRetouchBaseCost.value : 0) +
     retouchOptionsForMethod.value.reduce((total, option) => total + (option.on ? option.cost : 0), 0),
 )
-const canStartRetouch = computed(() => retouchMethod.value === 'quick' || retouchInstruction.value.trim().length > 0)
+const canStartRetouch = computed(
+  () => hasSelectedAsset.value && (retouchMethod.value === 'quick' || retouchInstruction.value.trim().length > 0),
+)
 const retouchAppliedLabel = computed(() => {
   if (lastRetouchMethod.value === 'command') {
     if (lastRetouchKeys.value.length === 0) return t('editor.retouch.commandApplied')
@@ -1524,6 +1549,19 @@ const previews = computed(() =>
   font-size: 2.75rem;
   transform-origin: center;
   transition: transform 160ms ease;
+}
+.canvasEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+
+  &__hint {
+    color: #aab8d0;
+    font-size: 0.875rem;
+    font-weight: 400;
+    text-align: center;
+  }
 }
 .artboard.cropping {
   overflow: hidden;
