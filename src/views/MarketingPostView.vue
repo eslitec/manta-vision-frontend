@@ -43,7 +43,8 @@
       .cost
         .cost__label {{ t('common.estimatedCost') }}
         .cost__value
-          IconFeedBottleSmall.cost__icon
+          button.cost__feedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true")
+            IconFeedBottleSmall.cost__icon
           span {{ t('units.feed', { count: outputTypeCost }) }}
       AppButton(:disabled="generating" @click="generate")
         component(:is="generating ? IconLoader : IconAddObject" :class="{ spin: generating }")
@@ -75,6 +76,7 @@
         span {{ t('marketing.nextStep') }}
 
   ImagePickerDialog(v-model:open="pickerOpen" :title="t('marketing.pickerTitle')" @select="onPick")
+  TopUpDialog(v-model:open="topUpOpen")
 </template>
 
 <script setup lang="ts">
@@ -82,6 +84,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
+import TopUpDialog from '@/components/TopUpDialog.vue'
 import AppButton from '@/components/AppButton.vue'
 import BrandToggle from '@/components/BrandToggle.vue'
 import { IconFeedBottleSmall, IconAddObject, IconCopy, IconImagePlaceholder, IconLoader } from '@/components/icons'
@@ -100,6 +103,7 @@ const intro = ref('')
 const applyBrand = ref(true)
 const inspOpen = ref(false)
 const pickerOpen = ref(false)
+const topUpOpen = ref(false)
 const generating = ref(false)
 const errorMsg = ref('')
 const result = ref<GeneratedPost | null>(null)
@@ -362,6 +366,17 @@ async function copyText() {
     width: 1rem;
     height: 1rem;
     flex-shrink: 0;
+  }
+  &__feedBtn {
+    display: inline-flex;
+    align-items: center;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    color: inherit;
+    cursor: pointer;
+    line-height: 0;
   }
 }
 .post__result {

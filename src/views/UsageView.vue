@@ -28,7 +28,8 @@
         .quota__usage
           span.quota__eyebrow {{ t('usage.quota.title') }}
           .quota__value
-            IconFeedBottleSmall
+            button.usageFeedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true")
+              IconFeedBottleSmall
             strong {{ formatNumber(periodData.used) }}
             span / {{ formatNumber(periodData.limit) }} {{ t('units.feedShort') }}
             em · {{ periodData.percent }}%
@@ -40,7 +41,7 @@
             span.gaugeLabels__current ● {{ t('usage.quota.currentPercent', { percent: periodData.percent }) }}
             span.gaugeLabels__forecast ● {{ t('usage.quota.forecastPercent', { percent: periodData.forecastPercent }) }}
             span.gaugeLabels__threshold | {{ t('usage.quota.thresholdPercent', { percent: periodData.warningPercent }) }}
-            span.gaugeLabels__remaining #[IconFeedBottleSmall] {{ t('usage.quota.remainingValue', { count: formatNumber(periodData.remaining) }) }}
+            span.gaugeLabels__remaining #[button.usageFeedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true") #[IconFeedBottleSmall]] {{ t('usage.quota.remainingValue', { count: formatNumber(periodData.remaining) }) }}
         .quota__stats
           .quota__kpi(v-for="k in quotaKpis" :key="k.label")
             span {{ k.label }}
@@ -84,7 +85,8 @@
           .module__summary
             strong {{ m.name }}
             b.module__feed(:class="`module__feed--${m.tone}`")
-              IconFeedBottleSmall.module__feedIcon
+              button.usageFeedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true")
+                IconFeedBottleSmall.module__feedIcon
               | {{ t('units.feed', { count: m.value }) }}
           .module__meta #[span {{ t('usage.modules.share', { share: m.share }) }}] #[span(:class="m.delta.startsWith('-') ? 'down' : 'up'") {{ t('usage.comparedLastMonth', { delta: m.delta }) }}] #[span {{ t('usage.modules.average', { average: m.avg }) }}]
           .module__track: span(:style="{ width: m.share + '%' }")
@@ -95,7 +97,8 @@
       article.metric(v-for="m in metricCards" :key="m.label")
         h2 {{ m.label }}
         .metric__row
-          IconFeedBottleSmall.metric__feedIcon(v-if="m.feed")
+          button.usageFeedBtn(v-if="m.feed" type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true")
+            IconFeedBottleSmall.metric__feedIcon
           strong(:class="m.tone")
             | {{ m.value }}
           span {{ t('usage.metrics.comparedLastMonth', { delta: m.delta }) }}
@@ -105,6 +108,7 @@
       div
         strong {{ t('usage.tracking.title') }}
         p {{ t('usage.tracking.description') }}
+  TopUpDialog(v-model:open="topUpOpen")
 </template>
 
 <script setup lang="ts">
@@ -112,6 +116,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppButton from '@/components/AppButton.vue'
 import DateRangeCalendarPanel from '@/components/DateRangeCalendarPanel.vue'
+import TopUpDialog from '@/components/TopUpDialog.vue'
 import { IconAlertTriangleFilled, IconChevronDown, IconFeedBottleSmall } from '@/components/icons'
 import { useDismissableMenu } from '@/composables/useDismissableMenu'
 import { getUsageAlertLevel } from '@/utils/usage'
@@ -123,6 +128,7 @@ import legendLimitUrl from '@/assets/images/usage-legend-limit.svg'
 const { t } = useI18n()
 const tabs = computed(() => ['usage', 'metrics'].map((value) => ({ value, label: t(`usage.tabs.${value}`) })))
 const tab = ref('usage')
+const topUpOpen = ref(false)
 const ranges = computed(() =>
   ['month', 'days30', 'days90', 'custom'].map((value) => ({ value, label: t(`usage.ranges.${value}`) })),
 )
@@ -388,6 +394,17 @@ const metricCards = computed(() =>
 </script>
 
 <style scoped lang="scss">
+.usageFeedBtn {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  cursor: pointer;
+  line-height: 0;
+}
 .usage {
   display: flex;
   height: 100%;

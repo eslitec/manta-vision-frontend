@@ -66,7 +66,8 @@
           .cost
             .cost__label {{ t('common.estimatedCost') }}
             .cost__value
-              IconFeedBottleSmall.cost__icon
+              button.cost__feedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true")
+                IconFeedBottleSmall.cost__icon
               span {{ t('units.feed', { count: 12 }) }}
           AppButton(:disabled="generating" @click="onGenerate")
             IconLoader.spin(v-if="generating")
@@ -86,6 +87,7 @@
         button.linkbtn(@click="onGenerate") {{ t('common.regenerate') }}
 
   ImagePickerDialog(v-model:open="pickerOpen" :title="t('tryOn.pickerTitle')" @select="onPick")
+  TopUpDialog(v-model:open="topUpOpen")
 
   Teleport(to="body")
     .cmodal(v-if="showConsent" @click.self="closeConsent")
@@ -119,6 +121,7 @@ import { Navigation } from 'swiper/modules'
 import 'swiper/css'
 import 'swiper/css/navigation'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
+import TopUpDialog from '@/components/TopUpDialog.vue'
 import AppButton from '@/components/AppButton.vue'
 import AppCheckbox from '@/components/AppCheckbox.vue'
 import BrandToggle from '@/components/BrandToggle.vue'
@@ -167,6 +170,7 @@ const ackChecked = ref(false) // 對話框「我已取得當事人同意…」�
 
 const apparel = ref<Asset | null>(null)
 const pickerOpen = ref(false)
+const topUpOpen = ref(false)
 const showConsent = ref(false)
 const consentDialogRef = ref<HTMLElement | null>(null)
 const generating = ref(false)
@@ -639,6 +643,17 @@ async function onGenerate() {
     width: 1rem;
     height: 1rem;
     flex-shrink: 0;
+  }
+  &__feedBtn {
+    display: inline-flex;
+    align-items: center;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    color: inherit;
+    cursor: pointer;
+    line-height: 0;
   }
 }
 .result__head {

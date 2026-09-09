@@ -43,6 +43,22 @@
 
 自動關閉（例如 3 秒後自動 close）在 Playwright 測試裡容易因為時序不穩定造成 flaky test，而且使用者可能還想再看一下新餘額或再儲值一次。改成顯示成功狀態＋一個「完成」按鈕，使用者確認後才關閉彈窗，跟專案裡其他彈窗（例如刪除確認）都需要使用者主動操作才關閉的體驗一致。
 
+### 決策 7（2026-09-09 ingest）：所有非巢狀的成本／餘額提示圖示，包一層按鈕開啟 `TopUpDialog`
+
+proposal.md 的 Non-Goal 反轉後，以下每個檔案都要：(a) 在圖示外包一層 `button(type="button")`，`@click` 把該檔案自己的 `topUpOpen` ref 設成 `true`；(b) 若檔案本來沒有 `topUpOpen` 狀態，新增一個 `ref(false)` 並在樣板掛載 `TopUpDialog(v-model:open="topUpOpen")`（import 路徑 `@/components/TopUpDialog.vue`，比照 `FeedBadge.vue`／`HomeView.vue` 既有寫法）；(c) 按鈕加上 `aria-label="t('home.topup')"`（沿用既有語意一致的 i18n key，不新增重複語意的 key）；(d) 不改變圖示旁邊原本文字的排版結構，只在圖示外面多一層 `button`。
+
+逐檔案清單：
+
+- `src/components/ConfirmGenerateDialog.vue`：兩處圖示（`confirm__cost` 的成本圖示、`confirm__balance` 的餘額圖示）都改成按鈕，但這個元件本身是疊在其他頁面上的 `alertdialog`，`useAccessibleDialog` 用全域 `document` 監聽 Escape／Tab 做焦點鎖定——如果讓 `TopUpDialog` 疊在它上面同時開兩個對話框，兩份 `keydown` 監聽器會同時處理同一次 Escape 按鍵（因為都沒有 `stopPropagation`），導致按一次 Escape 兩個對話框一起關閉，行為不直覺。決策：點擊這兩個圖示按鈕時，SHALL 先呼叫既有的 `cancel()`（關閉 `ConfirmGenerateDialog` 本身，等同使用者放棄這次生成操作），再把（呼叫端傳入或組件內新增的）`topUpOpen` 設成 `true` 開啈 `TopUpDialog`——同一時間只會有一個對話框開著，不新增疊對話框的技術風險
+- `src/components/ImageEditorWorkspace.vue`：只處理沒有巢狀在其他按鈕內的兩處——`aiCost__amount--item`（每筆已使用工具的成本，第 315 行附近）與 `aiCost__amount--total`（總計，第 320 行附近）；第 32 行（巢狀在 `label.option` 內，`AppCheckbox` 選項的每項成本標籤）維持不動——這個標籤巢狀在 checkbox 的 `label` 底下，是每個修圖選項各自的成本提示，若也包一層按鈕會在同一個清單裡疊出多個功能相同的儲值按鈕，對這種重複多筆的清單而言是不必要的視覺雜訊，跟決策 3（HomeView 卡片徽章）同樣的「巢狀在既有互動清單項目、會製造重複按鈕」考量；第 96 行已經巢狀在 `button.tool`（背景移除工具按鈕）內部，屬於 HTML 不允許的按鈕巢狀按鈕，proposal.md Non-Goals 已列為例外
+- `src/views/GenerateImageView.vue`、`src/views/GenerateVideoView.vue`、`src/views/TryOnView.vue`：各自只有一處 `cost__icon`，都是獨立的 `div`/`span`，直接包一層按鈕即可，新增各自的 `topUpOpen` ref 與 `TopUpDialog` 掛載
+- `src/views/MarketingPostView.vue`：只處理 `cost__icon`（第 46 行附近，獨立的 `.cost__value` 區塊）；`outputTypeCard__icon`（第 11 行）巢狀在 `button.outputTypeCard` 內部，屬於例外，proposal.md Non-Goals 已列出
+- `src/views/UsageView.vue`：四處（`quota__value` 的圖示、`gaugeLabels__remaining` 的圖示、`module__feed` 的圖示、`metric__feedIcon` 的圖示）都是獨立的行內元素，全部包一層按鈕；這個頁面本身就是「飼料用量」頁，新增的按鈕讓使用者在看用量明細時能就地儲值，跟這個頁面的既有目的一致，新增 `topUpOpen` ref 與 `TopUpDialog` 掛載
+
+### 決策 8（2026-09-09 ingest）：例外清單裡的圖示維持不可點擊，不做替代方案
+
+proposal.md Non-Goals 列出的四個例外（`DefaultLayout.vue` 導覽連結、`HomeView.vue` 卡片徽章、`MarketingPostView.vue` 的 `outputTypeCard__icon`、`ImageEditorWorkspace.vue` 的工具按鈕內成本標籤與 `label.option` 內的選項成本標籤）SHALL NOT 額外做「點擊卡片/按鈕本身也觸發儲值」之類的替代方案——這些既有互動元素各自已經有明確、不該被覆蓋的既有點擊行為（導覽、選取生成類型、選取工具、勾選選項），這次需求的範圍是「圖示本身可點擊」，不是「重新設計這些既有元件的互動」。
+
 ## Implementation Contract
 
 **行為**：使用者在任何已登入頁面點擊飼料圖示或「儲值」／「＋ 儲值飼料」按鈕，SHALL 開啟 `TopUpDialog`彈窗（不再導航到 `/usage`）。彈窗顯示 3 個套餐卡片（500／1500／3000 顆），使用者點選一個卡片標記為選取狀態（同時間只能選一個）；「確認儲值」按鈕在未選取任何套餐時 SHALL disable，選取後 SHALL 變成可點擊。使用者點擊「確認儲值」後，SHALL 呼叫 `topUpFeed(packageId)`，成功後彈窗 SHALL 切換成顯示成功訊息（含儲值的顆數），並且畫面上（頂部工具列與首頁）顯示的飼料餘額 SHALL 同步更新成新數字。使用者點擊「完成」按鈕後彈窗 SHALL 關閉，並重置回未選取任何套餐的初始狀態（下次開啟不會殘留上次的選取狀態）。
@@ -58,7 +74,12 @@
 - 點擊「完成」關閉彈窗；重新開啟彈窗時套餐選取狀態已重置
 - `npm run lint` 與 `npx vue-tsc --noEmit` 通過
 
-**範圍邊界**：僅限 proposal.md Impact 列出的檔案。不修改 `src/api/real.ts`、`src/views/UsageView.vue`、`src/router/`、其餘顯示「預估花費」的成本提示元件。
+**範圍邊界**：僅限 proposal.md Impact 列出的檔案。不修改 `src/api/real.ts`、`src/router/`。
+
+**（2026-09-09 追加）全站圖示可點擊的驗收標準**：
+- `src/components/ConfirmGenerateDialog.vue`、`src/components/ImageEditorWorkspace.vue`（僅 `aiCost__amount--item`／`aiCost__amount--total` 兩處）、`src/views/GenerateImageView.vue`、`src/views/GenerateVideoView.vue`、`src/views/MarketingPostView.vue`（僅 `cost__icon`）、`src/views/TryOnView.vue`、`src/views/UsageView.vue`（四處）——圖示點擊後 SHALL 開啟 `TopUpDialog`
+- `ConfirmGenerateDialog.vue` 的兩處點擊 SHALL 先關閉 `ConfirmGenerateDialog` 本身再開啟 `TopUpDialog`，不SHALL 同時有兩個對話框開著
+- `src/layouts/DefaultLayout.vue` 導覽連結、`src/views/HomeView.vue` 第 34 行卡片徽章、`src/views/MarketingPostView.vue` 的 `outputTypeCard__icon`、`src/components/ImageEditorWorkspace.vue` 第 32／96 行——SHALL NOT 被改動，維持原本的既有行為（導覽／卡片連結／選取輸出類型／選取工具／勾選選項）
 
 ## Risks / Trade-offs
 

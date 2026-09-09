@@ -54,3 +54,33 @@
 
 - **WHEN** 使用者在串接真後端（非 mock）的環境點擊「確認儲值」
 - **THEN** 畫面 SHALL 顯示明確的不支援訊息，SHALL NOT 呼叫不存在的 API 方法造成執行期錯誤或白屏
+
+### Requirement: 全站飼料圖示只要不巢狀在既有互動元素內，皆可點擊開啟儲值彈窗
+
+除了頂部工具列與首頁既有的兩個入口，`src/components/ConfirmGenerateDialog.vue`、`src/components/ImageEditorWorkspace.vue`（AI 已使用工具的成本清單與總計）、`src/views/GenerateImageView.vue`、`src/views/GenerateVideoView.vue`、`src/views/MarketingPostView.vue`（預估花費區塊）、`src/views/TryOnView.vue`、`src/views/UsageView.vue` 顯示的飼料圖示 SHALL 都能點擊並開啟 `TopUpDialog`。圖示若巢狀在既有的互動元素內（`router-link`、其他 `button`、`label` 底下重複多筆的清單項目），SHALL NOT 額外包一層按鈕，維持原本的既有行為。
+
+#### Scenario: 生成前確認彈窗的飼料圖示可以點擊儲值
+
+- **WHEN** 使用者在 `ConfirmGenerateDialog` 看到「預估花費」或「目前餘額」旁的飼料圖示並點擊
+- **THEN** `ConfirmGenerateDialog` SHALL 先關閉，接著開啟 `TopUpDialog`，SHALL NOT 讓兩個對話框同時開著
+
+##### Example:
+
+- **GIVEN** 使用者在圖生圖流程按下「生成」，彈出 `ConfirmGenerateDialog` 顯示「預估花費 12 顆」與「目前餘額 5 顆」
+- **WHEN** 使用者點擊「目前餘額」旁的飼料圖示
+- **THEN** `ConfirmGenerateDialog` 關閉，`TopUpDialog` 開啟顯示 3 個套餐選項
+
+#### Scenario: AI 生成工作台各頁面的成本提示圖示可以點擊儲值
+
+- **WHEN** 使用者在 `GenerateImageView`、`GenerateVideoView`、`MarketingPostView`、`TryOnView` 任一頁面點擊「預估花費」旁的飼料圖示
+- **THEN** 畫面開啟 `TopUpDialog`，SHALL NOT 導航離開目前頁面
+
+#### Scenario: 飼料用量頁面的圖示可以點擊儲值
+
+- **WHEN** 使用者在 `UsageView`（飼料用量頁）點擊配額、量表、模組明細或指標卡片旁的飼料圖示
+- **THEN** 畫面開啟 `TopUpDialog`
+
+#### Scenario: 巢狀在既有互動元素內的圖示維持原本行為，不變成獨立按鈕
+
+- **WHEN** 使用者點擊 `HomeView` 工具卡片右上角的飼料徽章、`MarketingPostView` 輸出類型選項卡片內的飼料圖示、`ImageEditorWorkspace` 工具按鈕或修圖選項清單內的飼料圖示、`DefaultLayout` 側邊導覽「飼料用量」連結
+- **THEN** SHALL 維持原本各自的既有行為（導覽到對應生成頁面／選取輸出類型／選取工具或選項／導覽到 `/usage`），SHALL NOT 額外開啟 `TopUpDialog`
