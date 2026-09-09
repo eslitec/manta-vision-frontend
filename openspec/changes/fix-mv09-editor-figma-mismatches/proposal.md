@@ -33,6 +33,14 @@ AI 修圖 loading box（MV-09b3，Figma node `1311:580`／`1311:814`／`1311:815
 
 僅影響圖片編輯器（`ImageEditorWorkspace.vue`）畫面本身：加入物件、指令修圖、裁切、背景移除、AI 修圖等子功能的畫面與互動；不涉及後端 API 契約（加入物件本身不扣飼料，維持原本 costNote 的說明），不影響其他畫面共用元件。「後續調整」新增了 `src/components/icons/IconSpinnerRing.vue`（新檔案）與 `src/components/icons/index.ts`（新增匯出）。
 
+## 後續調整二（ingest，2026-09-08）：背景移除覆蓋層對齊 Figma
+
+任務 1.5 當初做的背景移除覆蓋層是依現有程式碼結構推斷刻出來的，借用了修圖 loading box 的 `IconAiSparkle` 圖示與隨手選的間距／顏色，沒有真的比對過覆蓋層自己的 Figma node。commit `cf7269b` 補上這次比對（node `1311:1042`，overlay_processing）：
+
+- spinner 換成 `IconSpinnerRing`（跟修圖 loading box／`1311:815` 同一顆環形＋弧形圖示），取代形狀不符的 `IconAiSparkle`，尺寸 32px → 40px（節點標註值）
+- 取消按鈕從 `size="compact"` 改回 `AppButton` 預設 medium 尺寸（對齊節點 `1311:1048` 量出來的 36px 高／18px 圓角／9px·16px padding）
+- 疊層背景 `rgba(255,255,255,0.92)` → `0.96`、元素間距 `6px` → `12px`、副標文字色 `#9299aa` → `#606692`，皆為量測 Figma 後的訂正；補上 `border-radius: 4px` 避免疊層方角蓋住外層 `.artboard` 既有的圓角邊框
+
 ## 待確認
 
 - 裁切「已套用」狀態的觸發條件（固定比例 vs 自訂拖曳）是依現有程式碼與設計稿結構推斷的合理對應，Figma 本身沒有明確標示觸發時機，若跟設計師確認後有出入可再調整。

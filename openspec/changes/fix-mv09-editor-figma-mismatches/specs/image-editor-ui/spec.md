@@ -1,37 +1,4 @@
-# image-editor-ui Specification
-
-## Purpose
-
-TBD - created by archiving change 'sync-mv-09-design'. Update Purpose after archive.
-
-## Requirements
-
-### Requirement: 非破壞編輯，另存為新素材
-
-編輯與修圖 SHALL 不覆寫原始素材；所有輸出 SHALL 以「另存為新素材」的方式產生新的編輯產物。
-
-#### Scenario: 使用者編輯後另存
-
-- **WHEN** 使用者在編輯畫布完成調整並「另存為新素材」
-- **THEN** 產生一個來源為「編輯產物」的新素材，原圖不變
-
-<!-- @trace
-source: sync-mv-09-design
-updated: 2026-08-21
-code:
-  - src/components/ImageEditorWorkspace.vue
-  - src/components/SaveAssetDialog.vue
-  - src/components/ImagePickerDialog.vue
-  - src/composables/useAssets.ts
-  - src/stores/feed.ts
-  - src/api/mock.ts
-  - src/types/api.ts
-  - index.html
-  - src/lang/zh-Hant.ts
-  - src/lang/en.ts
--->
-
----
+## MODIFIED Requirements
 
 ### Requirement: AI 工具即時扣款並顯示成本
 
@@ -46,23 +13,6 @@ code:
 
 - **WHEN** 背景移除仍在執行中
 - **THEN** 畫布上顯示處理中覆蓋層（含 spinner、說明文字與取消按鈕），避免使用者誤以為畫面卡住；覆蓋層背景 SHALL 為白色、透明度 `0.96`，四角 SHALL 有 `4px` 圓角以貼合外層畫布邊框；spinner SHALL 使用跟 AI 修圖 loading box 相同的環形＋弧形圖示（`IconSpinnerRing`），尺寸 `40px`；取消按鈕 SHALL 使用 `AppButton` 預設（medium）尺寸，不使用 `compact`
-
-<!-- @trace
-source: sync-mv-09-design, fix-mv09-editor-figma-mismatches
-updated: 2026-09-08
-code:
-  - src/components/ImageEditorWorkspace.vue
-  - src/components/icons/IconSpinnerRing.vue
-  - src/components/SaveAssetDialog.vue
-  - src/components/ImagePickerDialog.vue
-  - src/composables/useAssets.ts
-  - src/stores/feed.ts
-  - src/api/mock.ts
-  - src/types/api.ts
-  - index.html
-  - src/lang/zh-Hant.ts
-  - src/lang/en.ts
--->
 
 ---
 
@@ -95,23 +45,6 @@ AI 修圖 SHALL 提供分項修飾（去除雜物／修復瑕疵／光線校正�
 - **GIVEN** 使用者選了 2 個修圖項目，估計每項耗時 9 秒（估計總時長 18 秒）
 - **WHEN** 修圖開始執行，經過 9 秒
 - **THEN** 進度條顯示約 50%、倒數文字顯示「約剩 9 秒」；SHALL NOT 因為只選了 2 個項目就在開場直接跳到 50%（進度條從 0% 起算，隨秒數推進才到 50%，不是依項目數量直接換算）
-
-<!-- @trace
-source: sync-mv-09-design, fix-mv09-editor-figma-mismatches, fix-mv09-retouch-method-style
-updated: 2026-09-07
-code:
-  - src/components/ImageEditorWorkspace.vue
-  - src/components/icons/IconSpinnerRing.vue
-  - src/components/SaveAssetDialog.vue
-  - src/components/ImagePickerDialog.vue
-  - src/composables/useAssets.ts
-  - src/stores/feed.ts
-  - src/api/mock.ts
-  - src/types/api.ts
-  - index.html
-  - src/lang/zh-Hant.ts
-  - src/lang/en.ts
--->
 
 ---
 
@@ -159,23 +92,7 @@ code:
 - **WHEN** 使用者選定固定比例（非自訂）
 - **THEN** 側邊欄尺寸文字改為「已裁切為 {寬} × {高} px（原圖 1440 × 1080）」、通路預覽標題改為「套用後各通路預覽」，完全符合比例的通路副標為綠色「完整呈現」，其餘通路副標為灰色「上下留白」；上方比例列到這段文字留 12px、文字到下方分隔線留 4px
 
-<!-- @trace
-source: sync-mv-09-design, fix-mv09-editor-figma-mismatches, fix-mv09-line-preview-centering, fix-mv09-crop-panel-spacing, fix-mv09-crop-locked-resize, fix-mv09-crop-applied-panel-text
-updated: 2026-09-03
-code:
-  - src/components/ImageEditorWorkspace.vue
-  - src/components/SaveAssetDialog.vue
-  - src/components/ImagePickerDialog.vue
-  - src/composables/useAssets.ts
-  - src/stores/feed.ts
-  - src/api/mock.ts
-  - src/types/api.ts
-  - index.html
-  - src/lang/zh-Hant.ts
-  - src/lang/en.ts
--->
-
----
+## ADDED Requirements
 
 ### Requirement: 加入物件為文字描述生成，非從圖庫疊圖
 
@@ -200,61 +117,3 @@ code:
 
 - **WHEN** 使用者開啟「加入物件」面板
 - **THEN** 標題、描述框、字數計數、預設列、提示文字、按鈕之間 SHALL 統一保持 10px 間距；字數計數與預設列各自共用樣式帶的負邊距／額外邊距 SHALL 在此面板歸零，不與統一間距疊加；標題文字（`h3`）SHALL 不帶 `aside.layers` 共用樣式帶來的內距與最小高度，字級為 13px Bold
-
-<!-- @trace
-source: fix-mv09-editor-figma-mismatches, fix-mv09-add-object-panel
-updated: 2026-09-03
-code:
-  - src/components/ImageEditorWorkspace.vue
-  - src/lang/zh-Hant.ts
-  - src/lang/en.ts
--->
-
----
-
-### Requirement: 字型選單的九個字體家族與 Figma list_font 逐項一致
-
-文字圖層屬性面板的字型選單 SHALL 提供與 Figma `list_font`（node `1157:872`）一致的字體家族選項，分為「中文」與「英數」兩組共九項，不得多也不得少；選單 SHALL 以自訂 listbox（`role="listbox"` / `role="option"`）呈現分組標頭、字體名稱、副標與選中列打勾，並提供 default／active 兩種 trigger 框線狀態。文字圖層屬性面板本身（Figma node `1157:619`）SHALL 有 16px 內距，且與上方圖層清單之間 SHALL 有 1px 分隔線。
-
-#### Scenario: 文字屬性面板有內距與上方分隔線
-
-- **WHEN** 使用者選取文字圖層，顯示「文字屬性」面板
-- **THEN** 面板內容（文字輸入框、字型下拉、色票、字重說明）與面板左右邊界保持 16px 內距，且面板上方與圖層清單之間有一條分隔線
-
-#### Scenario: 使用者開啟字型選單
-
-- **WHEN** 使用者點擊字型下拉 trigger
-- **THEN** trigger 框線由 `#d2d5dd`（default）變為 `#2e3567`（active），並展開自訂 listbox
-
-##### Example: 九個字體家族分兩組
-
-| 分組                       | 字體                                                                   |
-| -------------------------- | ---------------------------------------------------------------------- |
-| 中文（思源系列・開放商用） | 思源黑體 Noto Sans TC、思源宋體 Noto Serif TC                          |
-| 英數（系統安全字體）       | Inter、Roboto、Arial、Helvetica、Georgia、Times New Roman、Courier New |
-
-#### Scenario: 選單不含設計稿未收錄的字體
-
-- **WHEN** 使用者開啟字型選單
-- **THEN** 選單 SHALL NOT 出現 Chiron GoRound TC、霞鶩文楷 TC、jf open 粉圓、芫荽
-
-#### Scenario: 使用者選取一個字體家族
-
-- **WHEN** 使用者在 listbox 點選某個字體家族
-- **THEN** 該列以 Medium 500 字重與 `#eff2fa` 底色標示為選中，並顯示 14×14 打勾圖示
-
-<!-- @trace
-source: sync-mv-09-design, fix-mv09-properties-panel-spacing
-updated: 2026-09-01
-code:
-  - src/components/ImageEditorWorkspace.vue
-  - src/components/SaveAssetDialog.vue
-  - src/components/ImagePickerDialog.vue
-  - src/composables/useAssets.ts
-  - src/stores/feed.ts
-  - src/api/mock.ts
-  - src/types/api.ts
-  - index.html
-  - src/lang/zh-Hant.ts
-  - src/lang/en.ts
--->
