@@ -7,7 +7,8 @@
   section.stats
     .stats__item
       .stats__num
-        IconFeedBottleSmall.stats__numIcon
+        button.stats__numIconBtn(type="button" @click="goToUsage" :aria-label="t('home.topup')")
+          IconFeedBottleSmall.stats__numIcon
         | {{ balance.toLocaleString() }} #[small {{ t('units.feedShort') }}]
       .stats__label {{ t('home.feedBalance') }}
       .stats__hint {{ t('home.feedEstimate', { images: imgEst, videos: vidEst }) }}
@@ -20,7 +21,7 @@
         | {{ t('home.brandComplete') }}
       .stats__num.isMuted(v-else) ○ {{ t('home.brandIncomplete') }}
       .stats__hint {{ brandReady ? t('home.brandCompleteHint') : t('home.brandIncompleteHint') }}
-    AppButton(variant="secondary") {{ t('home.topup') }}
+    AppButton(variant="secondary" @click="goToUsage") {{ t('home.topup') }}
 
   h2.home__sectionTitle {{ t('home.sectionTitle') }}
   .cards
@@ -45,6 +46,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { useFeedStore } from '@/stores/feed'
 import { useBrandStore } from '@/stores/brand'
 import { api } from '@/api'
@@ -66,6 +68,7 @@ const { balance } = storeToRefs(feed)
 const brandStore = useBrandStore()
 const { profile } = storeToRefs(brandStore)
 const { t } = useI18n()
+const router = useRouter()
 
 const usage = ref<UsageSummary | null>(null)
 
@@ -74,6 +77,10 @@ onMounted(async () => {
   brandStore.load()
   usage.value = await api.getUsage()
 })
+
+function goToUsage() {
+  router.push('/usage')
+}
 
 // 本月已生成張數（後端 getUsage 提供）
 const generatedThisMonth = computed(() => usage.value?.generatedThisMonth ?? 0)
@@ -204,6 +211,13 @@ const genTools = computed(() => [
   }
   :deep(.stats__numIcon) {
     flex-shrink: 0;
+  }
+  &__numIconBtn {
+    @include flex(center, center);
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
   }
   :deep(.iconCheck) {
     width: 1.25rem;
