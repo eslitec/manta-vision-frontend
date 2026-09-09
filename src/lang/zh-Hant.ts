@@ -670,6 +670,10 @@ export default {
       object: '物件：花束',
       original: '原圖：{name}',
     },
+    emptyState: {
+      title: '尚未選擇素材',
+      canvasHint: '請點擊上方「從圖庫選擇」開始編輯',
+    },
     layerDescriptions: {
       text: '文字圖層',
       object: 'AI 生成物件',
