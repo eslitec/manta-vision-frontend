@@ -28,11 +28,14 @@
 **新的 Non-Goals（本次追加，取代舊條目）：**
 
 - 不處理 `src/layouts/DefaultLayout.vue` 側邊導覽「飼料用量」連結本身的圖示——這是既有的頁面導覽連結（點擊會切換路由到 `/usage`），語意跟「成本提示／餘額顯示」不同，改成彈窗會讓使用者無法再從側邊導覽進入「飼料用量」頁面
-- 不處理 `src/views/HomeView.vue` 第 34 行 `IconFeedBottleBadge.card__feedBadge`——這個裝飾性徽章巢狀在 `router-link.card` 卡片內部，HTML 不允許在 `<a>`／`router-link` 裡面再放一個 `<button>`（無效標記＋可及性問題），卡片本身已經是導向對應生成頁面的可點擊連結
 - 不處理 `src/components/MarketingPostView.vue` 第 11 行、`src/components/ImageEditorWorkspace.vue` 第 96 行——這兩處的圖示分別巢狀在 `button.outputTypeCard`、`button.tool`（選取輸出類型／選取工具的既有按鈕）內部，同樣是無效的按鈕巢狀按鈕標記，不能再包一層按鈕
 - `src/components/TopUpDialog.vue` 自己內部兩處套餐圖示（自我參照）不處理
 
 **其餘出現位置 SHALL 全部改成可點擊，開啟 `TopUpDialog`**，詳見 design.md「決策 7」與後續決策。
+
+## 2026-09-10 追加：`HomeView.vue` 卡片徽章改用「伸展連結」拆解巢狀按鈕問題
+
+使用者提供 `HomeView.vue` 工具卡片右上角 `IconFeedBottleBadge.card__feedBadge` 徽章的截圖，明確要求也要能點擊開啟 `TopUpDialog`。這推翻了上面「新的 Non-Goals」原本因為「巢狀在 `router-link.card` 內」而排除這個位置的判斷——實際上巢狀按鈕的技術限制可以透過重新拆解卡片的 DOM 結構解決（把整張卡片是一個 `router-link` 改成卡片內部有一個貼齊內容區的 `router-link`，飼料徽章獨立變成同層級的 `button`），不需要真的把 `button` 塞進 `router-link` 裡面。詳見 design.md「決策 9」。
 
 ## Capabilities
 
