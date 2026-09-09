@@ -1213,7 +1213,6 @@ async function onUpload(e: Event) {
   flex-direction: column;
   gap: 0.5rem;
   width: 15.75rem;
-  height: 13.4375rem;
   padding: 0.25rem;
   border: 1px solid $gray;
   border-radius: 10px;
@@ -1231,7 +1230,7 @@ async function onUpload(e: Event) {
 
   &__thumb {
     width: 15.25rem;
-    height: 9.5rem;
+    height: 15.25rem;
     border-radius: 8px;
   }
 
@@ -1321,7 +1320,7 @@ async function onUpload(e: Event) {
 .pending {
   @include flex(center, center, 0.75rem);
   flex-direction: column;
-  aspect-ratio: 244 / 152;
+  aspect-ratio: 1 / 1;
   padding: 0 2.5rem;
   background: $blue-light; // 灰底 #eff2fa
   border-radius: 8px;
@@ -1571,7 +1570,7 @@ async function onUpload(e: Event) {
 }
 .modal__previewThumb {
   @include flex(center, center);
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 1 / 1;
   background: $blue-light;
   border-radius: 8px;
   color: $babyBlue;

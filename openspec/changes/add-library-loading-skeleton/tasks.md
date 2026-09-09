@@ -36,6 +36,13 @@
 - [x] 5.4 `npm run lint` 與 `npx vue-tsc --noEmit` 通過
 - [x] 5.5 執行 `spectra validate add-library-loading-skeleton --strict` 與 `spectra analyze add-library-loading-skeleton`，確認沒有 CRITICAL／WARNING 級別的發現
 
-## 6. 收尾
+## 6. 骨架卡片縮圖改為正方形（配合圖庫縮圖統一比例）
 
-- [ ] 6.1 PR 合併並確認畫面驗收無誤後執行 `spectra archive add-library-loading-skeleton`
+- [ ] 6.1 落地設計決策「決策 7：骨架卡片縮圖尺寸改為正方形，覆蓋原本對齊 Figma `1309:7676` 的橫向比例」：`LibraryView.vue` 的 `.assetSkeleton__thumb` 尺寸從 `15.25rem × 9.5rem` 改為 `15.25rem × 15.25rem`（正方形），寬度維持不變、只調整高度；`.assetSkeleton` 外層總高度（原本 `13.4375rem`）依新的縮圖高度重新調整
+- [ ] 6.2 手動驗證決策 7：骨架卡片的縮圖佔位（`.assetSkeleton__thumb`）SHALL 呈現正方形，跟資料載入完成後 `AssetCard.vue` 的正方形縮圖框（`.assetCard__thumb`）外觀尺寸一致；觸發骨架屏載入狀態時，SHALL NOT 因為骨架卡片跟實際卡片比例不同而出現明顯的版面高度跳動
+- [ ] 6.3 `npm run lint` 與 `npx vue-tsc --noEmit` 通過
+- [ ] 6.4 執行 `spectra validate add-library-loading-skeleton --strict` 與 `spectra analyze add-library-loading-skeleton`，確認沒有 CRITICAL／WARNING 級別的發現
+
+## 7. 收尾
+
+- [ ] 7.1 PR 合併並確認畫面驗收無誤後執行 `spectra archive add-library-loading-skeleton`

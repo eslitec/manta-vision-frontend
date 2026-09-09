@@ -74,7 +74,7 @@ watch(
   &__thumb {
     @include flex(center, center);
     width: 100%;
-    aspect-ratio: 244 / 152;
+    aspect-ratio: 1 / 1;
     border-radius: 8px;
     background: #eef1f7;
     color: $babyBlue;
