@@ -1,0 +1,30 @@
+## Why
+
+圖庫管理中心（`/library`）素材清單第一次載入、或切換篩選條件／分頁重新打 `GET /images` 期間，畫面只顯示純文字「載入中…」（`LibraryView.vue` 的 `.assets__empty`）。使用者提供了 Figma node `1309:7676`（`grid_assets`）與其父層 `1309:7666`（`panel_assets`，完整面板），設計稿已經補上骨架屏（skeleton loading）版面：8 張卡片外框＋灰色漸層色塊佔位縮圖／標題／標籤取代空白文字，同時工具列（搜尋框／來源篩選／上傳按鈕）降低透明度、頁碼列改顯示「載入中…」——整個面板在載入中呈現一致的降透明度＋骨架屏樣式，不是只有卡片格線本身變化。
+
+## What Changes
+
+- `LibraryView.vue` 的載入中分支改成顯示 8 張骨架卡片（對齊 `PAGE_SIZE = 8`，跟目前一頁筆數一致），取代純文字「載入中…」
+- 骨架卡片版面對齊 Figma `1309:7676` 底下的 `skcard_0`～`skcard_7`：252×215 白底卡片、`1px #d2d5dd` 邊框、`10px` 圓角、`4px` 內距、`8px` 垂直間距；內含縮圖佔位（244×152、`8px` 圓角）、標題佔位（139×13）、一行標籤＋尺寸佔位（58×18 圓角膠囊 ＋ 64×11）
+- 佔位色塊使用 Figma 標註的漸層色（`#e4e8f2` → `#f2f5fb` → `#e4e8f2`），並加上左至右掃過的 shimmer 動畫，讓「載入中」的動態感比純靜態色塊明顯（Figma 是靜態設計稿，本來就無法標註動畫時序，這是延伸設計稿意圖的實作選擇，非 Figma 標註值）
+- 對齊 Figma `1309:7666`（`panel_assets`）：載入中時，工具列（`.assets__toolbar`：搜尋框、來源篩選 chip、上傳按鈕）SHALL 降到 50% 透明度並停用互動；頁碼列（`.pagination`）SHALL 維持顯示（不是完全隱藏），降到 40% 透明度，左側文字改顯示「載入中…」取代「共 N 筆素材」
+- 只影響「素材清單第一次載入」或「篩選條件／分頁切換後、資料尚未回來」這段時間的畫面；空清單（讀取完成但真的沒有素材）與已有清單時的載入態（例如批次操作後重新整理）不受影響，維持現有行為
+
+## Non-Goals
+
+- 不處理圖庫頁以外的其他載入中畫面（例如生成任務、AI 試穿等頁面各自的 loading 狀態），這次只做圖庫管理中心的素材清單
+- 不改動 `useAssets.ts`／`api/real.ts` 的資料載入邏輯或 API 呼叫時機，純粹是 `loading` 為真時的視覺呈現
+- 不引入額外的動畫函式庫，shimmer 效果純 CSS 實作（`background-position` 位移＋現有 `@keyframes` 慣例）
+- Figma 頁碼列 mockup 畫的「‹ 1 2 3 … 16 ›」是設計稿的示意頁碼，不是真實分頁狀態（載入中根本還不知道總頁數）；這次**不虛構假的頁碼數字**——載入中頁碼列右側維持顯示目前已知的分頁按鈕狀態（沿用既有 `pageItems`／`page` 邏輯，通常是切換篩選前的頁碼，或首次載入時的單一頁 1），只降透明度＋停用互動，不是照抄設計稿畫面上那組固定數字
+
+## Capabilities
+
+### New Capabilities
+
+- `library-loading-skeleton`：圖庫管理中心素材清單載入中時，顯示對齊 Figma 的骨架屏卡片版面，取代純文字提示
+
+## Impact
+
+- Affected specs: library-loading-skeleton
+- Affected code:
+  - Modified: src/views/LibraryView.vue（新增骨架卡片樣板與對應 CSS，改寫 `.assets__empty` 載入中分支的判斷邏輯）
