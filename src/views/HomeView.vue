@@ -7,7 +7,7 @@
   section.stats
     .stats__item
       .stats__num
-        button.stats__numIconBtn(type="button" @click="goToUsage" :aria-label="t('home.topup')")
+        button.stats__numIconBtn(type="button" @click="topUpOpen = true" :aria-label="t('home.topup')")
           IconFeedBottleSmall.stats__numIcon
         | {{ balance.toLocaleString() }} #[small {{ t('units.feedShort') }}]
       .stats__label {{ t('home.feedBalance') }}
@@ -21,7 +21,7 @@
         | {{ t('home.brandComplete') }}
       .stats__num.isMuted(v-else) ○ {{ t('home.brandIncomplete') }}
       .stats__hint {{ brandReady ? t('home.brandCompleteHint') : t('home.brandIncompleteHint') }}
-    AppButton(variant="secondary" @click="goToUsage") {{ t('home.topup') }}
+    AppButton(variant="secondary" @click="topUpOpen = true") {{ t('home.topup') }}
 
   h2.home__sectionTitle {{ t('home.sectionTitle') }}
   .cards
@@ -40,13 +40,14 @@
       .card__title {{ t('home.libraryTitle') }}
       .card__desc {{ t('home.libraryDescription') }}
     AppButton(tag="span" variant="outline") {{ t('home.openLibrary') }}
+
+  TopUpDialog(v-model:open="topUpOpen")
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 import { useFeedStore } from '@/stores/feed'
 import { useBrandStore } from '@/stores/brand'
 import { api } from '@/api'
@@ -62,13 +63,14 @@ import {
   IconCheckCircle,
 } from '@/components/icons'
 import AppButton from '@/components/AppButton.vue'
+import TopUpDialog from '@/components/TopUpDialog.vue'
 
 const feed = useFeedStore()
 const { balance } = storeToRefs(feed)
 const brandStore = useBrandStore()
 const { profile } = storeToRefs(brandStore)
 const { t } = useI18n()
-const router = useRouter()
+const topUpOpen = ref(false)
 
 const usage = ref<UsageSummary | null>(null)
 
@@ -77,10 +79,6 @@ onMounted(async () => {
   brandStore.load()
   usage.value = await api.getUsage()
 })
-
-function goToUsage() {
-  router.push('/usage')
-}
 
 // 本月已生成張數（後端 getUsage 提供）
 const generatedThisMonth = computed(() => usage.value?.generatedThisMonth ?? 0)
