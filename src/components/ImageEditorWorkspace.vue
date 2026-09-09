@@ -778,7 +778,11 @@ const layers = reactive<EditorLayer[]>([{ key: 'original', type: 'original', vis
 const selectedLayerKey = ref('original')
 const draggedLayerKey = ref('')
 const dropTargetKey = ref('')
-const layerLabel = (layer: EditorLayer) => layer.label ?? t(`editor.layerItems.${layer.type}`)
+const layerLabel = (layer: EditorLayer) => {
+  if (layer.type === 'original') return t('editor.layerItems.original', { name: selectedAssetName.value })
+  if (layer.type === 'text') return t('editor.layerItems.text', { text: textContent.value })
+  return layer.label ?? t(`editor.layerItems.${layer.type}`)
+}
 const layerDescription = (layer: EditorLayer) => {
   if (layer.type === 'original') return t(layer.locked ? 'editor.originalLocked' : 'editor.originalUnlocked')
   return t(`editor.layerDescriptions.${layer.type}`)
