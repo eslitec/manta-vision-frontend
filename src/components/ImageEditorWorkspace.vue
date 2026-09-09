@@ -299,12 +299,14 @@
         p.aiCost__row(v-for="item in usedTools" :key="item.tool")
           span {{ t(`editor.tools.${item.tool}`) }}
           span.aiCost__amount.aiCost__amount--item
-            IconFeedBottleSmall
+            button.aiCost__feedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true")
+              IconFeedBottleSmall
             b {{ t('units.feed', { count: item.cost }) }}
         p.aiCost__row.aiCost__row--total
           strong {{ t('editor.total') }}
           span.aiCost__amount.aiCost__amount--total
-            IconFeedBottleSmall
+            button.aiCost__feedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true")
+              IconFeedBottleSmall
             b {{ t('units.feed', { count: usedToolsTotal }) }}
         small.aiCost__note {{ t('editor.costNote') }}
     aside.cropPanel(v-else)
@@ -331,6 +333,7 @@
     :loading="savingAsset"
     @save="saveAsNewAsset"
   )
+  TopUpDialog(v-model:open="topUpOpen")
 </template>
 
 <script setup lang="ts">
@@ -340,6 +343,7 @@ import AppButton from '@/components/AppButton.vue'
 import AppCheckbox from '@/components/AppCheckbox.vue'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import SaveAssetDialog from '@/components/SaveAssetDialog.vue'
+import TopUpDialog from '@/components/TopUpDialog.vue'
 import { useAssets } from '@/composables/useAssets'
 import { usePointerDrag } from '@/composables/usePointerDrag'
 import { usePercentDrag } from '@/composables/usePercentDrag'
@@ -375,6 +379,7 @@ const removeToolCost = computed(() => pricing.value?.tools.remove ?? 0)
 // 本次編輯已實際套用（並已扣款）的 AI 工具
 const usedTools = ref<AppliedEditTool[]>([])
 const usedToolsTotal = computed(() => usedTools.value.reduce((total, item) => total + item.cost, 0))
+const topUpOpen = ref(false)
 const applyingTool = ref('')
 const toolError = ref('')
 const retouching = ref(false)
@@ -2274,6 +2279,17 @@ const previews = computed(() =>
     color: inherit;
     font-weight: inherit;
   }
+}
+.aiCost__feedBtn {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  cursor: pointer;
+  line-height: 0;
 }
 .aiCost__amount--item {
   font-size: 0.75rem;

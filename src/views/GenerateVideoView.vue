@@ -47,7 +47,8 @@
         .cost
           .cost__label {{ t('common.estimatedCost') }}
           .cost__value
-            IconFeedBottleSmall.cost__icon
+            button.cost__feedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true")
+              IconFeedBottleSmall.cost__icon
             span {{ t('units.feed', { count: estCost }) }}
         AppButton(:disabled="busy" @click="confirmOpen = true")
           IconAddObject
@@ -87,6 +88,7 @@
 
   ImagePickerDialog(v-model:open="pickerOpen" :title="t('video.pickerTitle')" @select="onPick")
   ConfirmGenerateDialog(v-model:open="confirmOpen" :cost="estCost" :model-label="modelLabelText" @confirm="startGenerate")
+  TopUpDialog(v-model:open="topUpOpen")
 </template>
 
 <script setup lang="ts">
@@ -95,6 +97,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import ConfirmGenerateDialog from '@/components/ConfirmGenerateDialog.vue'
+import TopUpDialog from '@/components/TopUpDialog.vue'
 import AppButton from '@/components/AppButton.vue'
 import ModelOption from '@/components/ModelOption.vue'
 import {
@@ -115,6 +118,7 @@ const { t } = useI18n()
 
 const sourceImage = ref<Asset | null>(null)
 const pickerOpen = ref(false)
+const topUpOpen = ref(false)
 const confirmOpen = ref(false)
 const errorMsg = ref('')
 const myTaskId = ref<string | null>(null)
@@ -461,6 +465,17 @@ function goLibrary() {
     width: 1rem;
     height: 1rem;
     flex-shrink: 0;
+  }
+  &__feedBtn {
+    display: inline-flex;
+    align-items: center;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    color: inherit;
+    cursor: pointer;
+    line-height: 0;
   }
 }
 .preview__title {

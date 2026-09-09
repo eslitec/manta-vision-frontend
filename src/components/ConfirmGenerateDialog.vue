@@ -14,18 +14,21 @@ Teleport(to="body")
         .confirm__row.confirm__row--card
           span.confirm__label {{ t('confirmGenerate.cost') }}
           strong.confirm__cost
-            IconFeedBottleSmall
+            button.confirm__feedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="openTopUp")
+              IconFeedBottleSmall
             span {{ cost }} {{ t('confirmGenerate.feedUnit') }}
         .confirm__row.confirm__row--sub
           span.confirm__label {{ t('confirmGenerate.balance') }}
           span.confirm__balance
-            IconFeedBottleSmall
+            button.confirm__feedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="openTopUp")
+              IconFeedBottleSmall
             span {{ balance.toLocaleString() }} {{ t('confirmGenerate.feedUnit') }}
       .confirm__actions
         AppButton(data-dialog-initial-focus variant="outline" @click="cancel") {{ t('confirmGenerate.cancel') }}
         AppButton(variant="primary" @click="confirm")
           IconAddObject
           span {{ resolvedConfirmText }}
+  TopUpDialog(v-model:open="topUpOpen")
 </template>
 
 <script setup lang="ts">
@@ -34,6 +37,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFeedStore } from '@/stores/feed'
 import AppButton from '@/components/AppButton.vue'
+import TopUpDialog from '@/components/TopUpDialog.vue'
 import { IconFeedBottleSmall, IconAddObject, IconAlertTriangleFilled } from '@/components/icons'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 
@@ -64,6 +68,12 @@ useAccessibleDialog(open, dialogRef, cancel)
 const confirm = () => {
   emit('confirm')
   open.value = false
+}
+
+const topUpOpen = ref(false)
+const openTopUp = () => {
+  cancel()
+  topUpOpen.value = true
 }
 </script>
 
@@ -143,6 +153,17 @@ const confirm = () => {
   &__cost,
   &__balance {
     @include flex(flex-start, center, 0.25rem);
+  }
+
+  &__feedBtn {
+    @include flex(center, center);
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    color: inherit;
+    cursor: pointer;
+    line-height: 0;
   }
 
   &__cost {
