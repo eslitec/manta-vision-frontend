@@ -34,16 +34,31 @@ code:
 
 ### Requirement: 視覺識別可上傳 Logo 並管理色票
 
-視覺識別 SHALL 支援上傳 Logo、從 Logo 抽取建議色、以及新增／編輯／移除品牌色票。
+視覺識別 SHALL 支援上傳 Logo、從 Logo 抽取建議色、以及新增／編輯／移除品牌色票。品牌色票 SHALL 支援最多 10 色；「全部套用」SHALL 把偵測到的建議色全部加入色票（受 10 色上限限制），SHALL NOT 只加入前 3 色。色票的前 3 筆 SHALL 固定指派為主色／輔色／點綴色；第 4 筆以後 SHALL 依序自動命名為「點綴色2」「點綴色3」……，且 SHALL 提供可編輯輸入框讓使用者自行改名。色票達到 10 色上限時，SHALL NOT 顯示「新增」色票的操作入口。
 
 #### Scenario: 使用者上傳 Logo 後套用建議色
 
 - **WHEN** 使用者上傳 Logo
 - **THEN** 系統分析並列出建議色，使用者可單獨或全部加入色票
 
+#### Scenario: 使用者全部套用超過 3 種偵測到的顏色
+
+- **WHEN** Logo 分析出 5 種建議色，使用者點擊「全部套用」
+- **THEN** 5 種顏色全部加入色票（未超過 10 色上限），前 3 筆分別指派為主色／輔色／點綴色，第 4、5 筆自動命名「點綴色2」「點綴色3」
+
+#### Scenario: 使用者自訂第 4 個以後色票的名稱
+
+- **WHEN** 使用者點擊第 4 個（或之後）色票的名稱欄位並輸入新名稱
+- **THEN** 該色票的名稱更新為使用者輸入的文字，不受自動命名規則限制
+
+#### Scenario: 色票達到上限時隱藏新增入口
+
+- **WHEN** 色票已有 10 筆
+- **THEN** 「新增」色票的按鈕不再顯示，使用者無法再新增更多色票
+
 <!-- @trace
-source: sync-mv-08-design, brand-real-backend-wiring
-updated: 2026-09-04
+source: sync-mv-08-design, brand-real-backend-wiring, feat-brand-color-palette-apply-all
+updated: 2026-09-09
 code:
   - src/views/BrandSettingsView.vue
   - src/stores/brand.ts
