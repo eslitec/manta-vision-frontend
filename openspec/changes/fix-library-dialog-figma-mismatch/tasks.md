@@ -32,6 +32,7 @@
 
 ## 4. 驗證
 
-- [ ] 4.1 執行 `spectra validate fix-library-dialog-figma-mismatch --strict` 與
+- [x] 4.1 執行 `spectra validate fix-library-dialog-figma-mismatch --strict` 與
       `spectra analyze fix-library-dialog-figma-mismatch`，確認沒有 CRITICAL／WARNING 級別的發現
+      （2026-09-09 重新執行：validate 通過，analyze 四項檢查皆 Clean，0 findings）
 - [ ] 4.2 PR 合併並確認畫面驗收無誤後執行 `spectra archive fix-library-dialog-figma-mismatch`
