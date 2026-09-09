@@ -1,29 +1,27 @@
 <template lang="pug">
 .feedBadge
-  button.feedBadge__icon(type="button" @click="goToUsage" :aria-label="t('feedBadge.topup')")
+  button.feedBadge__icon(type="button" @click="topUpOpen = true" :aria-label="t('feedBadge.topup')")
     IconFeedBottleSmall
   span.feedBadge__num {{ t('feedBadge.balance', { count: balance.toLocaleString() }) }}
-  AppButton(variant="secondary" size="compact" @click="goToUsage") {{ t('feedBadge.topup') }}
+  AppButton(variant="secondary" size="compact" @click="topUpOpen = true") {{ t('feedBadge.topup') }}
+  TopUpDialog(v-model:open="topUpOpen")
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 import { useFeedStore } from '@/stores/feed'
 import { IconFeedBottleSmall } from '@/components/icons'
 import AppButton from '@/components/AppButton.vue'
+import TopUpDialog from '@/components/TopUpDialog.vue'
 const feed = useFeedStore()
 const { balance } = storeToRefs(feed)
 const { t } = useI18n()
-const router = useRouter()
+const topUpOpen = ref(false)
 onMounted(() => {
   if (!feed.loaded) feed.refresh()
 })
-function goToUsage() {
-  router.push('/usage')
-}
 </script>
 
 <style scoped lang="scss">

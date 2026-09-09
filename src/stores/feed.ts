@@ -13,5 +13,11 @@ export const useFeedStore = defineStore('feed', () => {
     loaded.value = true
   }
 
-  return { balance, loaded, refresh }
+  // 儲值成功後直接寫入 API 回傳的新餘額，不用再打一次 getFeed（見 TopUpDialog.vue）
+  function applyTopUp(newBalance: number) {
+    balance.value = newBalance
+    loaded.value = true
+  }
+
+  return { balance, loaded, refresh, applyTopUp }
 })

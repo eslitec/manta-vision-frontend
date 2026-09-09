@@ -199,6 +199,17 @@ export interface Session {
   expiresAt: number
 }
 
+// ── 飼料儲值（MV「儲值」彈窗，mock-only）──
+// 套餐識別碼；套餐的顆數與顯示文字定義在 TopUpDialog.vue 的常數陣列，這裡只約束 id 格式。
+export type FeedPackageId = 'pkg-500' | 'pkg-1500' | 'pkg-3000'
+/**
+ * 模擬儲值：輸入套餐 id，回傳更新後的飼料餘額。
+ * 只在 `src/api/mock.ts` 實作，`src/api/real.ts` 不新增對應實作（真後端目前沒有付款端點，
+ * 見 openspec/changes/add-feed-topup-dialog design.md 決策 5）——呼叫端一律用
+ * `api.topUpFeed?.(...)` 選擇性呼叫，避免真後端環境下呼叫到不存在的方法。
+ */
+export type TopUpFeedFn = (packageId: string) => Promise<{ balance: number }>
+
 export type {
   Asset,
   BatchResult,
