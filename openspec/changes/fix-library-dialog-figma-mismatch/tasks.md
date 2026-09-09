@@ -17,4 +17,21 @@
 - [x] 2.2 「批次移動素材到資料夾」Requirement 補上「未分類」是清單選項之一的描述，
       新增 Scenario「使用者透過『移至資料夾』把素材移回未分類」與 Example——這關掉了上一輪
       比對時留下的開放問題（未分類該不該加進移至資料夾選單）
-- [ ] 2.3 PR 合併並確認畫面驗收無誤後執行 `spectra archive fix-library-dialog-figma-mismatch`
+
+## 3. 說明文字色碼訂正（ingest，2026-09-08）
+
+- [x] 3.1 對齊 Requirement「批次移動素材到資料夾」（commit `6e47603`）：`LibraryView.vue` 的
+      「移至資料夾」彈窗說明文字（「將選取的 N 筆素材加入資料夾。素材可同時屬於多個資料夾。」）
+      原本用 `$gray-400`（實際色碼 `#606472`），對照 Figma node `442:2868` 確認正確色碼是
+      `#606692`（兩者視覺相近但不是同一個值），改成直接寫死 `#606692`（比照專案裡其他多處
+      同色碼的既有用法，沒有對應的共用變數）；順便核對資料夾 icon 未選取／選取顏色
+      （`#383c4b`／`#2e3567`）跟 Figma 一致，不需要改
+- [x] 3.2 `openspec/specs/library-management-ui/spec.md`：「批次移動素材到資料夾」Requirement
+      補上說明文字色碼 `#606692` 的描述，trace 日期更新
+- [x] 3.3 `npx vue-tsc --noEmit` 與全部既有單元測試（155 筆）皆通過
+
+## 4. 驗證
+
+- [ ] 4.1 執行 `spectra validate fix-library-dialog-figma-mismatch --strict` 與
+      `spectra analyze fix-library-dialog-figma-mismatch`，確認沒有 CRITICAL／WARNING 級別的發現
+- [ ] 4.2 PR 合併並確認畫面驗收無誤後執行 `spectra archive fix-library-dialog-figma-mismatch`

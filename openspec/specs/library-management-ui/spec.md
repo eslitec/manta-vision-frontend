@@ -245,7 +245,8 @@ code:
 使用者選取一或多筆素材後點擊「移至資料夾」，SHALL 顯示彈窗列出所有資料夾（含數量）供選擇，
 清單最後 SHALL 包含「未分類」這個虛擬選項（數量取 unfiledCount），並可在彈窗內就地建立新
 資料夾；確認後，選取的素材改為歸屬指定資料夾。素材同一時間 SHALL 只屬於一個資料夾（未歸檔
-即為「未分類」），移至新資料夾 SHALL NOT 保留原本的資料夾歸屬。
+即為「未分類」），移至新資料夾 SHALL NOT 保留原本的資料夾歸屬。彈窗說明文字（「將選取的 N
+筆素材加入資料夾。素材可同時屬於多個資料夾。」）的顏色 SHALL 為 `#606692`。
 
 #### Scenario: 使用者移動素材到既有資料夾
 
@@ -295,7 +296,7 @@ code:
 
 <!-- @trace
 source: sync-mv-01-design, library-real-backend, fix-library-dialog-figma-mismatch
-updated: 2026-09-01
+updated: 2026-09-08
 code:
   - src/views/LibraryView.vue
   - src/components/AssetCard.vue
