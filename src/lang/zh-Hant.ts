@@ -329,7 +329,7 @@ export default {
     logoRedetect: '重新偵測',
     logoReplace: '更換 Logo',
     logoRemove: '移除',
-    color: { primary: '主色', secondary: '輔色', accent: '點綴色', new: '新增' },
+    color: { primary: '主色', secondary: '輔色', accent: '點綴色', new: '新增', extra: '點綴色{n}', customName: '自訂顏色名稱' },
     palette: {
       analyzing: '正在辨識 Logo 色彩…',
       title: '從 Logo 萃取的顏色',
