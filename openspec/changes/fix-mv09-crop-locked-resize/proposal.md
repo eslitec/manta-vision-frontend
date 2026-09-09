@@ -19,6 +19,14 @@
   - 移除原本 `startCropResize` 內無條件 `ratio.value = 'custom'` 的寫死邏輯（因為現在同一個把手在兩種模式下有不同語意，不該由拖曳動作決定 ratio）
 - `openspec/specs/image-editor-ui/spec.md`：「裁切提供各通路預覽且不扣飼料」Requirement 補上 Scenario 與 trace
 
+## 後續調整（ingest，2026-09-09）：新增拖曳框身移動位置
+
+第 1 節做的是「拖曳角落把手」的等比例縮放；使用者後續反饋，點在裁切框可見範圍內（把手以外）按住拖曳時，應該要能整個移動取景框的位置——這是跟縮放不同的互動，先前沒有實作。commit `e8ef421`：
+
+- `ImageEditorWorkspace.vue` 新增 `startCropMove`，在 `.cropFrame` 本身掛 `pointerdown`，用滑鼠位移換算成 x/y 的百分比位移並夾限在畫布範圍內；不論目前是固定比例或自訂裁切都適用，只改變位置、不改變寬高或比例
+- 角落把手的 `pointerdown` 已有 `.stop`，不會被這個新處理器攔截，移動與縮放兩種拖曳互不干擾
+- `openspec/specs/image-editor-ui/spec.md`：Requirement 補上這段行為描述與新 Scenario，並建立本 change 的 delta spec
+
 ## 影響範圍
 
 只影響裁切面板的拖曳互動與畫布上裁切框的顯示邏輯；「各通路預覽」計算方式、套用徽章文字、比例選項本身均不受影響。
