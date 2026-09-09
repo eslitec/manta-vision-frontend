@@ -199,7 +199,7 @@
         p(:style="canvasHintStyle") {{ tool === 'crop' ? t('editor.cropInstructionDynamic', cropOutputDimensions) : t('editor.selectionInstruction') }}
       footer.canvasFoot {{ t('editor.nonDestructive') }}
     aside.layers(v-if="tool!=='crop'")
-      h3 {{ t('editor.layers') }} #[button(:aria-label="t('editor.layers')"): IconAddObject]
+      h3 {{ t('editor.layers') }} #[button(:aria-label="t('editor.duplicateLayer')" :disabled="!canDuplicateSelectedLayer" @click="duplicateSelectedLayer"): IconAddObject]
       .layer(
         v-for="layer in layers"
         :key="layer.key"
@@ -685,6 +685,8 @@ const selectLayer = (key: string) => {
 const textLayer = computed(() => layers.find((layer) => layer.type === 'text'))
 const objectLayers = computed(() => layers.filter((layer): layer is ObjectEditorLayer => layer.type === 'object'))
 const originalLayer = computed(() => layers.find((layer) => layer.key === 'original')!)
+const selectedLayer = computed(() => layers.find((layer) => layer.key === selectedLayerKey.value))
+const canDuplicateSelectedLayer = computed(() => selectedLayer.value?.type === 'object')
 const layerZIndex = (key: string) => {
   const index = layers.findIndex((layer) => layer.key === key)
   return index < 0 ? 1 : layers.length - index + 1
@@ -775,6 +777,20 @@ function addObjectLayer(description: string) {
     dragging: false,
   }
   layers.unshift(layer)
+  selectedLayerKey.value = key
+  savedAssetId.value = ''
+}
+function duplicateSelectedLayer() {
+  const source = selectedLayer.value
+  if (!source || source.type !== 'object') return
+  const objectSource = source as ObjectEditorLayer
+  const key = `object-${crypto.randomUUID()}`
+  const duplicated: ObjectEditorLayer = {
+    ...objectSource,
+    key,
+    dragging: false,
+  }
+  layers.unshift(duplicated)
   selectedLayerKey.value = key
   savedAssetId.value = ''
 }

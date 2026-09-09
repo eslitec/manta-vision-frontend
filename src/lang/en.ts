@@ -585,6 +585,7 @@ export default {
     selectionInstruction: 'Selected: text layer · Drag to move · Resize from corners',
     nonDestructive: 'Editing does not alter the original. Saving creates a new library asset.',
     layers: 'Layers',
+    duplicateLayer: 'Duplicate layer',
     selectLayer: 'Select {name} layer',
     originalLocked: 'Original · Locked',
     originalUnlocked: 'Original · Unlocked',
