@@ -204,7 +204,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useBrandStore } from '@/stores/brand'
@@ -214,6 +214,7 @@ import AppSearchbar from '@/components/AppSearchbar.vue'
 import AppTab from '@/components/AppTab.vue'
 import { IconAlertTriangleFilled, IconCheckCircle, IconChevronDown, IconLogoUpload } from '@/components/icons'
 import { extractColors, type DominantColor } from '@/utils/colors'
+import type { BrandProfile } from '@/types/api'
 const store = useBrandStore()
 const { profile, saving } = storeToRefs(store)
 const { t } = useI18n()
@@ -221,10 +222,15 @@ const tabs = computed(() =>
   ['basic', 'visual', 'copy', 'compliance'].map((value) => ({ value, label: t(`brandSettings.tabs.${value}`) })),
 )
 const tab = ref('basic')
-// 表單是否偏離目前已存檔的狀態（決策 5）：預設 true（尚未存過檔時本來就該可點擊），
-// 存檔／取消成功後設回 false（決策 6／7），使用者再編輯任一欄位時（深度監看 profile）變回 true
-const dirty = ref(true)
-watch(profile, () => (dirty.value = true), { deep: true })
+// 上次成功載入／儲存的品牌設定快照（決策 1）：profile 尚未載入完成時維持 null，
+// 跟 profile 的初始值一致，dirty 一開始就是 false，不會誤判成「有變更」。
+const savedSnapshot = ref<BrandProfile | null>(null)
+// profile 是純資料物件（無函式／循環參照），JSON.stringify 比較足夠安全（決策 1）；
+// 專案未依賴 lodash 等深比較函式庫，不為此新增依賴。
+const dirty = computed(() => JSON.stringify(profile.value) !== JSON.stringify(savedSnapshot.value))
+function snapshotProfile(): BrandProfile | null {
+  return profile.value ? (JSON.parse(JSON.stringify(profile.value)) as BrandProfile) : null
+}
 const toneOptions = computed(() =>
   ['warm', 'literary', 'professional', 'playful', 'minimal', 'luxury'].map((key) => t(`brandSettings.tones.${key}`)),
 )
@@ -295,7 +301,12 @@ const logoInput = ref<HTMLInputElement | null>(null)
 const addingTag = ref(false),
   newTag = ref(''),
   tagInput = ref<HTMLInputElement | null>(null)
-onMounted(store.load)
+onMounted(async () => {
+  await store.load()
+  // 載入成功後才建立快照（決策 1／失敗模式）：store.load() 若拋出例外，
+  // 這行不會執行，profile 維持原狀，dirty 也不受影響。
+  savedSnapshot.value = snapshotProfile()
+})
 function toggleTone(t: string) {
   if (!profile.value) return
   const i = profile.value.tones.indexOf(t)
@@ -422,15 +433,13 @@ function assignColor(index: number) {
 }
 async function onSave() {
   await store.save()
-  // profile 被 store 整包替換也會觸發上面的 deep watch（把 dirty 打回 true）；
-  // 用 nextTick 排在那次觸發之後，確保「存檔成功」是最後一個動作（決策 6）
-  await nextTick()
-  dirty.value = false
+  // 存檔成功後把（可能已被後端覆寫的，例如 Logo 網址）profile 內容存成新快照（決策 1）
+  savedSnapshot.value = snapshotProfile()
 }
 async function onCancel() {
+  // 取消＝還原成上次存檔的內容；profile 被還原後會自動跟 savedSnapshot 一致，
+  // dirty 這個 computed 會自動重新算出 false，不需要再手動賦值（決策 2）
   await store.load(true)
-  await nextTick()
-  dirty.value = false
 }
 </script>
 
