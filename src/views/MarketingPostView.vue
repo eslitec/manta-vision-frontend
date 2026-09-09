@@ -266,40 +266,44 @@ async function copyText() {
   margin: 1rem 0;
 }
 .outputTypes {
-  @include flex(flex-start, stretch, 0.5rem);
-  flex-wrap: wrap;
+  @include flex(flex-start, stretch, 0.25rem);
+  background: $blue-light;
+  padding: 0.25rem;
+  border-radius: 10px;
 }
 .outputTypeCard {
-  @include flex(center, center, 0.25rem);
+  @include flex(center, center, 0.0625rem);
   flex-direction: column;
-  min-width: 6.5rem;
-  padding: 0.625rem 0.875rem;
-  border: 1px solid #d2d5dd;
+  flex: 1 0 0;
+  padding: 0.4375rem 0.625rem;
   border-radius: 8px;
-  background: $white;
+  background: transparent;
   &__label {
-    font-size: 0.875rem;
-    font-weight: 700;
+    font-size: 0.75rem;
+    font-weight: 400;
     line-height: 1.375;
-    color: $dark-blue-gray;
+    color: #606692;
   }
   &__cost {
     @include flex(center, center, 0.25rem);
-    font-size: 0.75rem;
+    font-size: 0.625rem;
     line-height: 1.333;
-    color: #606692;
+    color: $gray-100;
   }
   &__icon {
-    width: 0.875rem;
-    height: 0.875rem;
+    width: 0.6875rem;
+    height: 0.6875rem;
     flex-shrink: 0;
   }
   &.isActive {
-    background: $blue-light;
-    border: 1.5px solid $blue-dark-500;
-    .outputTypeCard__label,
-    .outputTypeCard__cost {
+    background: $white;
+    box-shadow: 0px 1px 1.5px rgba(0, 0, 0, 0.1);
+    .outputTypeCard__label {
+      font-weight: 500;
       color: $blue-dark-500;
+    }
+    .outputTypeCard__cost {
+      color: $orange;
     }
   }
 }
