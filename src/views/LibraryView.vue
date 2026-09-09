@@ -166,8 +166,6 @@
         small.modal__error(v-if="moveDialogError" role="alert") {{ moveDialogError }}
         footer.modal__foot
           AppButton(variant="ghost" @click="moveDialogOpen = false") {{ t('common.cancel') }}
-          AppButton(variant="primary" :disabled="!moveTargetFolder" @click="confirmMoveToFolder") {{ t('library.moveInto', { folder: moveTargetFolder }) }}
-          AppButton(variant="outline" @click="moveDialogOpen = false") {{ t('common.cancel') }}
           AppButton(variant="primary" :disabled="moveTargetFolder === undefined" @click="confirmMoveToFolder") {{ t('library.moveInto', { folder: moveTargetFolderName }) }}
 
   Teleport(to="body")
@@ -1215,7 +1213,6 @@ async function onUpload(e: Event) {
   flex-direction: column;
   gap: 0.5rem;
   width: 15.75rem;
-  height: 13.4375rem;
   padding: 0.25rem;
   border: 1px solid $gray;
   border-radius: 10px;
@@ -1233,7 +1230,7 @@ async function onUpload(e: Event) {
 
   &__thumb {
     width: 15.25rem;
-    height: 9.5rem;
+    height: 15.25rem;
     border-radius: 8px;
   }
 

@@ -256,8 +256,8 @@ export default {
     },
     steps: { model: '1. 選擇模特', apparel: '2. 選擇服飾素材' },
     tabs: { builtIn: '內建模特庫', upload: '上傳模特照' },
-    models: { femaleCasual: '女·休閒', maleFormal: '男·正裝', femaleSport: '女·運動', femaleElegant: '女·優雅' },
-    viewFullLibrary: '檢視完整模特庫（內建 12 位）',
+    viewFullLibrary: '檢視完整模特庫（內建 {count} 位）',
+    noBuiltInModels: '目前沒有內建模特',
     upload: {
       title: '拖曳模特照到這裡，或點擊上傳',
       hint: 'JPG／PNG・單張 ≤ 10MB・建議 1024px 以上',
@@ -733,5 +733,15 @@ export default {
     feedUnit: '顆飼料',
     cancel: '取消',
     confirm: '確認生成',
+  },
+  topUpDialog: {
+    title: '儲值飼料',
+    packageAriaLabel: '{count} 顆套餐',
+    confirm: '確認儲值',
+    done: '完成',
+    successTitle: '儲值成功！',
+    successMessage: '已儲值 {count} 顆！',
+    errorMessage: '儲值失敗，請稍後再試',
+    unsupported: '這個環境尚未支援模擬儲值',
   },
 }
