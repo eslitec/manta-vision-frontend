@@ -23,7 +23,19 @@
 - [x] 3.4 對齊 Requirement「AI 修圖提供分項修飾與對比」：更新 `openspec/specs/image-editor-ui/spec.md` 的「AI 修圖執行中顯示處理進度」Scenario，補上倒數秒數文字與進度條「從 0% 漸進」的行為描述，trace 加上 `src/components/icons/IconSpinnerRing.vue`
 - [x] 3.5 `npm run lint` 與 `npx vue-tsc --noEmit` 都跑過確認無錯誤（於本次 ingest 補跑一次，確認 2026-09-07 這 4 個 commit 疊加後的最終狀態仍乾淨）
 
-## 4. 驗證
+## 4. 驗證（第一輪，2026-09-07）
 
 - [x] 4.1 執行 `spectra validate fix-mv09-editor-figma-mismatches --strict` 與 `spectra analyze fix-mv09-editor-figma-mismatches`，確認沒有 CRITICAL／WARNING 級別的發現（`validate` 通過，`analyze` 顯示 Coverage／Gaps Clean，僅有預期中的「No delta specs found」提示——本 change 沿用直接套用進主 spec 的既有模式，不建 delta spec）
-- [ ] 4.2 PR 合併並確認畫面驗收無誤後執行 `spectra archive fix-mv09-editor-figma-mismatches`
+
+## 5. 背景移除覆蓋層對齊 Figma（ingest，2026-09-08）
+
+> 任務 1.5 當初做的背景移除覆蓋層（commit `9f19f41`）借用了修圖 loading box 的 `IconAiSparkle` 圖示與隨手選的間距／顏色，沒有真的比對過覆蓋層自己的 Figma node。commit `cf7269b` 補上這次比對與修正。
+
+- [x] 5.1 對齊 Requirement「AI 工具即時扣款並顯示成本」（commit `cf7269b`）：比對 Figma node `1311:1042`（overlay_processing）後修正——spinner 換成 `IconSpinnerRing`（跟修圖 loading box／`1311:815` 同一顆）取代形狀不符的 `IconAiSparkle`，尺寸 32px → 40px；取消按鈕從 `size="compact"` 改回不帶 `size`（吃 `AppButton` 預設 medium，對齊節點 `1311:1048` 量出來的 36px 高／18px 圓角／9px·16px padding）；疊層背景 `rgba(255,255,255,0.92)` → `0.96`、元素間距 `6px` → `12px`、副標文字色 `#9299aa` → `#606692`，並補上 `border-radius: 4px` 避免疊層方角蓋住外層 `.artboard` 的圓角邊框
+- [x] 5.2 `openspec/specs/image-editor-ui/spec.md`：「背景移除執行中顯示處理覆蓋層」Scenario 補上覆蓋層背景透明度、圓角、spinner 圖示與尺寸、取消按鈕尺寸的具體規格，trace 加上 `src/components/icons/IconSpinnerRing.vue`、日期更新
+- [x] 5.3 `npx vue-tsc --noEmit` 確認無錯誤
+
+## 6. 驗證（第二輪，2026-09-08）
+
+- [ ] 6.1 執行 `spectra validate fix-mv09-editor-figma-mismatches --strict` 與 `spectra analyze fix-mv09-editor-figma-mismatches`，確認沒有 CRITICAL／WARNING 級別的發現
+- [ ] 6.2 PR 合併並確認畫面驗收無誤後執行 `spectra archive fix-mv09-editor-figma-mismatches`
