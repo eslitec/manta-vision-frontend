@@ -181,16 +181,74 @@ function deduct(cost: number) {
   db.monthlyUsed += cost
 }
 
+// 儲值套餐顆數對照（id 對齊 TopUpDialog.vue 的套餐常數陣列／FeedPackageId）；
+// mock-only，真後端目前沒有付款端點，見 add-feed-topup-dialog design.md 決策 5
+const FEED_TOPUP_AMOUNTS: Record<string, number> = {
+  'pkg-500': 500,
+  'pkg-1500': 1500,
+  'pkg-3000': 3000,
+}
+
 // 圖庫／資料夾常數，對齊後端 app/services/images.py、app/services/folders.py
 const MAX_UPLOAD_MB = 10
 const MAX_FOLDERS_PER_BOT = 200
 const SUPPORTED_UPLOAD_FORMATS = ['jpg', 'jpeg', 'png', 'webp']
 
-// 內建素材（GET /materials；不分機器人，全平台共用；model 類別後端也還是空的）
+// 內建素材（GET /materials；不分機器人，全平台共用）
+// model 類別：真後端目前仍是空的（見 proposal.md Non-Goals），這裡先補上 mock 資料
+// 讓 AI 試穿工作台「內建模特庫」的 Swiper 輪播本機開發／測試時有超過 4 筆真實素材可顯示。
 const MATERIALS: Material[] = [
   { materialId: 'mat_bg_1', materialName: '白色棚拍背景', category: 'background', url: '', width: 1024, height: 768 },
   { materialId: 'mat_bg_2', materialName: '木質桌面情境', category: 'background', url: '', width: 1024, height: 768 },
   { materialId: 'mat_obj_1', materialName: '春季花束', category: 'object', url: '', width: 1024, height: 768 },
+  {
+    materialId: 'mat_model_1',
+    materialName: '女·休閒',
+    category: 'model',
+    url: 'https://picsum.photos/seed/mvmodel1/400/500',
+    width: 400,
+    height: 500,
+  },
+  {
+    materialId: 'mat_model_2',
+    materialName: '男·正裝',
+    category: 'model',
+    url: 'https://picsum.photos/seed/mvmodel2/400/500',
+    width: 400,
+    height: 500,
+  },
+  {
+    materialId: 'mat_model_3',
+    materialName: '女·運動',
+    category: 'model',
+    url: 'https://picsum.photos/seed/mvmodel3/400/500',
+    width: 400,
+    height: 500,
+  },
+  {
+    materialId: 'mat_model_4',
+    materialName: '女·優雅',
+    category: 'model',
+    url: 'https://picsum.photos/seed/mvmodel4/400/500',
+    width: 400,
+    height: 500,
+  },
+  {
+    materialId: 'mat_model_5',
+    materialName: '男·休閒',
+    category: 'model',
+    url: 'https://picsum.photos/seed/mvmodel5/400/500',
+    width: 400,
+    height: 500,
+  },
+  {
+    materialId: 'mat_model_6',
+    materialName: '女·街頭',
+    category: 'model',
+    url: 'https://picsum.photos/seed/mvmodel6/400/500',
+    width: 400,
+    height: 500,
+  },
 ]
 
 // 依 source／mediaType 兩個維度統計整個圖庫（不受目前查詢條件篩選；對齊後端 count_by_bucket）
@@ -231,6 +289,15 @@ export const mockApi = {
   // GET /feed
   async getFeed() {
     await delay(150)
+    return { balance: db.feedBalance }
+  },
+
+  // POST /feed/topup（mock-only：模擬儲值，見 add-feed-topup-dialog design.md 決策 5）
+  async topUpFeed(packageId: string): Promise<{ balance: number }> {
+    await delay(150)
+    const amount = FEED_TOPUP_AMOUNTS[packageId]
+    if (!amount) throw new Error('INVALID_PACKAGE')
+    db.feedBalance += amount
     return { balance: db.feedBalance }
   },
 
