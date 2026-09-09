@@ -219,7 +219,7 @@ code:
 #### Scenario: 文字屬性面板有內距與上方分隔線
 
 - **WHEN** 使用者選取文字圖層，顯示「文字屬性」面板
-- **THEN** 面板內容（文字輸入框、字型下拉、色票、字重說明）與面板左右邊界保持 16px 內距，且面板上方與圖層清單之間有一條分隔線
+- **THEN** 面板內容（文字輸入框、字型下拉、色票、字重說明）與面板上下左右邊界保持 16px 內距，面板上方與圖層清單之間有一條分隔線，且「文字屬性」標題與下方第一個輸入框之間保持 10px 間距
 
 #### Scenario: 使用者開啟字型選單
 
@@ -245,7 +245,7 @@ code:
 
 <!-- @trace
 source: sync-mv-09-design, fix-mv09-properties-panel-spacing
-updated: 2026-09-01
+updated: 2026-09-08
 code:
   - src/components/ImageEditorWorkspace.vue
   - src/components/SaveAssetDialog.vue
