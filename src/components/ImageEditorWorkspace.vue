@@ -293,7 +293,7 @@
           :loading="generatingObject"
           @click="generateObjectFromDescription"
         ) {{ generatingObject ? t('editor.addObject.generating') : t('editor.addObject.generate') }}
-      p.editorError(v-if="toolError" role="alert") {{ toolError }}
+      p.editorError(v-if="toolError && tool === 'remove'" role="alert") {{ toolError }}
       .aiCost(v-if="usedTools.length")
         h3 {{ t('editor.aiToolsUsed') }}
         p.aiCost__row(v-for="item in usedTools" :key="item.tool")
@@ -399,6 +399,11 @@ onMounted(async () => {
 })
 const tool = ref('remove'),
   ratio = ref('square')
+// toolError 只跟「背景移除」的結果有關；離開背景移除工具時要清空，
+// 避免上一次背景移除失敗的訊息殘留到物件／文字工具的畫面裡。
+watch(tool, (value) => {
+  if (value !== 'remove') toolError.value = ''
+})
 const editorPickerOpen = ref(false)
 // 「加入物件」對齊 Figma（1141:906）後改成 AI 生成流程，不再是從圖庫挑素材疊圖，
 // 所以這顆 picker 現在只服務「選擇要編輯的素材」一種用途。
