@@ -703,17 +703,26 @@ async function confirmDelete() {
   if (result.failedIds.length) batchError.value = t('library.batchFailed', { count: result.failedIds.length })
 }
 
-function downloadSelected() {
+async function downloadSelected() {
   for (const a of selectedAssets.value) {
     if (!a.url) continue // mock 素材沒有真實檔案，跳過
-    const link = document.createElement('a')
-    link.href = a.url
-    link.download = a.name
-    link.target = '_blank'
-    link.rel = 'noopener'
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
+    // <a download> 對跨網域網址會被瀏覽器忽略、退化成一般導覽——先把內容讀成 Blob
+    // 轉成同源的 blob: 網址才能讓 download 屬性真的生效。素材伺服器沒開放 CORS 讀取
+    // 內容時 fetch 會失敗，退回開新分頁至少讓使用者看得到圖片，不要完全沒反應。
+    try {
+      const response = await fetch(a.url)
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = a.name
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(blobUrl)
+    } catch {
+      window.open(a.url, '_blank', 'noopener')
+    }
   }
 }
 
