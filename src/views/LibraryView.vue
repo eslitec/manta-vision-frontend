@@ -1140,7 +1140,7 @@ async function onUpload(e: Event) {
     }
   }
   &__actions {
-    @include flex(flex-start, center, 1.25rem);
+    @include flex(flex-start, center, 0.5rem);
   }
   &__action {
     min-width: 6.375rem;
