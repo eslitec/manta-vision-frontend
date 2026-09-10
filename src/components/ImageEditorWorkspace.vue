@@ -122,49 +122,51 @@
             img.editorSourceImg(v-if="selectedAssetUrl" :src="selectedAssetUrl" :alt="selectedAssetName")
             IconImagePlaceholder(v-else)
           .textObject(
-            v-if="textLayer?.visible"
-            :class="{ isDragging: textDragging, isEditing: textEditing, isCropPreview: tool === 'crop' }"
-            :style="textObjectStyle"
-            @pointerdown.stop="startTextDrag"
+            v-for="textLayer in textLayers"
+            v-show="textLayer.visible"
+            :key="textLayer.key"
+            :class="{ isDragging: draggingTextKey === textLayer.key, isEditing: editingTextKey === textLayer.key, isCropPreview: tool === 'crop' }"
+            :style="textLayerStyle(textLayer)"
+            @pointerdown.stop="startTextDrag($event, textLayer)"
           )
             span.textObject__content(
-              ref="textObjectRef"
+              :ref="(el) => setTextObjectRef(textLayer.key, el)"
               role="textbox"
               :tabindex="tool === 'crop' ? -1 : 0"
               :aria-label="t('editor.textContent')"
               :aria-multiline="false"
-              :contenteditable="tool !== 'crop' && textEditing ? 'true' : 'false'"
-              @dblclick.stop="beginTextEdit"
-              @keydown="handleTextKeydown"
-              @blur="finishTextEdit"
-            ) {{ textContent }}
+              :contenteditable="tool !== 'crop' && editingTextKey === textLayer.key ? 'true' : 'false'"
+              @dblclick.stop="beginTextEdit(textLayer.key)"
+              @keydown="handleTextKeydown($event, textLayer.key)"
+              @blur="finishTextEdit(textLayer.key)"
+            ) {{ textLayer.content }}
             button.textResizeHandle.textResizeHandle--nw(
-              v-if="tool !== 'crop' && !textEditing"
+              v-if="tool !== 'crop' && editingTextKey !== textLayer.key"
               type="button"
               :aria-label="t('editor.resizeText')"
-              @pointerdown.stop="startTextResize($event, 'nw')"
-              @keydown="handleTextResizeKeydown"
+              @pointerdown.stop="startTextResize($event, textLayer, 'nw')"
+              @keydown="handleTextResizeKeydown($event, textLayer)"
             )
             button.textResizeHandle.textResizeHandle--ne(
-              v-if="tool !== 'crop' && !textEditing"
+              v-if="tool !== 'crop' && editingTextKey !== textLayer.key"
               type="button"
               :aria-label="t('editor.resizeText')"
-              @pointerdown.stop="startTextResize($event, 'ne')"
-              @keydown="handleTextResizeKeydown"
+              @pointerdown.stop="startTextResize($event, textLayer, 'ne')"
+              @keydown="handleTextResizeKeydown($event, textLayer)"
             )
             button.textResizeHandle.textResizeHandle--sw(
-              v-if="tool !== 'crop' && !textEditing"
+              v-if="tool !== 'crop' && editingTextKey !== textLayer.key"
               type="button"
               :aria-label="t('editor.resizeText')"
-              @pointerdown.stop="startTextResize($event, 'sw')"
-              @keydown="handleTextResizeKeydown"
+              @pointerdown.stop="startTextResize($event, textLayer, 'sw')"
+              @keydown="handleTextResizeKeydown($event, textLayer)"
             )
             button.textResizeHandle.textResizeHandle--se(
-              v-if="tool !== 'crop' && !textEditing"
+              v-if="tool !== 'crop' && editingTextKey !== textLayer.key"
               type="button"
               :aria-label="t('editor.resizeText')"
-              @pointerdown.stop="startTextResize($event, 'se')"
-              @keydown="handleTextResizeKeydown"
+              @pointerdown.stop="startTextResize($event, textLayer, 'se')"
+              @keydown="handleTextResizeKeydown($event, textLayer)"
             )
           .objectObject(
             v-for="objectLayer in objectLayers"
@@ -249,9 +251,9 @@
           @keydown="handleLayerOrderKeydown($event, layer.key)"
         )
           IconLayerSort.layer__sort
-      .properties(v-if="selectedLayerKey === 'text' && textLayer")
+      .properties(v-if="selectedTextLayer")
         h3 {{ t('editor.textProperties') }}
-        input.properties__text(v-model="textContent" :aria-label="t('editor.textContent')")
+        input.properties__text(v-model="selectedTextLayer.content" :aria-label="t('editor.textContent')")
         .fontRow
           .fontSelect(ref="fontSelectEl")
             button.fontSelect__trigger(
@@ -262,7 +264,7 @@
               :class="{ isOpen: fontMenuOpen }"
               @click="fontMenuOpen = !fontMenuOpen"
             )
-              span.fontSelect__value {{ t(`editor.fontOptions.${selectedFontId}`) }}
+              span.fontSelect__value {{ t(`editor.fontOptions.${selectedTextLayer.fontId}`) }}
               IconChevronDown(:class="{ isUp: fontMenuOpen }")
             .fontMenu(v-if="fontMenuOpen")
               .fontMenu__scroll
@@ -274,20 +276,20 @@
                       :key="option.id"
                       type="button"
                       role="option"
-                      :aria-selected="option.id === selectedFontId"
-                      :class="{ isSelected: option.id === selectedFontId }"
+                      :aria-selected="option.id === selectedTextLayer.fontId"
+                      :class="{ isSelected: option.id === selectedTextLayer.fontId }"
                       @click="selectFont(option.id)"
                     )
                       span.fontMenu__col
                         span.fontMenu__name {{ t(`editor.fontOptions.${option.id}`) }}
                         span.fontMenu__desc {{ t(`editor.fontDescriptions.${option.id}`) }}
-                      IconCheckCircle.fontMenu__check(v-if="option.id === selectedFontId")
+                      IconCheckCircle.fontMenu__check(v-if="option.id === selectedTextLayer.fontId")
                 span.fontMenu__fade(aria-hidden="true")
               .fontMenu__note
                 span.fontMenu__noteMain {{ t('editor.fontNoteLicense') }}
                 span.fontMenu__noteSub {{ t('editor.fontNoteUpload') }}
-          label.colorPicker(:aria-label="t('editor.textColor')" :style="{ '--selected-color': textColor }")
-            input(v-model="textColor" type="color" :title="t('editor.textColor')")
+          label.colorPicker(:aria-label="t('editor.textColor')" :style="{ '--selected-color': selectedTextLayer.color }")
+            input(v-model="selectedTextLayer.color" type="color" :title="t('editor.textColor')")
         small.properties__settings {{ t('editor.textSettings') }}
       .objectGenerator(v-if="tool === 'object'")
         h3 {{ t('editor.addObject.title') }}
@@ -351,7 +353,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppButton from '@/components/AppButton.vue'
 import AppCheckbox from '@/components/AppCheckbox.vue'
@@ -603,13 +605,16 @@ const saveAsNewAsset = async (payload: SaveAssetPayload) => {
     savingAsset.value = false
   }
 }
-const textContent = ref(t('editor.demoText'))
-const textColor = ref('#2e3567')
-const textObjectRef = ref<HTMLElement | null>(null)
-const textPosition = reactive({ x: 50, y: 58 })
-const textScale = ref(1)
-const textDragging = ref(false)
-const textEditing = ref(false)
+// 文字圖層是多實例架構（比照 ObjectEditorLayer）：內容／位置／字級／字型／顏色都
+// 存在各自的圖層物件裡（見 TextEditorLayer），這裡只保留「目前正在拖曳／編輯的是
+// 哪一筆」跟「哪一筆圖層的 DOM 節點是哪個」這種跨圖層共用的輔助狀態。
+const textObjectRefs = new Map<string, HTMLElement>()
+const setTextObjectRef = (key: string, el: Element | ComponentPublicInstance | null) => {
+  if (el instanceof HTMLElement) textObjectRefs.set(key, el)
+  else textObjectRefs.delete(key)
+}
+const draggingTextKey = ref('')
+const editingTextKey = ref('')
 const zoomPercent = ref(80)
 const zoomMin = 40
 const zoomMax = 160
@@ -641,26 +646,27 @@ const fontGroups = [
   { id: 'latin' as const, options: fontOptions.filter((option) => option.group === 'latin') },
 ]
 type FontId = (typeof fontOptions)[number]['id']
-const selectedFontId = ref<FontId>('notoSansTC')
-const selectedFont = computed(() => fontOptions.find((option) => option.id === selectedFontId.value) ?? fontOptions[0])
 // 設計稿的字型選單是自訂面板（每列有副標、選中列有打勾），原生 select 的 option 由
 // 作業系統繪製，做不出這個樣式，因此自行實作 listbox。
 const fontMenuOpen = ref(false)
 const fontSelectEl = ref<HTMLElement | null>(null)
 const selectFont = (id: FontId) => {
-  selectedFontId.value = id
+  if (selectedTextLayer.value) selectedTextLayer.value.fontId = id
   fontMenuOpen.value = false
 }
 useDismissableMenu(fontMenuOpen, fontSelectEl)
-const textObjectStyle = computed(() => ({
-  left: `${textPosition.x}%`,
-  top: `${textPosition.y}%`,
-  color: textColor.value,
-  fontFamily: selectedFont.value.family,
-  fontWeight: selectedFont.value.weight,
-  fontSize: `${1.25 * textScale.value}rem`,
-  zIndex: layerZIndex('text'),
-}))
+const textLayerStyle = (layer: TextEditorLayer) => {
+  const font = fontOptions.find((option) => option.id === layer.fontId) ?? fontOptions[0]
+  return {
+    left: `${layer.x}%`,
+    top: `${layer.y}%`,
+    color: layer.color,
+    fontFamily: font.family,
+    fontWeight: font.weight,
+    fontSize: `${1.25 * layer.scale}rem`,
+    zIndex: layerZIndex(layer.key),
+  }
+}
 const retouchSetupOpen = ref(false)
 const retouchMethod = ref<'quick' | 'command'>('quick')
 const commandRetouchBaseCost = computed(() => pricing.value?.commandBase ?? 0)
@@ -800,6 +806,17 @@ type ObjectEditorLayer = EditorLayer & {
   scale: number
   dragging: boolean
 }
+// 文字圖層是多實例架構（比照 ObjectEditorLayer）：內容／位置／字級／字型／顏色都是
+// 圖層自己的欄位，layers 陣列可以同時存在多筆，彼此獨立。
+type TextEditorLayer = EditorLayer & {
+  type: 'text'
+  content: string
+  color: string
+  x: number
+  y: number
+  scale: number
+  fontId: FontId
+}
 // 圖層清單初始為空（decision 2）：原圖圖層只在 selectEditorAsset() 真的選定素材
 // 之後才會被 push 進來，元件掛載當下沒有任何圖層，也就沒有任何圖層被選取。
 const layers = reactive<EditorLayer[]>([])
@@ -808,7 +825,7 @@ const draggedLayerKey = ref('')
 const dropTargetKey = ref('')
 const layerLabel = (layer: EditorLayer) => {
   if (layer.type === 'original') return t('editor.layerItems.original', { name: selectedAssetName.value })
-  if (layer.type === 'text') return t('editor.layerItems.text', { text: textContent.value })
+  if (layer.type === 'text') return t('editor.layerItems.text', { text: (layer as TextEditorLayer).content })
   return layer.label ?? t(`editor.layerItems.${layer.type}`)
 }
 const layerDescription = (layer: EditorLayer) => {
@@ -821,11 +838,16 @@ const selectLayer = (key: string) => {
   selectedLayerKey.value = key
   if (layer.type !== 'original') tool.value = layer.type
 }
-const textLayer = computed(() => layers.find((layer) => layer.type === 'text'))
+const textLayers = computed(() => layers.filter((layer): layer is TextEditorLayer => layer.type === 'text'))
 const objectLayers = computed(() => layers.filter((layer): layer is ObjectEditorLayer => layer.type === 'object'))
 const originalLayer = computed(() => layers.find((layer) => layer.key === 'original'))
 const selectedLayer = computed(() => layers.find((layer) => layer.key === selectedLayerKey.value))
-const canDuplicateSelectedLayer = computed(() => selectedLayer.value?.type === 'object')
+const selectedTextLayer = computed(() =>
+  selectedLayer.value?.type === 'text' ? (selectedLayer.value as TextEditorLayer) : undefined,
+)
+const canDuplicateSelectedLayer = computed(
+  () => selectedLayer.value?.type === 'object' || selectedLayer.value?.type === 'text',
+)
 const layerZIndex = (key: string) => {
   const index = layers.findIndex((layer) => layer.key === key)
   return index < 0 ? 1 : layers.length - index + 1
@@ -876,20 +898,31 @@ const handleLayerOrderKeydown = (event: KeyboardEvent, key: string) => {
   if (!movingLayer) return
   layers.splice(nextIndex, 0, movingLayer)
 }
+// 每次點擊「文字」工具都新增一筆獨立的新圖層（比照 addObjectLayer），不再判斷
+// 「已經有就重用」——這樣文字圖層才能像物件圖層一樣同時存在多筆。
+function addTextLayer() {
+  const key = `text-${crypto.randomUUID()}`
+  const layer: TextEditorLayer = {
+    key,
+    type: 'text',
+    visible: true,
+    locked: false,
+    content: t('editor.newTextPlaceholder'),
+    color: '#2e3567',
+    x: 50,
+    y: 58,
+    scale: 1,
+    fontId: 'notoSansTC',
+  }
+  layers.unshift(layer)
+  selectedLayerKey.value = key
+  savedAssetId.value = ''
+  return layer
+}
 const insertTextLayer = async () => {
   tool.value = 'text'
-  if (!textLayer.value) {
-    layers.unshift({ key: 'text', type: 'text', visible: true, locked: false })
-    textContent.value = t('editor.newTextPlaceholder')
-    textPosition.x = 50
-    textPosition.y = 58
-    textScale.value = 1
-  } else {
-    textLayer.value.visible = true
-  }
-  selectedLayerKey.value = 'text'
-  savedAssetId.value = ''
-  await beginTextEdit()
+  const layer = addTextLayer()
+  await beginTextEdit(layer.key)
 }
 // 「加入物件」對齊 Figma（1141:906）：畫布上先框選範圍，右側面板輸入描述、
 // 點選常用物件預設可快速帶入描述，「生成物件」才會真的建立新圖層——
@@ -921,14 +954,12 @@ function addObjectLayer(description: string) {
 }
 function duplicateSelectedLayer() {
   const source = selectedLayer.value
-  if (!source || source.type !== 'object') return
-  const objectSource = source as ObjectEditorLayer
-  const key = `object-${crypto.randomUUID()}`
-  const duplicated: ObjectEditorLayer = {
-    ...objectSource,
-    key,
-    dragging: false,
-  }
+  if (!source || (source.type !== 'object' && source.type !== 'text')) return
+  const key = `${source.type}-${crypto.randomUUID()}`
+  const duplicated =
+    source.type === 'object'
+      ? ({ ...(source as ObjectEditorLayer), key, dragging: false } as ObjectEditorLayer)
+      : ({ ...(source as TextEditorLayer), key } as TextEditorLayer)
   layers.unshift(duplicated)
   selectedLayerKey.value = key
   savedAssetId.value = ''
@@ -1051,25 +1082,25 @@ const startObjectSelectionDrag = (event: PointerEvent) => {
     },
   })
 }
-const startTextDrag = (event: PointerEvent) => {
-  if (textEditing.value || event.button !== 0 || !artboardRef.value) return
+const startTextDrag = (event: PointerEvent, layer: TextEditorLayer) => {
+  if (editingTextKey.value === layer.key || event.button !== 0 || !artboardRef.value) return
   event.preventDefault()
-  selectLayer('text')
+  selectLayer(layer.key)
   const artboardBounds = artboardRef.value.getBoundingClientRect()
   const textBounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  textDragging.value = true
+  draggingTextKey.value = layer.key
   textDrag.start({
     containerBounds: artboardBounds,
     elementBounds: textBounds,
     startEvent: event,
-    startX: textPosition.x,
-    startY: textPosition.y,
+    startX: layer.x,
+    startY: layer.y,
     onDrag: (x, y) => {
-      textPosition.x = x
-      textPosition.y = y
+      layer.x = x
+      layer.y = y
     },
     onEnd: () => {
-      textDragging.value = false
+      draggingTextKey.value = ''
     },
   })
 }
@@ -1122,10 +1153,10 @@ const handleObjectResizeKeydown = (event: KeyboardEvent, layer: ObjectEditorLaye
   const step = event.shiftKey ? 0.1 : 0.05
   layer.scale = Math.max(0.35, Math.min(2.5, layer.scale + (increase ? step : -step)))
 }
-const beginTextEdit = async () => {
-  textEditing.value = true
+const beginTextEdit = async (key: string) => {
+  editingTextKey.value = key
   await nextTick()
-  const element = textObjectRef.value
+  const element = textObjectRefs.get(key)
   if (!element) return
   element.focus()
   const selection = window.getSelection()
@@ -1134,56 +1165,64 @@ const beginTextEdit = async () => {
   selection?.removeAllRanges()
   selection?.addRange(range)
 }
-const finishTextEdit = () => {
-  if (!textEditing.value) return
-  textContent.value = textObjectRef.value?.textContent ?? ''
-  textEditing.value = false
+const finishTextEdit = (key: string) => {
+  if (editingTextKey.value !== key) return
+  const layer = layers.find((item): item is TextEditorLayer => item.key === key && item.type === 'text')
+  if (layer) layer.content = textObjectRefs.get(key)?.textContent ?? ''
+  editingTextKey.value = ''
 }
-const handleTextKeydown = (event: KeyboardEvent) => {
-  if (!textEditing.value && (event.key === 'Enter' || event.key === 'F2')) {
+const handleTextKeydown = (event: KeyboardEvent, key: string) => {
+  const isEditing = editingTextKey.value === key
+  if (!isEditing && (event.key === 'Enter' || event.key === 'F2')) {
     event.preventDefault()
-    void beginTextEdit()
+    void beginTextEdit(key)
     return
   }
-  if (textEditing.value && event.key === 'Enter') {
+  if (isEditing && event.key === 'Enter') {
     event.preventDefault()
-    finishTextEdit()
+    finishTextEdit(key)
     ;(event.currentTarget as HTMLElement).blur()
-  } else if (textEditing.value && event.key === 'Escape') {
+  } else if (isEditing && event.key === 'Escape') {
     event.preventDefault()
-    textEditing.value = false
+    editingTextKey.value = ''
+    const layer = layers.find((item): item is TextEditorLayer => item.key === key && item.type === 'text')
     const element = event.currentTarget as HTMLElement
-    element.textContent = textContent.value
+    element.textContent = layer?.content ?? ''
     element.blur()
   }
 }
-const resizeTextBy = (amount: number) => {
-  textScale.value = Math.max(0.5, Math.min(3, textScale.value + amount))
+const resizeTextBy = (layer: TextEditorLayer, amount: number) => {
+  layer.scale = Math.max(0.5, Math.min(3, layer.scale + amount))
 }
-const handleTextResizeKeydown = (event: KeyboardEvent) => {
+const handleTextResizeKeydown = (event: KeyboardEvent, layer: TextEditorLayer) => {
   if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
   event.preventDefault()
-  resizeTextBy(event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 0.1 : -0.1)
+  resizeTextBy(layer, event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 0.1 : -0.1)
 }
-const startTextResize = (event: PointerEvent, corner: CropCorner) => {
+const startTextResize = (event: PointerEvent, layer: TextEditorLayer, corner: CropCorner) => {
   if (event.button !== 0) return
   event.preventDefault()
-  const start = { x: event.clientX, y: event.clientY, scale: textScale.value }
+  const start = { x: event.clientX, y: event.clientY, scale: layer.scale }
   const horizontalDirection = corner.includes('w') ? -1 : 1
   const verticalDirection = corner.includes('n') ? -1 : 1
   textResizeDrag.start((moveEvent) => {
     const delta =
       ((moveEvent.clientX - start.x) * horizontalDirection + (moveEvent.clientY - start.y) * verticalDirection) / 160
-    textScale.value = Math.max(0.5, Math.min(3, start.scale + delta))
+    layer.scale = Math.max(0.5, Math.min(3, start.scale + delta))
   })
 }
 const cropRect = reactive({ x: 12.5, y: 0, width: 75, height: 100 })
+// 文字圖層改成多實例後，用字串化所有文字圖層目前欄位的 fingerprint 取代原本盯著
+// 五個全域 ref 的寫法，任何一筆文字圖層的內容／位置／字級／字型／顏色改變都要
+// 重新標記「有未儲存的變更」。
+const textLayersFingerprint = computed(() =>
+  textLayers.value
+    .map((layer) => `${layer.key}:${layer.content}:${layer.color}:${layer.scale}:${layer.fontId}:${layer.x}:${layer.y}`)
+    .join('|'),
+)
 watch(
   [
-    textContent,
-    textColor,
-    textScale,
-    selectedFontId,
+    textLayersFingerprint,
     tool,
     retouchInstruction,
     () => retouchOptions.value.map((option) => `${option.key}:${option.on}`).join('|'),
