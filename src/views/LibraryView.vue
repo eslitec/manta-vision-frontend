@@ -127,7 +127,7 @@
           input.modal__createInput(v-model="moveNewFolderName" type="text" :aria-label="t('library.createFolderPlaceholder')" :placeholder="t('library.createFolderPlaceholder')" @keyup.enter="createFolderForMove")
           AppButton.modal__createBtn(variant="ghost" size="compact" @click="createFolderForMove") {{ t('common.create') }}
         footer.modal__foot
-          AppButton(variant="outline" @click="moveDialogOpen = false") {{ t('common.cancel') }}
+          AppButton(variant="ghost" @click="moveDialogOpen = false") {{ t('common.cancel') }}
           AppButton(variant="primary" :disabled="!moveTargetFolder" @click="confirmMoveToFolder") {{ t('library.moveInto', { folder: moveTargetFolder }) }}
 
   Teleport(to="body")
@@ -1017,7 +1017,7 @@ async function onUpload(e: Event) {
 .modal__title {
   font-size: 1.125rem;
   font-weight: 700;
-  color: $blue-dark-300;
+  color: $blue-dark-500;
 }
 .modal__close {
   color: $gray-400;
@@ -1045,21 +1045,22 @@ async function onUpload(e: Event) {
   border-radius: 8px;
   font-size: 0.875rem;
   // 對齊 Figma opt_春季檔期／opt_常用商品圖（node 442:2870、442:2876）：未選取的列是
-  // 較淡的 $dark-blue-gray，只有選取列才換成較深的 $blue-dark-500 並加淺藍底
-  color: $dark-blue-gray;
+  // 較淡的 $gray-100，選取列才換成較深的顏色並加淺藍底
+  color: $gray-100;
   cursor: pointer;
   &:hover {
     background: $blue-light;
   }
   &.isActive {
     background: $blue-light;
-    color: $blue-dark-500;
+    color: #606692;
     font-weight: 500;
   }
 }
 .modal__listName {
   flex: 1;
   text-align: left;
+  color: $dark-blue-gray;
 }
 .modal__listCount {
   color: $gray-100;
@@ -1078,6 +1079,9 @@ async function onUpload(e: Event) {
   font-size: 0.875rem;
   color: $blue-dark-300;
   outline: none;
+  &::placeholder {
+    color: $gray-100;
+  }
   &:focus {
     border-color: $blue;
   }
