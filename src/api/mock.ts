@@ -126,6 +126,14 @@ function deduct(cost: number) {
   db.feedBalance -= cost
   db.monthlyUsed += cost
 }
+// 儲值套餐顆數對照（id 對齊 TopUpDialog.vue 的套餐常數陣列／FeedPackageId）；
+// mock-only，真後端目前沒有付款端點，見 add-feed-topup-dialog design.md 決策 5
+const FEED_TOPUP_AMOUNTS: Record<string, number> = {
+  'pkg-500': 500,
+  'pkg-1500': 1500,
+  'pkg-3000': 3000,
+}
+
 export const mockApi = {
   // GET /models
   async listModels(): Promise<AiModel[]> {
@@ -407,5 +415,12 @@ export const mockApi = {
   async giveConsent(): Promise<void> {
     await delay(300)
     db.consent = true
+  },
+  async topUpFeed(packageId: string): Promise<{ balance: number }> {
+    await delay(150)
+    const amount = FEED_TOPUP_AMOUNTS[packageId]
+    if (!amount) throw new Error('INVALID_PACKAGE')
+    db.feedBalance += amount
+    return { balance: db.feedBalance }
   },
 }
