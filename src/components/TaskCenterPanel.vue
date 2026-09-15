@@ -22,7 +22,7 @@ Teleport(to="body")
               .task__bar(role="progressbar" :aria-label="task.name" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="task.progress")
                 .task__barFill(:style="{ width: task.progress + '%' }")
               span.task__progress {{ task.progress }}%
-          template(v-else-if="task.status === 'succeeded'")
+          template(v-else-if="task.status === 'done'")
             .task__topline
               span.task__dot.task__dot--done
               span.task__name {{ task.name }}
@@ -33,7 +33,7 @@ Teleport(to="body")
               span.task__name {{ task.name }}
             p.task__meta.task__meta--failed {{ task.error || $t('taskCenter.failedDetail') }}
         .task__action
-          button(v-if="task.status === 'succeeded'" @click="view") {{ $t('common.view') }}
+          button(v-if="task.status === 'done'" @click="view") {{ $t('common.view') }}
           button(v-else-if="task.status === 'failed'" @click="tasksStore.retryTask(task.id)") {{ $t('common.retry') }}
     .taskpanel__foot
       p {{ t('taskCenter.notePrimary') }}
