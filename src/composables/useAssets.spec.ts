@@ -4,12 +4,14 @@ import type { Asset } from '@/types/asset'
 const listImages = vi.fn()
 const uploadImage = vi.fn()
 const saveGenerated = vi.fn()
+const editImage = vi.fn()
 
 vi.mock('@/api', () => ({
   api: {
     listImages: () => listImages(),
     uploadImage: (f: File) => uploadImage(f),
     saveGenerated: (n: string) => saveGenerated(n),
+    editImage: (n: string) => editImage(n),
   },
 }))
 
@@ -61,5 +63,15 @@ describe('useAssets', () => {
     await load()
     await save('生成')
     expect(assets.value[0].tag).toBe('ai')
+  })
+
+  it('saveEdited prepends a new edited asset and preserves the original', async () => {
+    listImages.mockResolvedValue([asset('a1', 'original')])
+    editImage.mockResolvedValue({ id: 'e1', name: 'edited', source: 'edited', tag: 'edit', dim: '1024x768' })
+    const { assets, load, saveEdited } = useAssets()
+    await load()
+    await saveEdited('original')
+    expect(assets.value.map((item) => item.id)).toEqual(['e1', 'a1'])
+    expect(assets.value[0].tag).toBe('edit')
   })
 })

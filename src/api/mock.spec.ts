@@ -29,10 +29,31 @@ describe('計費與扣點', () => {
     expect((await api.getFeed()).balance).toBe(before)
   })
 
-  it('generatePost 固定扣 12 顆', async () => {
+  it('generatePost 預設輸出類型「文案＋配圖」扣 5 顆飼料', async () => {
     const before = (await api.getFeed()).balance
-    await api.generatePost({ intro: 'x', applyBrand: true })
-    expect((await api.getFeed()).balance).toBe(before - 12)
+    await api.generatePost({ intro: 'x', applyBrand: true, outputType: 'both' })
+    expect((await api.getFeed()).balance).toBe(before - 5)
+  })
+
+  it.each([
+    { outputType: 'both', cost: 5 },
+    { outputType: 'textOnly', cost: 2 },
+    { outputType: 'imageOnly', cost: 3 },
+  ] as const)('generatePost outputType=$outputType 回傳對應內容並扣 $cost 顆飼料', async ({ outputType, cost }) => {
+    const before = (await api.getFeed()).balance
+    const post = await api.generatePost({ intro: 'x', applyBrand: true, outputType })
+    expect((await api.getFeed()).balance).toBe(before - cost)
+    if (outputType === 'both') {
+      expect(post.posterUrl).toBeTruthy()
+      expect(post.copy).not.toBe('')
+    } else if (outputType === 'textOnly') {
+      expect(post.posterUrl).toBeUndefined()
+      expect(post.copy).not.toBe('')
+    } else {
+      expect(post.posterUrl).toBeTruthy()
+      expect(post.copy).toBe('')
+      expect(post.hashtags).toEqual([])
+    }
   })
 
   it('tryOn 固定扣 15 顆', async () => {
@@ -41,10 +62,11 @@ describe('計費與扣點', () => {
     expect((await api.getFeed()).balance).toBe(before - 15)
   })
 
-  it('createVideoJob 扣 45 顆並回傳 queued', async () => {
+  it('createVideoJob 扣 45 顆並回傳 pending 與 0% 進度', async () => {
     const before = (await api.getFeed()).balance
     const job = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'standard' })
-    expect(job.status).toBe('queued')
+    expect(job.status).toBe('pending')
+    expect(job.progress).toBe(0)
     expect(job.cost).toBe(45)
     expect((await api.getFeed()).balance).toBe(before - 45)
   })
@@ -57,12 +79,73 @@ describe('計費與扣點', () => {
     expect(pro.cost).toBe(180)
     expect((await api.getFeed()).balance).toBe(before - 90 - 180)
   })
+})
 
-  it('refundFeed 退還飼料（失敗退點）', async () => {
+describe('圖片編輯與 AI 修圖的扣款（MV-09 / MV-09b）', () => {
+  it('價目表由後端提供，且回傳的是複本、改不到內部狀態', async () => {
+    const pricing = await api.getEditorPricing()
+    expect(pricing.tools.remove).toBe(8)
+    expect(pricing.retouchOptions).toEqual({ removeObjects: 8, repair: 8, lighting: 0, upscale: 5 })
+    expect(pricing.commandBase).toBe(16)
+    pricing.tools.remove = 999
+    expect((await api.getEditorPricing()).tools.remove).toBe(8)
+  })
+
+  it('applyEditTool 背景移除扣 8 顆，其餘工具不扣', async () => {
     const before = (await api.getFeed()).balance
-    await api.tryOn() // -15
-    api.refundFeed(15)
+    expect(await api.applyEditTool('remove')).toEqual({ tool: 'remove', cost: 8 })
+    expect((await api.getFeed()).balance).toBe(before - 8)
+
+    for (const tool of ['object', 'fade', 'text', 'crop'] as const) {
+      const mid = (await api.getFeed()).balance
+      expect((await api.applyEditTool(tool)).cost).toBe(0)
+      expect((await api.getFeed()).balance).toBe(mid)
+    }
+  })
+
+  it('retouchImage 依價目表加總後扣款，成本不採信前端', async () => {
+    const before = (await api.getFeed()).balance
+    const res = await api.retouchImage({ method: 'quick', options: ['removeObjects', 'repair', 'lighting'] })
+    expect(res.cost).toBe(16) // 8 + 8 + 0
+    expect((await api.getFeed()).balance).toBe(before - 16)
+  })
+
+  it('指令式修圖含基本費，且只認光線校正與放大兩個加購項', async () => {
+    const before = (await api.getFeed()).balance
+    const res = await api.retouchImage({
+      method: 'command',
+      options: ['removeObjects', 'repair', 'upscale'],
+      instruction: '把背景換成純白',
+    })
+    expect(res.options).toEqual(['upscale']) // 快速項目被濾掉
+    expect(res.cost).toBe(21) // 基本費 16 + 放大 5
+    expect((await api.getFeed()).balance).toBe(before - 21)
+  })
+
+  it('全部選免費項目時不扣款', async () => {
+    const before = (await api.getFeed()).balance
+    expect((await api.retouchImage({ method: 'quick', options: ['lighting'] })).cost).toBe(0)
     expect((await api.getFeed()).balance).toBe(before)
+  })
+
+  it('另存編輯產物不扣飼料，且不覆寫原素材', async () => {
+    const beforeFeed = (await api.getFeed()).balance
+    const beforeCount = (await api.listImages()).length
+    const saved = await api.editImage('編輯後的圖', { keepLayers: true })
+    expect(saved.tag).toBe('edit')
+    expect(saved.editable).toBe(true)
+    expect((await api.getFeed()).balance).toBe(beforeFeed)
+    expect((await api.listImages()).length).toBe(beforeCount + 1)
+  })
+
+  it('餘額不足時擲出 INSUFFICIENT_FEED，且不扣款', async () => {
+    // 先把餘額燒到接近見底，再送一筆會超支的修圖
+    const { balance } = await api.getFeed()
+    const req: GenerateImageReq = { modelId: 'flux-1', prompt: 'x', count: Math.floor(balance / 8) }
+    await api.generateImages(req, 8)
+    const left = (await api.getFeed()).balance
+    await expect(api.retouchImage({ method: 'command', options: ['upscale'] })).rejects.toThrow('INSUFFICIENT_FEED')
+    expect((await api.getFeed()).balance).toBe(left)
   })
 })
 
@@ -81,12 +164,12 @@ describe('AI 輔助描述', () => {
 
 describe('品牌套用（行銷 PO 文）', () => {
   it('applyBrand=true 帶入品牌 hashtag', async () => {
-    const post = await api.generatePost({ intro: 'x', applyBrand: true })
-    expect(post.hashtags).toEqual(['#日安選物', '#日常穿搭', '#質感生活'])
+    const post = await api.generatePost({ intro: 'x', applyBrand: true, outputType: 'both' })
+    expect(post.hashtags).toEqual(['#日安選物', '#選物日常', '#質感生活'])
   })
 
   it('applyBrand=false 使用預設 hashtag', async () => {
-    const post = await api.generatePost({ intro: 'x', applyBrand: false })
+    const post = await api.generatePost({ intro: 'x', applyBrand: false, outputType: 'both' })
     expect(post.hashtags).toEqual(['#新品', '#日常'])
   })
 })
@@ -98,15 +181,26 @@ describe('圖生影非同步任務', () => {
     expect(j.error).toBe('NOT_FOUND')
   })
 
-  it('依經過時間由 queued → done（覆寫 Date.now 模擬時間流逝）', async () => {
+  it('依經過時間由 pending → processing → succeeded 並回傳進度', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
     const job = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'standard' })
-    // 剛建立：queued
-    expect((await api.getVideoJob(job.id)).status).toBe('queued')
-    // 模擬經過 6 秒：done（delay 用 setTimeout，不受 Date.now 影響）
-    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 6000)
-    const done = await api.getVideoJob(job.id)
-    expect(done.status).toBe('done')
-    expect(done.resultUrl).toBeTruthy()
+    // 剛建立：pending
+    const pending = await api.getVideoJob(job.id)
+    expect(pending.status).toBe('pending')
+    expect(pending.progress).toBeGreaterThanOrEqual(0)
+    expect(pending.progress).toBeLessThanOrEqual(10)
+    const baseNow = Date.now()
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(baseNow + 3000)
+    const processing = await api.getVideoJob(job.id)
+    expect(processing.status).toBe('processing')
+    expect(processing.progress).toBeGreaterThan(0)
+    expect(processing.progress).toBeLessThan(100)
+    // 模擬經過 6 秒：succeeded（delay 用 setTimeout，不受 Date.now 影響）
+    nowSpy.mockReturnValue(baseNow + 6000)
+    const succeeded = await api.getVideoJob(job.id)
+    expect(succeeded.status).toBe('succeeded')
+    expect(succeeded.progress).toBe(100)
+    expect(succeeded.resultUrl).toBeTruthy()
   })
 })
 
@@ -124,7 +218,7 @@ describe('素材（圖庫）', () => {
     const countBefore = (await api.listImages()).length
     const a = await api.editImage('原圖')
     expect(a.source).toBe('編輯產物')
-    expect(a.name).toContain('_去背')
+    expect(a.name).toBe('原圖')
     expect((await api.listImages()).length).toBe(countBefore + 1)
   })
 
@@ -137,12 +231,12 @@ describe('素材（圖庫）', () => {
   it('uploadImage 指定資料夾則落到該資料夾', async () => {
     const file = new File(['x'], '海報.png')
     const a = await api.uploadImage(file, '春季企劃')
-    expect(a.folders).toContain('春季企劃')
+    expect(a.folderId).toBe('春季企劃')
   })
 
   it('uploadImage 未指定資料夾則進未分類', async () => {
     const a = await api.uploadImage(new File(['x'], '隨手拍.png'))
-    expect(a.folders).toContain('未分類')
+    expect(a.folderId).toBe('未分類')
   })
 })
 
@@ -160,18 +254,17 @@ describe('資料夾', () => {
     expect(again.filter((f) => f === '冬季企劃')).toHaveLength(1)
   })
 
-  it('addToFolder 多重歸屬：加入新資料夾但保留原本歸屬', async () => {
+  it('moveToFolder 1:N：移至資料夾會替換原本歸屬', async () => {
     // a1 原本在「春季企劃」
-    await api.addToFolder(['a1'], '蘋果')
+    await api.moveToFolder(['a1'], '蘋果')
     const a1 = (await api.listImages()).find((a) => a.id === 'a1')!
-    expect(a1.folders).toContain('蘋果')
-    expect(a1.folders).toContain('春季企劃') // 原本的仍在
+    expect(a1.folderId).toBe('蘋果')
   })
 
-  it('addToFolder 對已在該資料夾的素材不重複加入', async () => {
-    await api.addToFolder(['a1'], '春季企劃')
+  it('removeFromFolder 1:N：移出後回到未分類', async () => {
+    await api.removeFromFolder(['a1'])
     const a1 = (await api.listImages()).find((a) => a.id === 'a1')!
-    expect(a1.folders!.filter((f) => f === '春季企劃')).toHaveLength(1)
+    expect(a1.folderId).toBe('未分類')
   })
 })
 
@@ -204,9 +297,11 @@ describe('用量與指標', () => {
 describe('品牌設定持久化', () => {
   it('getBrand 回傳深拷貝，改動不會污染後端', async () => {
     const b1 = await api.getBrand()
+    const original = b1.name
     b1.name = '被竄改'
     const b2 = await api.getBrand()
-    expect(b2.name).toBe('日安選物')
+    expect(b2.name).toBe(original)
+    expect(b2.name).not.toBe('被竄改')
   })
 
   it('saveBrand 後 getBrand 讀得到新值', async () => {

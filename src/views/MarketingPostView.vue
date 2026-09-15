@@ -1,18 +1,29 @@
 <template lang="pug">
 .post
+  h1.visuallyHidden {{ t('routeTitles.generatePost') }}
   section.panel.post__input
+    .step
+      .step__title {{ t('marketing.outputType.title') }}
+      .outputTypes
+        button.outputTypeCard(v-for="o in outputTypeOptions" :key="o.value" :aria-pressed="outputType === o.value" :class="{ isActive: outputType === o.value }" @click="outputType = o.value")
+          span.outputTypeCard__label {{ o.label }}
+          span.outputTypeCard__cost
+            IconFeedBottleSmall.outputTypeCard__icon
+            span {{ t('units.feed', { count: o.cost }) }}
+      p.outputTypeHint {{ t('marketing.outputType.hint') }}
     .step
       .step__title {{ t('marketing.steps.image') }}
       .dropzone
-        i.ti.ti-photo.dropzone__icon
+        IconImagePlaceholder.dropzone__icon
         span.dropzone__name(v-if="productImage") {{ productImage.name }}
       .dropzone__actions
-        OutlineButton(@click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
+        AppButton(variant="outline" @click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
     .step
       .step__title {{ t('marketing.steps.intro') }}
       .field
-        textarea.field__input(v-model="intro" maxlength="200" rows="4" :placeholder="t('marketing.introPlaceholder')")
-        span.field__counter {{ intro.length }} / 200
+        label.visuallyHidden(for="marketing-intro") {{ t('marketing.steps.intro') }}
+        textarea#marketing-intro.field__input(v-model="intro" maxlength="200" rows="4" :aria-describedby="'marketing-intro-counter'" :placeholder="t('marketing.introPlaceholder')")
+        span#marketing-intro-counter.field__counter {{ intro.length }} / 200
       .insp
         button.insp__pill(@click="inspOpen = !inspOpen") {{ t('marketing.inspiration') }}
         span.insp__hint {{ t('marketing.inspirationHint') }}
@@ -24,45 +35,48 @@
     .step
       .step__title {{ t('marketing.steps.ratio') }}
       .ratios
-        button.ratiocard(v-for="r in ratios" :key="r.v" :class="{ 'isActive': ratio === r.v }" @click="ratio = r.v")
+        button.ratiocard(v-for="r in ratios" :key="r.v" :aria-pressed="ratio === r.v" :class="{ 'isActive': ratio === r.v }" @click="ratio = r.v")
           span.ratiocard__label {{ r.label }}
           span.ratiocard__desc {{ r.desc }}
-    p.err(v-if="errorMsg") {{ errorMsg }}
+    p.err(v-if="errorMsg" role="alert") {{ errorMsg }}
     .post__footer
       .cost
         .cost__label {{ t('common.estimatedCost') }}
         .cost__value
-          IconFeedBottleSmall.cost__icon
-          span {{ t('units.feed', { count: 5 }) }}
-      PrimaryButton(:disabled="generating" @click="generate")
-        i.ti(:class="generating ? 'ti-loader spin' : 'ti-plus'")
+          button.cost__feedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true")
+            IconFeedBottleSmall.cost__icon
+          span {{ t('units.feed', { count: outputTypeCost }) }}
+      AppButton(:disabled="generating" @click="generate")
+        component(:is="generating ? IconLoader : IconAddObject" :class="{ spin: generating }")
         span {{ generating ? t('common.generating') : t('marketing.generate') }}
 
   section.panel.post__result
     h2.result__title {{ t('common.generationResult') }}
     .result__empty(v-if="!result") {{ t('marketing.emptyResult') }}
     template(v-else)
+      .visuallyHidden(role="status" aria-live="polite") {{ t('common.generationResult') }}
       .postresult
-        .postresult__col
-          .poster(:style="{ aspectRatio: aspect }")
-            i.ti.ti-photo
+        .postresult__col(v-if="result.posterUrl")
+          .poster(:class="{ isPortrait: ratio === '9:16' }" :style="{ aspectRatio: aspect }")
+            IconImagePlaceholder
           .postresult__act
             button.linkbtn(@click="generate") {{ t('marketing.changeImage') }}
             button.linkbtn(@click="downloadPoster") {{ t('common.download') }}
-        .postresult__col
+        .postresult__col(v-if="result.copy")
           .copy
             p.copy__text(v-for="(line, i) in copyLines" :key="i") {{ line }}
             p.copy__tags {{ result.hashtags.join(' ') }}
           .postresult__act
-            OutlineButton(@click="copyText")
-              i.ti.ti-copy
+            AppButton(variant="outline" @click="copyText")
+              IconCopy
               span {{ copied ? t('common.copied') : t('marketing.copyText') }}
             button.linkbtn(@click="generate") {{ t('marketing.rewrite') }}
       .postresult__note
-        i.ti.ti-alert-triangle.postresult__noteIcon
+        img.postresult__noteIcon(:src="postNextStepIconUrl" alt="")
         span {{ t('marketing.nextStep') }}
 
   ImagePickerDialog(v-model:open="pickerOpen" :title="t('marketing.pickerTitle')" @select="onPick")
+  TopUpDialog(v-model:open="topUpOpen")
 </template>
 
 <script setup lang="ts">
@@ -70,14 +84,15 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
-import PrimaryButton from '@/components/PrimaryButton.vue'
-import OutlineButton from '@/components/OutlineButton.vue'
+import TopUpDialog from '@/components/TopUpDialog.vue'
+import AppButton from '@/components/AppButton.vue'
 import BrandToggle from '@/components/BrandToggle.vue'
-import IconFeedBottleSmall from '@/components/icons/IconFeedBottleSmall.vue'
+import { IconFeedBottleSmall, IconAddObject, IconCopy, IconImagePlaceholder, IconLoader } from '@/components/icons'
+import postNextStepIconUrl from '@/assets/images/marketing-next-step-alert.svg'
 import { useFeedStore } from '@/stores/feed'
 import { api } from '@/api'
 import { isInsufficientFeed } from '@/utils/error'
-import type { Asset, GeneratedPost } from '@/types/api'
+import type { Asset, GeneratedPost, PostOutputType } from '@/types/api'
 
 const router = useRouter()
 const feed = useFeedStore()
@@ -88,10 +103,21 @@ const intro = ref('')
 const applyBrand = ref(true)
 const inspOpen = ref(false)
 const pickerOpen = ref(false)
+const topUpOpen = ref(false)
 const generating = ref(false)
 const errorMsg = ref('')
 const result = ref<GeneratedPost | null>(null)
 const copied = ref(false)
+
+// 要產出什麼：輸出內容類型，決定生成內容與飼料成本（5／2／3 顆），同一份常數供分段選擇器與底部預估消耗顯示使用
+const OUTPUT_TYPE_OPTIONS: { value: PostOutputType; labelKey: string; cost: number }[] = [
+  { value: 'both', labelKey: 'marketing.outputType.options.both', cost: 5 },
+  { value: 'textOnly', labelKey: 'marketing.outputType.options.textOnly', cost: 2 },
+  { value: 'imageOnly', labelKey: 'marketing.outputType.options.imageOnly', cost: 3 },
+]
+const outputType = ref<PostOutputType>('both')
+const outputTypeOptions = computed(() => OUTPUT_TYPE_OPTIONS.map((o) => ({ ...o, label: t(o.labelKey) })))
+const outputTypeCost = computed(() => OUTPUT_TYPE_OPTIONS.find((o) => o.value === outputType.value)?.cost ?? 5)
 
 // 輸出比例（生成前於設定區選定，影響構圖與結果預覽比例）
 const ratios = computed(() => [
@@ -118,6 +144,7 @@ async function generate() {
       intro: intro.value,
       applyBrand: applyBrand.value,
       ratio: ratio.value, // 版位比例一併送給後端，影響構圖
+      outputType: outputType.value,
     })
     await feed.refresh()
   } catch (e: unknown) {
@@ -238,6 +265,53 @@ async function copyText() {
 .post__brand {
   margin: 1rem 0;
 }
+.outputTypes {
+  @include flex(flex-start, stretch, 0.25rem);
+  background: $blue-light;
+  padding: 0.25rem;
+  border-radius: 10px;
+}
+.outputTypeCard {
+  @include flex(center, center, 0.0625rem);
+  flex-direction: column;
+  flex: 1 0 0;
+  padding: 0.4375rem 0.625rem;
+  border-radius: 8px;
+  background: transparent;
+  &__label {
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1.375;
+    color: #606692;
+  }
+  &__cost {
+    @include flex(center, center, 0.25rem);
+    font-size: 0.625rem;
+    line-height: 1.333;
+    color: $gray-100;
+  }
+  &__icon {
+    width: 0.6875rem;
+    height: 0.6875rem;
+    flex-shrink: 0;
+  }
+  &.isActive {
+    background: $white;
+    box-shadow: 0px 1px 1.5px rgba(0, 0, 0, 0.1);
+    .outputTypeCard__label {
+      font-weight: 500;
+      color: $blue-dark-500;
+    }
+    .outputTypeCard__cost {
+      color: $orange;
+    }
+  }
+}
+.outputTypeHint {
+  font-size: 0.75rem;
+  color: $gray-100;
+  margin-top: 0.5rem;
+}
 .ratios {
   @include flex(flex-start, stretch, 0.5rem);
   flex-wrap: wrap;
@@ -297,11 +371,24 @@ async function copyText() {
     height: 1rem;
     flex-shrink: 0;
   }
+  &__feedBtn {
+    display: inline-flex;
+    align-items: center;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    color: inherit;
+    cursor: pointer;
+    line-height: 0;
+  }
 }
 .post__result {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  overflow: hidden;
 }
 .result__title {
   font-size: 1.125rem;
@@ -317,6 +404,13 @@ async function copyText() {
 }
 .postresult {
   @include flex(flex-start, flex-start, 1.25rem);
+
+  @media (min-width: $bp-lg) {
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
+  }
+
   @include below($bp-sm) {
     flex-direction: column;
   }
@@ -334,14 +428,35 @@ async function copyText() {
     min-width: 0;
     gap: 0.75rem;
   }
+  @media (min-width: $bp-lg) {
+    // Figma 12:90 基準為圖片欄 300、文字欄 318；
+    // 使用比例分配剩餘寬度，避免桌面版把圖片欄寫死為 300px。
+    &:first-child {
+      width: auto;
+      min-width: 0;
+      flex: 300 1 0;
+    }
+    &:last-child {
+      flex: 318 1 0;
+    }
+  }
   @include below($bp-sm) {
     &:first-child {
       width: 100%;
     }
   }
+  // 只選「只要文案」或「只要配圖」時，結果區只渲染一欄——該欄獨佔整個結果區寬度，不維持雙欄骨架
+  &:only-child {
+    width: 100%;
+    flex: 1 1 auto;
+    @media (min-width: $bp-lg) {
+      flex: 1 1 auto;
+    }
+  }
 }
 .postresult__act {
   @include flex(flex-start, center, 0.75rem);
+  flex-shrink: 0;
 }
 .postresult__note {
   @include flex(flex-start, center, 0.625rem);
@@ -352,10 +467,10 @@ async function copyText() {
   font-size: 0.875rem;
   font-weight: 500;
   color: $dark-blue-gray;
-  line-height: 1.5;
+  line-height: normal;
   &-icon {
-    color: $babyBlue;
-    font-size: 1.125rem;
+    width: 1.25rem;
+    height: 1.25rem;
     flex-shrink: 0;
   }
 }
@@ -366,6 +481,16 @@ async function copyText() {
   color: $babyBlue;
   font-size: 2.75rem;
   width: 100%;
+
+  @media (min-width: $bp-lg) {
+    &.isPortrait {
+      width: auto;
+      max-width: 100%;
+      height: calc(100% - 1.75rem);
+      max-height: calc(100% - 1.75rem);
+      align-self: center;
+    }
+  }
 }
 .copy {
   background: $blue-light;

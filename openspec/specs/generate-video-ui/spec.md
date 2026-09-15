@@ -1,0 +1,170 @@
+# generate-video-ui Specification
+
+## Purpose
+
+TBD - created by archiving change 'sync-mv-04-design'. Update Purpose after archive.
+
+## Requirements
+
+### Requirement: 圖生影頁面呈現對齊設計稿
+
+系統 SHALL 讓 `GenerateVideoView.vue` 的文案、間距、字級、色碼與圖示對齊目前的 Figma 設計稿。
+
+#### Scenario: 頁面渲染符合設計稿數值
+
+- **WHEN** 使用者開啟圖生影頁面
+- **THEN** 頁面上的間距、字級、色碼與設計稿提供的數值一致
+
+<!-- @trace
+source: sync-mv-04-design
+updated: 2026-08-21
+code:
+  - src/views/GenerateVideoView.vue
+  - src/layouts/DefaultLayout.vue
+  - src/components/TaskCenterPanel.vue
+  - src/components/GenerationToast.vue
+  - src/stores/generationTasks.ts
+-->
+
+---
+
+### Requirement: 選擇來源圖片、動態模板與輸出比例
+
+系統 SHALL 讓使用者上傳或從圖庫選取來源圖片、選擇一個動態模板、選擇輸出比例。
+
+#### Scenario: 選擇動態模板
+
+- **WHEN** 使用者點擊某個動態模板卡片
+- **THEN** 該卡片變為選取狀態，其餘卡片取消選取
+
+<!-- @trace
+source: sync-mv-04-design
+updated: 2026-08-21
+code:
+  - src/views/GenerateVideoView.vue
+  - src/layouts/DefaultLayout.vue
+  - src/components/TaskCenterPanel.vue
+  - src/components/GenerationToast.vue
+  - src/stores/generationTasks.ts
+-->
+
+---
+
+### Requirement: 主畫面不呈現品牌設定
+
+系統 SHALL 在 MV-04 主畫面依序呈現來源圖片、動態模板、輸出比例與生成模型。系統 SHALL NOT 在主畫面呈現「套用品牌設定」開關。
+
+#### Scenario: 使用者開啟圖生影主畫面
+
+- **WHEN** 使用者進入圖生影頁面且尚未送出生成
+- **THEN** 左側設定面板依序顯示來源圖片、動態模板、輸出比例與生成模型
+- **AND** 畫面不顯示套用品牌設定開關
+
+#### Scenario: 確認視窗顯示已選模型
+
+- **WHEN** 使用者點擊「生成影片」並開啟確認視窗
+- **THEN** 確認視窗顯示使用者在主畫面選擇的模型與倍率
+- **AND** 本次消耗依該模型倍率計算
+
+<!-- @trace
+source: sync-mv-04-design
+updated: 2026-08-21
+code:
+  - src/views/GenerateVideoView.vue
+  - src/layouts/DefaultLayout.vue
+  - src/components/TaskCenterPanel.vue
+  - src/components/GenerationToast.vue
+  - src/stores/generationTasks.ts
+-->
+
+---
+
+### Requirement: 送出生成前二次確認
+
+系統 SHALL 在使用者點擊「生成影片」後，顯示確認彈窗（含已選模型與預估飼料消耗），使用者確認後才真正送出生成請求。確認彈窗（`ConfirmGenerateDialog.vue`）的標題、內文與各列文字 SHALL 在字級與顏色上對齊 Figma 設計稿（node `125:805`）：標題 18px Bold `#383c4b`；內文 16px Regular `#606692`；「使用模型」「剩餘飼料」列的標籤 14px `#b4b9c4`、數值 14px `#606692`；「本次消耗」列標籤 14px `#383c4b`、金額 16px Bold `#ea903a`。彈窗的間距與圓角 SHALL 同樣對齊該節點：外層彈窗圓角 10px、內部各區塊（icon＋標題／內文／三列資訊／按鈕列）以 16px 的 `gap` 分隔；icon 為 40px 圓角矩形（8px 圓角）；三列資訊之間以 16px `gap` 分隔且無分隔線；「本次消耗」列內距四邊統一 12px；icon 與文字間距 4px；兩顆按鈕間距 12px。
+
+#### Scenario: 確認後送出
+
+- **WHEN** 使用者在確認彈窗點擊確認
+- **THEN** 系統送出生成請求，扣除預估飼料，並開始追蹤生成進度
+
+#### Scenario: 飼料不足時提示
+
+- **WHEN** 使用者送出生成請求但飼料餘額不足
+- **THEN** 系統顯示錯誤訊息，不建立生成任務
+
+#### Scenario: 確認彈窗文字字級與顏色對齊設計稿
+
+- **WHEN** 使用者開啟「確認生成影片」彈窗
+- **THEN** 標題、內文與「使用模型／本次消耗／剩餘飼料」三列的標籤、數值文字，字級與顏色皆與 Figma `125:805` 提供的數值一致
+
+#### Scenario: 確認彈窗間距與圓角對齊設計稿
+
+- **WHEN** 使用者開啟「確認生成影片」彈窗
+- **THEN** 彈窗圓角、icon 造型、各區塊間的 `gap`、「本次消耗」列內距皆與 Figma `125:805` 提供的數值一致
+
+<!-- @trace
+source: sync-mv-04-design, fix-confirm-dialog-typography
+updated: 2026-09-03
+code:
+  - src/views/GenerateVideoView.vue
+  - src/layouts/DefaultLayout.vue
+  - src/components/TaskCenterPanel.vue
+  - src/components/GenerationToast.vue
+  - src/components/ConfirmGenerateDialog.vue
+  - src/stores/generationTasks.ts
+-->
+
+---
+
+### Requirement: 生成中的背景任務與完成通知
+
+系統 SHALL 讓使用者送出生成請求後可以離開這頁繼續使用其他功能，生成中的任務以背景任務呈現；生成完成後系統 SHALL 通知使用者。
+
+#### Scenario: 離開頁面後任務持續追蹤
+
+- **WHEN** 使用者送出生成請求後導覽到其他頁面
+- **THEN** 該筆生成任務仍持續在背景追蹤進度，不會因為離開頁面而中斷
+
+#### Scenario: 生成完成通知
+
+- **WHEN** 某筆生成任務完成
+- **THEN** 系統通知使用者該任務已完成
+
+#### Scenario: 生成失敗退還飼料
+
+- **WHEN** 某筆生成任務失敗
+- **THEN** 系統退還該筆任務預先扣除的飼料，並通知使用者失敗
+
+<!-- @trace
+source: sync-mv-04-design
+updated: 2026-08-21
+code:
+  - src/views/GenerateVideoView.vue
+  - src/layouts/DefaultLayout.vue
+  - src/components/TaskCenterPanel.vue
+  - src/components/GenerationToast.vue
+  - src/stores/generationTasks.ts
+-->
+
+---
+
+### Requirement: 任務中心面板
+
+系統 SHALL 提供一個任務中心面板，列出使用者進行中與已完成的生成任務。
+
+#### Scenario: 開啟任務中心
+
+- **WHEN** 使用者點擊頂部工具列的「任務」按鈕
+- **THEN** 系統展開任務中心面板，顯示目前進行中與最近完成的任務列表
+
+<!-- @trace
+source: sync-mv-04-design
+updated: 2026-08-21
+code:
+  - src/views/GenerateVideoView.vue
+  - src/layouts/DefaultLayout.vue
+  - src/components/TaskCenterPanel.vue
+  - src/components/GenerationToast.vue
+  - src/stores/generationTasks.ts
+-->
