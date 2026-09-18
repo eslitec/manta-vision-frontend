@@ -369,7 +369,7 @@ const WIRE_BRAND = {
   customerAddress: '你',
   tone: ['溫暖'],
   hashtags: ['#日安選物'],
-  avoidWords: ['廉價', '瑕疵'],
+  avoidWords: '廉價、瑕疵',
   colorPalette: { primary: '#2e3567', secondary: '#a5c8e6' },
   logoImageId: 'img_logo',
   logoUrl: 'https://cdn.example.com/logos/logo_1.png',
@@ -380,7 +380,7 @@ const WIRE_BRAND = {
 }
 
 describe('品牌設定（brand）', () => {
-  it('getBrand 把後端形狀翻成 BrandProfile：avoidWords 併成字串、colorPalette 拆成三個色票', async () => {
+  it('getBrand 把後端形狀翻成 BrandProfile：avoidWords 原樣帶過來、colorPalette 拆成三個色票', async () => {
     stubRoutes({ '/brand': { data: WIRE_BRAND } })
 
     const profile = await realApi.getBrand()
@@ -462,7 +462,7 @@ describe('品牌設定（brand）', () => {
     imageLicense: '',
   }
 
-  it('saveBrand 把單一字串 avoidWords 拆成陣列、colors 依索引對到 primary／secondary／accent', async () => {
+  it('saveBrand 把 avoidWords 原樣送出（不再切成陣列）、colors 依索引對到 primary／secondary／accent', async () => {
     const calls = stubRoutes({ '/brand': { data: WIRE_BRAND } })
 
     await realApi.saveBrand(BASE_PROFILE)
@@ -472,7 +472,7 @@ describe('品牌設定（brand）', () => {
       name: '日安選物',
       positioning: '質感選物店',
       industry: 'apparel',
-      avoidWords: ['廉價', '瑕疵'],
+      avoidWords: '廉價、瑕疵',
       colorPalette: { primary: '#2E3567', secondary: '#A5C8E6' },
     })
   })
