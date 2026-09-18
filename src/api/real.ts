@@ -204,14 +204,18 @@ async function listMaterials(category?: 'background' | 'object' | 'model'): Prom
 // ── 品牌設定（brand）──
 // 對齊後端 `docs/api-status.md` §7（GET /brand #31、PUT /brand #32）。
 //
-// 前後端有三處形狀對不上，這裡把決定記下來，之後回頭看才知道為什麼這樣寫：
-// 1. `avoidWords`：前端是單一字串（textarea），後端是陣列。用「、」join／split。
-// 2. `colors`：前端可以無限新增色票（`addColor()`），後端固定只有
+// 前後端有兩處形狀對不上，這裡把決定記下來，之後回頭看才知道為什麼這樣寫：
+// 1. `colors`：前端可以無限新增色票（`addColor()`），後端固定只有
 //    primary／secondary／accent 三個具名欄位。這裡永遠只用陣列前 3 個索引對應
 //    這三個欄位——**第 4 個以後的自訂色票不會存到真後端**，這是已知限制。
-// 3. Logo：前端只會產生本機 `data:` URL（從沒真的上傳過），後端要求先
+// 2. Logo：前端只會產生本機 `data:` URL（從沒真的上傳過），後端要求先
 //    `POST /upload` 拿 `imageId`，PUT /brand 時再用 `logoImageId` 引用它。
 //    這裡在存檔當下偵測 `data:` URL、幫忙補這一步。
+//
+// `avoidWords` 曾經是「前端單一字串、後端陣列」，但後端 9/2 起改成自由文字
+// 字串（`app/schemas/brand.py::BrandUpdate.avoid_words`），前後端現在是同一個
+// 形狀（`string | null`），不需要再 join／split。⚠️ 後端把「空字串」當「不動」、
+// `null` 才是「清空」——要清空這個欄位時記得送 `null`，不能送 `''`。
 //
 // PUT /brand 是部分更新，三態語意（後端 `docs/api-status.md` §7）：
 // 不帶這個 key＝不動；`null`／`[]`＝明確清空；有值＝設定。但 name／positioning／
@@ -231,7 +235,7 @@ interface WireBrand {
   customerAddress: string | null
   tone: string[] | null
   hashtags: string[] | null
-  avoidWords: string[] | null
+  avoidWords: string | null
   colorPalette: WireColorPalette | null
   logoImageId: string | null
   logoUrl: string | null
@@ -239,17 +243,6 @@ interface WireBrand {
   imageLicense: string | null
   isComplete: boolean
   updatedAt: string | null
-}
-
-const AVOID_WORDS_SEPARATOR = '、'
-function splitAvoidWords(text: string): string[] {
-  return text
-    .split(/[、,，]/)
-    .map((word) => word.trim())
-    .filter(Boolean)
-}
-function joinAvoidWords(words: string[] | null | undefined): string {
-  return (words ?? []).join(AVOID_WORDS_SEPARATOR)
 }
 
 // 色票欄位名稱是固定的三個角色，`label` 只在畫面上索引 3 以後的自訂色票才會被讀到
@@ -298,7 +291,7 @@ function toBrand(wire: WireBrand): BrandProfile {
     tones: wire.tone ?? [],
     hashtags: wire.hashtags ?? [],
     addressing: wire.customerAddress ?? '',
-    avoidWords: joinAvoidWords(wire.avoidWords),
+    avoidWords: wire.avoidWords ?? '',
     logoName: wire.logoUrl ? logoNameFromUrl(wire.logoUrl) : '',
     logoUrl: wire.logoUrl ?? '',
     portraitConsent: wire.portraitConsentTemplate ?? '',
@@ -338,7 +331,7 @@ async function saveBrand(profile: BrandProfile): Promise<BrandProfile> {
     customerAddress: profile.addressing || null,
     tone: profile.tones,
     hashtags: profile.hashtags,
-    avoidWords: splitAvoidWords(profile.avoidWords),
+    avoidWords: profile.avoidWords || null,
     colorPalette: buildColorPalette(profile.colors),
     portraitConsentTemplate: profile.portraitConsent || null,
     imageLicense: profile.imageLicense || null,
