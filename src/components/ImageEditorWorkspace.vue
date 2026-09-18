@@ -381,7 +381,8 @@ import {
 } from '@/components/icons'
 import { api } from '@/api'
 import { useFeedStore } from '@/stores/feed'
-import { isInsufficientFeed } from '@/utils/error'
+import { hasCode, isInsufficientFeed } from '@/utils/error'
+import { downloadBlob } from '@/utils/download'
 import type { AppliedEditTool, EditorPricing, RetouchOptionKey } from '@/types/api'
 import type { Asset } from '@/types/asset'
 const props = defineProps<{ mode: string }>()
@@ -496,14 +497,7 @@ function downloadEditedCopy(name: string) {
   ctx.fillText(name, canvas.width / 2, canvas.height / 2)
   canvas.toBlob((blob) => {
     if (!blob) return
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${name}.png`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    URL.revokeObjectURL(url)
+    downloadBlob(blob, `${name}.png`)
   }, 'image/png')
 }
 
@@ -564,20 +558,13 @@ async function buildCroppedFile(name: string): Promise<File> {
 }
 // 把捕捉到的錯誤換成使用者看得懂、且看得到（不再只有螢幕報讀器聽得到）的訊息。
 function classifySaveError(err: unknown): string {
-  const code = err instanceof Error ? err.message : ''
-  if (code === 'CROP_NO_SOURCE_IMAGE') return t('editor.saveDialog.errorNoSourceImage')
-  if (code === 'CROP_IMAGE_LOAD_FAILED' || code === 'CROP_EXPORT_BLOCKED') return t('editor.saveDialog.errorImageAccess')
+  if (hasCode(err, 'CROP_NO_SOURCE_IMAGE')) return t('editor.saveDialog.errorNoSourceImage')
+  if (hasCode(err, 'CROP_IMAGE_LOAD_FAILED') || hasCode(err, 'CROP_EXPORT_BLOCKED'))
+    return t('editor.saveDialog.errorImageAccess')
   return t('editor.saveDialog.errorGeneric')
 }
 function downloadRealFile(file: File) {
-  const url = URL.createObjectURL(file)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = file.name
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
+  downloadBlob(file, file.name)
 }
 const saveAsNewAsset = async (payload: SaveAssetPayload) => {
   if (savingAsset.value || savedAssetId.value) return
