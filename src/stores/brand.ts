@@ -33,5 +33,13 @@ export const useBrandStore = defineStore('brand', () => {
     }
   }
 
-  return { profile, saving, load, save }
+  // 登出時要清：brand 資料是綁 bot（`X-Bot-Id`）的，不清的話換帳號／換 bot
+  // 登入後 `load()` 的 `if (profile.value && !force) return` 會直接跳過重抓，
+  // 畫面顯示的會是上一個帳號的品牌設定。這個 setup store 寫法沒有 Pinia
+  // 內建的 `$reset()` 可用，所以自己補一個（session.ts::discard() 會呼叫）。
+  function $reset() {
+    profile.value = null
+  }
+
+  return { profile, saving, load, save, $reset }
 })

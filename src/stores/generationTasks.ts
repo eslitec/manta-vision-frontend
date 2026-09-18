@@ -135,6 +135,17 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     })
   }
 
+  // 登出時要清：任務是綁 Account 的（poll() 打的 API 也帶著登入時的 auth），
+  // 不清的話登出後背景輪詢還在跑——這時 token 已經被 clearAuth() 拔掉，
+  // 輪詢會開始打出沒帶 auth 的請求；換帳號登入後任務清單／徽章也會殘留
+  // 上一個帳號的任務。先停掉所有計時器，再清空狀態。
+  function $reset() {
+    timers.forEach((timer) => clearInterval(timer))
+    timers.clear()
+    tasks.value = []
+    toast.value = null
+  }
+
   return {
     tasks,
     toast,
@@ -145,5 +156,6 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     retryTask,
     markAllRead,
     dismissToast,
+    $reset,
   }
 })

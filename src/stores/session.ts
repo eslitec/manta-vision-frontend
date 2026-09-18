@@ -2,6 +2,10 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/api'
 import { clearAuth, setAuth } from '@/api/http'
+import { useBrandStore } from '@/stores/brand'
+import { useConsentStore } from '@/stores/consent'
+import { useFeedStore } from '@/stores/feed'
+import { useGenerationTasksStore } from '@/stores/generationTasks'
 import type { Session } from '@/types/api'
 
 const STORAGE_KEY = 'mv_session'
@@ -28,6 +32,16 @@ export const useSessionStore = defineStore('session', () => {
     session.value = null
     localStorage.removeItem(STORAGE_KEY)
     clearAuth()
+
+    // 這裡自己的狀態清完不夠：brand／consent／feed／generationTasks 這幾個
+    // store 存的都是綁 Account／bot 的資料，是 setup store 寫法、沒有 Pinia
+    // 內建的 $reset() 可用，不主動清的話換帳號登入後會沿用上一個帳號的舊
+    // 資料（見 PR #5 review）。這裡才呼叫 use...Store()（不是在 module
+    // 頂層），確保 Pinia 已經就緒。
+    useBrandStore().$reset()
+    useConsentStore().$reset()
+    useFeedStore().$reset()
+    useGenerationTasksStore().$reset()
   }
 
   function restore() {

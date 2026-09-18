@@ -19,5 +19,12 @@ export const useConsentStore = defineStore('consent', () => {
     consented.value = true
   }
 
-  return { consented, loaded, load, give }
+  // 登出時要清：同意狀態綁 Account，`load()` 的 `if (loaded.value) return` 會
+  // 讓換帳號登入後直接沿用上一個帳號「已同意」的狀態，該顯示的同意畫面被跳過。
+  function $reset() {
+    consented.value = false
+    loaded.value = false
+  }
+
+  return { consented, loaded, load, give, $reset }
 })
