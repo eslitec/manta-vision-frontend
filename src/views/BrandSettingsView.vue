@@ -199,6 +199,7 @@
       input#brand-image-license(v-model="profile.imageLicense" maxlength="200")
 
   footer.brand__foot
+    p.brand__saveError(v-if="saveError" role="alert") {{ saveError }}
     AppButton(variant="outline" @click="onCancel") {{ t('common.cancel') }}
     AppButton(:loading="saving" :disabled="!dirty" @click="onSave") {{ saving ? t('common.saving') : t('brandSettings.save') }}
 </template>
@@ -209,6 +210,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useBrandStore } from '@/stores/brand'
 import { useDismissableMenu } from '@/composables/useDismissableMenu'
+import { displayMessage } from '@/utils/error'
 import AppButton from '@/components/AppButton.vue'
 import AppSearchbar from '@/components/AppSearchbar.vue'
 import AppTab from '@/components/AppTab.vue'
@@ -429,10 +431,18 @@ function assignColor(index: number) {
   }
   profile.value.colors[index].hex = selectedColor.value
 }
+const saveError = ref('')
 async function onSave() {
-  await store.save()
-  // 存檔成功後把（可能已被後端覆寫的，例如 Logo 網址）profile 內容存成新快照（決策 1）
-  savedSnapshot.value = snapshotProfile()
+  saveError.value = ''
+  try {
+    await store.save()
+    // 存檔成功後把（可能已被後端覆寫的，例如 Logo 網址）profile 內容存成新快照（決策 1）
+    savedSnapshot.value = snapshotProfile()
+  } catch (e) {
+    // 原本沒接 catch，存檔失敗（例如後端 422、網路斷線）會直接吃掉整個
+    // rejection——使用者只會看到 loading 轉一下又停掉，不知道到底存了沒有。
+    saveError.value = displayMessage(e, t('errors.submitFailed'))
+  }
 }
 async function onCancel() {
   // 取消＝還原成上次存檔的內容；profile 被還原後會自動跟 savedSnapshot 一致，
@@ -463,6 +473,13 @@ async function onCancel() {
     color: #606692;
     font-size: 0.875rem;
     line-height: 1.0625rem;
+  }
+
+  &__saveError {
+    margin-right: auto;
+    color: #d93e28;
+    font-size: 0.75rem;
+    line-height: 1rem;
   }
 
   &__foot {
