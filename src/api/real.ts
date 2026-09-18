@@ -314,11 +314,16 @@ async function saveBrand(profile: BrandProfile): Promise<BrandProfile> {
   // logoImageId 三態：undefined＝不動（Logo 沒變，沿用已經在後端的那個）；
   // null＝使用者清空了 Logo；字串＝新上傳（或换過）的 Logo 的 imageId。
   let logoImageId: string | null | undefined
+  // 這次呼叫「真的新上傳」的圖片 id（跟 logoImageId 分開記）：等一下如果存檔失敗，
+  // 要靠這個知道有沒有東西要清掉，不能直接看 logoImageId——它是 null 或沿用舊值的
+  // 情況都沒有新上傳，不該去刪。
+  let uploadedImageId: string | undefined
   if (profile.logoUrl && profile.logoUrl.startsWith('data:')) {
     // 還是本機預覽，代表這張還沒真的上傳過——先補這一步再存
     const file = await dataUrlToFile(profile.logoUrl, profile.logoName ?? 'logo.png')
     const asset = await uploadImage(file)
     logoImageId = asset.id
+    uploadedImageId = asset.id
   } else if (!profile.logoUrl) {
     logoImageId = null
   }
@@ -338,8 +343,19 @@ async function saveBrand(profile: BrandProfile): Promise<BrandProfile> {
   }
   if (logoImageId !== undefined) body.logoImageId = logoImageId
 
-  const { data } = await http.put<WireBrand>('/brand', body)
-  return toBrand(data)
+  try {
+    const { data } = await http.put<WireBrand>('/brand', body)
+    return toBrand(data)
+  } catch (e) {
+    // 這次有新上傳 Logo、但整包存檔失敗：圖片已經真的存進系統了，卻沒有任何品牌
+    // 資料引用它，會變成孤兒圖片留著占空間，所以失敗時要順手刪掉剛上傳的那張。
+    // 刪除本身失敗就算了（不能讓清理失敗蓋掉原本真正的錯誤），最後還是把原本的
+    // 錯誤丟出去，讓呼叫端（BrandSettingsView）照原本邏輯顯示錯誤訊息。
+    if (uploadedImageId) {
+      await deleteImage(uploadedImageId).catch(() => {})
+    }
+    throw e
+  }
 }
 
 export const realApi = {
