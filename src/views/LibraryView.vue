@@ -188,7 +188,7 @@
         AppCheckbox.modal__checkline(v-model="deleteConfirmed") {{ t('library.deleteConfirm') }}
         footer.modal__foot
           AppButton(variant="ghost" @click="deleteDialogOpen = false") {{ t('common.cancel') }}
-          AppButton(variant="alert" :disabled="!deleteConfirmed" @click="confirmDelete") {{ t('library.deletePermanently', { count: selectedIds.size }) }}
+          AppButton(variant="alert" :disabled="!deleteConfirmed || deleting" @click="confirmDelete") {{ t('library.deletePermanently', { count: selectedIds.size }) }}
 </template>
 
 <script setup lang="ts">
@@ -686,6 +686,8 @@ async function removeSelectedFromFolder() {
 // 刪除確認：完整彈窗（縮圖預覽＋勾選「我了解此操作無法復原」才能刪除）
 const deleteDialogOpen = ref(false)
 const deleteConfirmed = ref(false)
+// 刪除送出後到後端回應前這段時間，按鈕要 disable，避免使用者連點造成重複送出刪除請求
+const deleting = ref(false)
 useAccessibleDialog(moveDialogOpen, moveDialogRef, () => (moveDialogOpen.value = false))
 useAccessibleDialog(deleteDialogOpen, deleteDialogRef, () => (deleteDialogOpen.value = false))
 // assets 現在只有「目前這一頁」的內容，跨頁選取的素材要查 assetCache 才找得到完整資料
@@ -699,14 +701,19 @@ function openDeleteDialog() {
   deleteDialogOpen.value = true
 }
 async function confirmDelete() {
-  const result = await deleteAssets([...selectedIds.value])
-  deleteDialogOpen.value = false
-  clearSelection()
-  await fetchAssets()
-  await loadFolders(true)
-  // 後端目前還沒有任何地方會把 isInUse 設成 true，所以這條路徑實務上還不會被觸發，
-  // 但介面先接好：真的發生時要讓使用者知道「還有 N 筆沒刪成功」，而不是靜靜失敗。
-  if (result.failedIds.length) batchError.value = t('library.batchFailed', { count: result.failedIds.length })
+  deleting.value = true
+  try {
+    const result = await deleteAssets([...selectedIds.value])
+    deleteDialogOpen.value = false
+    clearSelection()
+    await fetchAssets()
+    await loadFolders(true)
+    // 後端目前還沒有任何地方會把 isInUse 設成 true，所以這條路徑實務上還不會被觸發，
+    // 但介面先接好：真的發生時要讓使用者知道「還有 N 筆沒刪成功」，而不是靜靜失敗。
+    if (result.failedIds.length) batchError.value = t('library.batchFailed', { count: result.failedIds.length })
+  } finally {
+    deleting.value = false
+  }
 }
 
 async function downloadSelected() {
