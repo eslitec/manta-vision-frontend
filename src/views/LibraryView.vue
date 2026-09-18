@@ -197,6 +197,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useAssets } from '@/composables/useAssets'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
+import { downloadBlob } from '@/utils/download'
 import AppButton from '@/components/AppButton.vue'
 import AppCheckbox from '@/components/AppCheckbox.vue'
 import AppSearchbar from '@/components/AppSearchbar.vue'
@@ -725,14 +726,7 @@ async function downloadSelected() {
     try {
       const response = await fetch(a.url)
       const blob = await response.blob()
-      const blobUrl = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = blobUrl
-      link.download = a.name
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(blobUrl)
+      downloadBlob(blob, a.name)
     } catch {
       window.open(a.url, '_blank', 'noopener')
     }
