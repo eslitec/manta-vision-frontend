@@ -291,8 +291,14 @@ const materialsForView = computed<Material[]>(() => {
   if (activeSource.value !== 'all') return []
   const v = activeView.value
   // 「物件素材」分類只混同分類的內建素材；「全部素材」跟「未分類」沒有分類限制，全部混進去。
-  if (v.kind === 'category') return materials.value.filter((m) => m.category === 'object')
-  return materials.value
+  let list = v.kind === 'category' ? materials.value.filter((m) => m.category === 'object') : materials.value
+  // 關鍵字搜尋：使用者自己的圖庫是把 keyword 當 q 送到後端篩（見 buildQuery），內建
+  // 素材沒有對應的後端查詢可以打，只能在前端自己比對名稱——不然打了關鍵字、真實圖庫
+  // 篩掉了，內建素材卻整批不受影響留在畫面上，使用者會誤以為那些也是搜尋結果（PR #5
+  // code review, nelsonliu-eslitec）。
+  const kw = keyword.value.trim().toLowerCase()
+  if (kw) list = list.filter((m) => m.materialName.toLowerCase().includes(kw))
+  return list
 })
 
 // 內建素材（materialsForView）永遠整批載入、不分頁；使用者自己的圖庫在會合流的檢視裡
