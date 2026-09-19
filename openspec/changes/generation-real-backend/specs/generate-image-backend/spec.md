@@ -6,7 +6,7 @@
 
 ### Requirement: 圖生圖檔位與單價由後端提供
 
-圖生圖頁掛載時 SHALL 呼叫 `listModels('image')`（真後端為 `GET /ai-models?modelType=image`），以回傳的 `costFeeds` 作為「標準／進階／專業」三個檔位（`imageStandard`／`imageAdvanced`／`imagePro`）的單價；後端沒有回傳的檔位 SHALL NOT 顯示。檔位倍率 SHALL 是該檔單價除以標準檔單價；預估消耗 SHALL 是所選檔位單價乘以張數。價格載入前，模型提示的單價 SHALL 顯示「…」；載入失敗時 SHALL 顯示「載入失敗，請重新整理頁面。」。
+圖生圖頁掛載時 SHALL 呼叫 `listModels('image')`（真後端為 `GET /ai-models?modelType=image`），以回傳的 `costFeeds` 作為「標準／進階／專業」三個檔位（`imageStandard`／`imageAdvanced`／`imagePro`）的單價；後端沒有回傳的檔位 SHALL NOT 顯示。檔位倍率 SHALL 是該檔單價除以標準檔單價；預估消耗 SHALL 是所選檔位單價乘以張數。價格載入前，模型提示的單價 SHALL 顯示「…」；載入失敗時 SHALL 顯示「載入失敗，請重新整理頁面。」。所選檔位沒有價格（未載入、載入失敗或被後端停用）時，預估消耗 SHALL 顯示「…」、「生成圖片」按鈕 SHALL 停用；預設的標準檔不在回傳中時 SHALL 改選第一張檔位卡。
 
 #### Scenario: 顯示後端價格
 
@@ -26,9 +26,14 @@
 - **WHEN** 後端只回傳 `imageStandard` 與 `imageAdvanced`
 - **THEN** 頁面只顯示「標準」「進階」兩張檔位卡
 
+#### Scenario: 價格載入失敗
+
+- **WHEN** `GET /ai-models` 失敗
+- **THEN** 預估消耗顯示「…」，「生成圖片」按鈕停用，不會送出一筆畫面標 0 顆、實際照價扣點的請求
+
 ### Requirement: 圖生圖請求以參考圖為必要條件並使用後端欄位
 
-「生成圖片」按鈕 SHALL 在沒有參考圖、沒有描述或生成中時停用。送出的 `GenerateImageReq` SHALL 直接使用後端 `GenerateRequest` 的欄位名：`modelKey`、`imageId`（參考圖的素材 id）、`prompt`、`count`、`strength`、`negativePrompt`、`seed`、`useBrand`、`regenOf`。`strength` SHALL 是 `1 − 參考強度滑桿值`（四捨五入到小數兩位），因為畫面上越高越貼近參考圖、後端越低越貼近；`negativePrompt` 去掉前後空白後為空字串時 SHALL 省略；種子欄位清空時 SHALL 省略 `seed`，填 0 時 SHALL 送出 `seed: 0`；`useBrand` SHALL 等於品牌開關的狀態。
+「生成圖片」按鈕 SHALL 在沒有參考圖、沒有描述（去掉前後空白後為空）或生成中時停用。送出的 `GenerateImageReq` SHALL 直接使用後端 `GenerateRequest` 的欄位名：`modelKey`、`imageId`（參考圖的素材 id）、`prompt`、`count`、`strength`、`negativePrompt`、`seed`、`useBrand`、`regenOf`。`strength` SHALL 是 `1 − 參考強度滑桿值`（四捨五入到小數兩位），因為畫面上越高越貼近參考圖、後端越低越貼近；`negativePrompt` 去掉前後空白後為空字串時 SHALL 省略；種子欄位清空時 SHALL 省略 `seed`，填 0 時 SHALL 送出 `seed: 0`；種子不是 0 以上的整數（負數、小數）時 SHALL NOT 送出，錯誤區 SHALL 顯示「種子要填 0 以上的整數，或留空改用隨機。」；`useBrand` SHALL 等於品牌開關的狀態。
 
 #### Scenario: 沒有參考圖不能生成
 
@@ -42,15 +47,16 @@
 
 ##### Example: seed 與 negativePrompt 的轉換
 
-| 種子欄位 | 排除元素欄位 | 送出的 seed | 送出的 negativePrompt |
-| -------- | ------------ | ----------- | --------------------- |
-| 清空     | 空白         | 省略        | 省略                  |
-| 0        | 「 模糊 」   | 0           | 「模糊」              |
-| 42       | 「文字」     | 42          | 「文字」              |
+| 種子欄位  | 排除元素欄位 | 送出的 seed | 送出的 negativePrompt |
+| --------- | ------------ | ----------- | --------------------- |
+| 清空      | 空白         | 省略        | 省略                  |
+| 0         | 「 模糊 」   | 0           | 「模糊」              |
+| 42        | 「文字」     | 42          | 「文字」              |
+| -1 或 1.5 | 任意         | 不送出      | 不送出                |
 
 ### Requirement: AI 輔助描述呼叫真後端
 
-按「AI 輔助描述」SHALL 呼叫 `enhancePrompt(text)`，真後端為 `POST /prompt/enhance`，body 為 `{ target: 'image', prompt: text }`，逾時 40 秒，不帶 `Idempotency-Key`；成功時 SHALL 以回傳的 `enhancedPrompt` 取代描述欄內容；失敗時 SHALL 在錯誤區顯示後端訊息，SHALL NOT 靜默吞掉錯誤。
+描述去掉前後空白後為空時「AI 輔助描述」SHALL 停用。按「AI 輔助描述」SHALL 呼叫 `enhancePrompt(text)`，真後端為 `POST /prompt/enhance`，body 為 `{ target: 'image', prompt: text }`，逾時 40 秒，不帶 `Idempotency-Key`；成功時 SHALL 以回傳的 `enhancedPrompt` 取代描述欄內容；失敗時 SHALL 在錯誤區顯示後端訊息，SHALL NOT 靜默吞掉錯誤。
 
 #### Scenario: 擴寫成功
 
@@ -78,12 +84,17 @@
 
 ### Requirement: 存入圖庫使用生成結果的保存端點
 
-對生成結果按「存入圖庫」SHALL 呼叫 `saveGenerated(name, { generationId, resultId })`，真後端為 `POST /generations/{generationId}/save`，body 為 `{ resultId, imageName }`（不帶 `folderId`，存進未分類），回應翻成 `Asset`。成功後該結果 SHALL 標記為已存入且已採用，SHALL NOT 再另外送採用事件；已存入的結果再按一次 SHALL NOT 送出請求。`saveGenerated` 沒帶 `from` 時（AI 試穿）SHALL 繼續走 mock，不送網路請求。
+對生成結果按「存入圖庫」SHALL 以該結果呼叫 `saveGenerated(name, result)`，真後端為 `POST /generations/{generationId}/save`，body 為 `{ resultId, imageName }`（不帶 `folderId`，存進未分類），回應翻成 `Asset`。成功後該結果 SHALL 標記為已存入且已採用，SHALL NOT 再另外送採用事件；已存入的結果再按一次 SHALL NOT 送出請求；送出中該結果的「存入圖庫」SHALL 停用（連點只送一發）；後端回 400 `ALREADY_SAVED`（前一發其實存進去了、回應遺失）時 SHALL 當成已存入，不顯示錯誤。`saveGenerated` 沒帶 `from` 時（AI 試穿）SHALL 繼續走 mock，不送網路請求。
 
 #### Scenario: 存入圖庫
 
 - **WHEN** 使用者對 `{ id: 'res_1', generationId: 'gen_1' }` 按「存入圖庫」
 - **THEN** 送出 `POST /generations/gen_1/save`，body 為 `{ resultId: 'res_1', imageName: '圖生圖_res_1' }`，按鈕變成「已存入」
+
+#### Scenario: 回應遺失後再按一次
+
+- **WHEN** 第一次「存入圖庫」在後端成功但前端收到斷線錯誤，使用者再按一次，後端回 400 `ALREADY_SAVED`
+- **THEN** 按鈕變成「已存入」並標記已採用，錯誤區不顯示「這張已經存進圖庫了」
 
 #### Scenario: 試穿存圖仍是假資料
 
@@ -92,7 +103,7 @@
 
 ### Requirement: 下載生成結果時記錄採用
 
-對生成結果按「下載」SHALL 用共用的 `downloadFile` 下載 `url`（`url` 為空時跳過檔案），接著在該結果尚未採用時呼叫 `recordAdoption({ generationId, resultId })`，真後端為 `POST /generations/{generationId}/events`，body 為 `{ event: 'downloaded', resultId }`，成功後標記為已採用；已採用的結果再次下載 SHALL NOT 再送採用事件。下載失敗時 SHALL 顯示「下載失敗：檔案可能已過期或暫時無法讀取，請稍後再試。」。
+對生成結果按「下載」SHALL 用共用的 `downloadFile` 下載 `url`（`url` 為空時跳過檔案），接著在該結果尚未採用時以該結果呼叫 `recordAdoption(result)`，真後端為 `POST /generations/{generationId}/events`，body 為 `{ event: 'downloaded', resultId }`，成功後標記為已採用；已採用的結果再次下載 SHALL NOT 再送採用事件。下載失敗時 SHALL 顯示「下載失敗：檔案可能已過期或暫時無法讀取，請稍後再試。」。
 
 #### Scenario: 第一次下載
 

@@ -400,22 +400,36 @@ describe('用量與指標', () => {
     expect((await api.getUsage()).generatedThisMonth).toBe(before + 2)
   })
 
+  const genOne = async () =>
+    (
+      await api.generateImages({ modelKey: 'imageStandard', imageId: 'img_1', prompt: 'x', count: 2, useBrand: false })
+    )[0]
+
   it('recordAdoption 會拉高採用率，同一張重複採用率不變', async () => {
+    const r = await genOne()
     const before = (await api.getMetrics()).adoptionRate
-    await api.recordAdoption({ generationId: 'gen_1', resultId: 'r_1' })
+    await api.recordAdoption(r)
     const after = (await api.getMetrics()).adoptionRate
     expect(after).toBeGreaterThan(before)
-    await api.recordAdoption({ generationId: 'gen_1', resultId: 'r_1' })
+    await api.recordAdoption(r)
     expect((await api.getMetrics()).adoptionRate).toBe(after)
   })
 
   it('saveGenerated 帶 from 也算一次採用，之後同一張下載不重複計', async () => {
+    const r = await genOne()
     const before = (await api.getMetrics()).adoptionRate
-    await api.saveGenerated('生成結果', { generationId: 'gen_2', resultId: 'r_2' })
+    await api.saveGenerated('生成結果', r)
     const after = (await api.getMetrics()).adoptionRate
     expect(after).toBeGreaterThan(before)
-    await api.recordAdoption({ generationId: 'gen_2', resultId: 'r_2' })
+    await api.recordAdoption(r)
     expect((await api.getMetrics()).adoptionRate).toBe(after)
+  })
+
+  it('下載行銷海報不算採用（採用率只算圖生圖，同後端）', async () => {
+    const post = await api.generatePost({ outputType: 'imageOnly', posterText: 'y', useBrand: true })
+    const before = (await api.getMetrics()).adoptionRate
+    await api.recordAdoption(post.poster!)
+    expect((await api.getMetrics()).adoptionRate).toBe(before)
   })
 
   it('getMetrics 的成功率不超過 100%', async () => {

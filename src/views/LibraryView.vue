@@ -705,6 +705,7 @@ async function confirmDelete() {
 }
 
 async function downloadSelected() {
+  batchError.value = '' // 上一次的下載錯誤不留到這一次
   for (const a of selectedAssets.value) {
     if (!a.url) continue // mock 素材沒有真實檔案，跳過
     try {

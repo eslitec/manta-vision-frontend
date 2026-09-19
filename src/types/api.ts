@@ -40,11 +40,8 @@ export interface GeneratedImage {
   adopted: boolean // 是否已採用（下載或存入圖庫）
   savedAssetId?: string // 存入圖庫後的素材 id
 }
-/** 指到某次生成的某一張結果：存入圖庫與採用事件都用它 */
-export interface GenerationRef {
-  generationId: string
-  resultId: string
-}
+/** 指到某次生成的某一張結果：存入圖庫與採用事件都用它，呼叫端直接傳 GeneratedImage */
+export type GenerationRef = Pick<GeneratedImage, 'id' | 'generationId'>
 
 // 輸出內容類型：文案＋配圖／只要文案／只要配圖；價格讀 GET /ai-models?modelType=marketing
 export type PostOutputType = 'both' | 'textOnly' | 'imageOnly'

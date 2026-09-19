@@ -36,6 +36,8 @@
   - New:
     - src/utils/download.ts
     - src/utils/download.spec.ts
+    - src/utils/generation.ts（審查後補：參考強度翻轉、種子解析、行銷結果合併抽成純函式）
+    - src/utils/generation.spec.ts
   - Modified:
     - src/types/api.ts
     - src/api/errors.ts
@@ -48,6 +50,7 @@
     - src/views/GenerateImageView.vue
     - src/views/MarketingPostView.vue
     - src/views/LibraryView.vue
+    - src/components/TaskCenterPanel.vue（審查後補：圖生圖任務不宣稱已入庫）
     - src/lang/zh-Hant.ts
     - src/lang/en.ts
   - Removed: (none)

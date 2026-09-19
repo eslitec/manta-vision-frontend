@@ -19,7 +19,7 @@
             textarea#image-prompt.textarea(v-model="prompt" rows="4" maxlength="500" :aria-label="t('image.steps.prompt')" :placeholder="t('image.promptPlaceholder')")
             span.textareaWrap__counter {{ prompt.length }} / 500
           .assist
-            button.assist__action(:disabled="assisting || !prompt" @click="assist")
+            button.assist__action(:disabled="assisting || !prompt.trim()" @click="assist")
               span {{ assisting ? t('image.assisting') : t('image.assist') }}
             span.assist__hint {{ t('image.assistHint') }}
           button.advanced(@click="advancedOpen = !advancedOpen")
@@ -51,7 +51,7 @@
                 label(for="image-seed") {{ t('image.seed') }}
                 button.adv__randomBtn(type="button" @click="randomizeSeed") {{ t('image.seedRandom') }}
               .adv__seedRow
-                input#image-seed.adv__field.adv__field--seed(type="number" v-model="seedInput" :placeholder="t('image.seedPlaceholder')" :aria-describedby="'image-seed-hint'")
+                input#image-seed.adv__field.adv__field--seed(type="number" min="0" step="1" v-model="seedInput" :placeholder="t('image.seedPlaceholder')" :aria-describedby="'image-seed-hint'")
                 button.adv__lock(type="button" :class="{ isActive: seedLocked }" :aria-pressed="seedLocked" @click="seedLocked = !seedLocked") {{ t('image.seedLock') }}
               span#image-seed-hint.adv__hint {{ t('image.seedHint') }}
             .adv__reset
@@ -70,8 +70,8 @@
               :multiplier="tier.multiplier"
               :cost="$t('image.feedPerImage', { count: tier.cost })"
               :description="$t(`image.modelDescriptions.${tier.key}`)"
-              :selected="imageTier === tier.key"
-              @click="imageTier = tier.key"
+              :selected="imageTier === tier.modelKey"
+              @click="imageTier = tier.modelKey"
             )
 
         BrandToggle.genimg__brand(v-model="applyBrand" :description="t('image.brandDescription')" @edit="goBrandSettings")
@@ -90,7 +90,7 @@
             button.cost__feedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true")
               IconFeedBottleSmall.cost__icon
             span {{ t('units.feed', { count: estCost }) }}
-        AppButton(:disabled="generating || !prompt || !refImage" @click="generate")
+        AppButton(:disabled="generating || !prompt.trim() || !refImage || perImage === undefined" @click="generate")
           component(:is="generating ? IconLoader : IconAddObject" :class="{ spin: generating }")
           span {{ generating ? t('common.generating') : t('image.generate') }}
 
@@ -106,7 +106,7 @@
           img.result__img(v-if="r.url" :src="r.url" :alt="t('common.generationResult')")
           IconImagePlaceholder(v-else)
         .result__actions
-          AppButton(:disabled="generating" @click="saveToLib(r)") {{ r.savedAssetId ? t('common.saved') : t('common.saveToLibrary') }}
+          AppButton(:disabled="generating || saving.has(r.id)" @click="saveToLib(r)") {{ r.savedAssetId ? t('common.saved') : t('common.saveToLibrary') }}
           AppButton(variant="subtle" :disabled="generating" @click="download(r)") {{ t('common.download') }}
           AppButton(variant="subtle" :disabled="generating" @click="regen(r)") {{ t('common.regenerate') }}
 
@@ -115,8 +115,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useEventListener } from '@vueuse/core'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import TopUpDialog from '@/components/TopUpDialog.vue'
 import AppButton from '@/components/AppButton.vue'
@@ -130,13 +131,15 @@ import {
   IconImagePlaceholder,
   IconLoader,
 } from '@/components/icons'
-import { useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useFeedStore } from '@/stores/feed'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
 import { useAssets } from '@/composables/useAssets'
 import { api } from '@/api'
+import { API_ERROR_CODES, hasErrorCode } from '@/api/errors'
 import { displayMessage, isInsufficientFeed } from '@/utils/error'
 import { downloadFile } from '@/utils/download'
+import { parseSeed, toBackendStrength } from '@/utils/generation'
 import type { Asset, GeneratedImage, GenerateImageReq } from '@/types/api'
 
 const feed = useFeedStore()
@@ -145,13 +148,14 @@ const { saveGenerated } = useAssets()
 const router = useRouter()
 const { t } = useI18n()
 
-// 三個檔位對應後端 modelKey；單價一律讀 GET /ai-models?modelType=image，倍率＝該檔單價 ÷ 標準檔單價
+// 三個檔位對應後端 modelKey；單價一律讀 GET /ai-models?modelType=image，倍率＝該檔單價 ÷ 標準檔單價。
+// key 只用來查 i18n（modelTiers.standard…），選取狀態直接存 modelKey
 const imageTiers = [
   { key: 'standard', modelKey: 'imageStandard' },
   { key: 'advanced', modelKey: 'imageAdvanced' },
   { key: 'pro', modelKey: 'imagePro' },
 ] as const
-const imageTier = ref('standard')
+const imageTier = ref<string>('imageStandard')
 const prices = ref<Partial<Record<string, number>>>({})
 const tierCards = computed(() => {
   const base = prices.value.imageStandard
@@ -161,10 +165,8 @@ const tierCards = computed(() => {
     return cost === undefined ? [] : [{ ...tier, cost, multiplier: base ? cost / base : 1 }]
   })
 })
-const selectedModelKey = computed(
-  () => imageTiers.find((tier) => tier.key === imageTier.value)?.modelKey ?? 'imageStandard',
-)
-const perImage = computed(() => prices.value[selectedModelKey.value] ?? 0)
+// 價格沒載入、或選的檔位被後端停用時是 undefined：生成鈕停用，不送出一筆畫面上說 0 顆、實際照價扣的請求
+const perImage = computed(() => prices.value[imageTier.value])
 const prompt = ref('')
 const applyBrand = ref(true)
 const advancedOpen = ref(false)
@@ -177,6 +179,7 @@ const generating = ref(false)
 const assisting = ref(false)
 const errorMsg = ref('')
 const results = ref<GeneratedImage[]>([])
+const saving = reactive(new Set<string>()) // 存入圖庫送出中的結果 id：連點兩下只送一發
 
 // 進階設定
 const DEFAULT_REFERENCE_STRENGTH = 0.5
@@ -217,13 +220,21 @@ function resetAdvanced() {
   seedLocked.value = false
 }
 
-const estCost = computed(() => perImage.value * count.value)
+const estCost = computed(() => (perImage.value === undefined ? '…' : perImage.value * count.value))
+
+// 生成中離開頁面，結果只活在這個元件裡、卸載就沒了，後端卻照樣結清飼料
+onBeforeRouteLeave(() => !generating.value || window.confirm(t('common.leaveWhileGenerating')))
+useEventListener(window, 'beforeunload', (e) => {
+  if (generating.value) e.preventDefault()
+})
 
 onMounted(async () => {
   if (!feed.loaded) feed.refresh()
   try {
     const models = await api.listModels('image')
     prices.value = Object.fromEntries(models.map((m) => [m.modelKey, m.costFeeds]))
+    // 預設的標準檔被後端停用時改選第一張卡，不然選中的是一張看不到的卡
+    if (perImage.value === undefined && tierCards.value[0]) imageTier.value = tierCards.value[0].modelKey
   } catch (e: unknown) {
     errorMsg.value = displayMessage(e, t('errors.loadFailed'))
   }
@@ -231,7 +242,7 @@ onMounted(async () => {
 
 // AI 輔助描述：呼叫增強器把口語擴寫成結構化 prompt
 async function assist() {
-  if (!prompt.value || assisting.value) return
+  if (!prompt.value.trim() || assisting.value) return
   errorMsg.value = ''
   assisting.value = true
   try {
@@ -246,32 +257,37 @@ async function assist() {
 // 組請求。欄位名和後端 GenerateRequest 相同，real 整包當 body 送出
 function buildReq(imageId: string, n: number, regenOf?: string): GenerateImageReq {
   return {
-    modelKey: selectedModelKey.value,
+    modelKey: imageTier.value,
     imageId,
     prompt: prompt.value,
     count: n, // 帶 regenOf 時後端一律當 1 張
-    // 畫面上的「參考強度」越高越貼近參考圖；後端 strength 方向相反（低＝貼近），所以送出前翻轉
-    strength: Math.round((1 - referenceStrength.value) * 100) / 100,
+    strength: toBackendStrength(referenceStrength.value),
     negativePrompt: negativePrompt.value.trim() || undefined,
-    // type="number" 的 v-model 會把輸入轉成數字，不能用 truthy 判斷（seed 填 0 會變成隨機）；清空時值仍是 ''
-    seed: seedInput.value === '' ? undefined : Number(seedInput.value),
+    seed: parseSeed(seedInput.value) ?? undefined, // null（不合法）已由 seedRejected 擋在送出前
     useBrand: applyBrand.value,
     regenOf,
   }
+}
+// 種子填了負數或小數：後端只會回籠統的「輸入值不在允許範圍」，送出前先講清楚是哪一欄
+function seedRejected() {
+  if (parseSeed(seedInput.value) !== null) return false
+  errorMsg.value = t('image.seedInvalid')
+  return true
 }
 const failText = (e: unknown, insufficient: string) =>
   isInsufficientFeed(e) ? insufficient : displayMessage(e, t('errors.generationFailed'))
 
 async function generate() {
   const reference = refImage.value
-  if (!reference || generating.value) return
+  const price = perImage.value
+  if (!reference || generating.value || price === undefined || seedRejected()) return
   errorMsg.value = ''
   generating.value = true
   try {
     results.value = await tasksStore.createImageTask(
       () => api.generateImages(buildReq(reference.id, count.value)),
       t('image.taskName', { name: prompt.value.slice(0, 12) || Date.now() }),
-      estCost.value,
+      price * count.value,
     )
   } catch (e: unknown) {
     errorMsg.value = failText(e, t('errors.insufficientFeed'))
@@ -288,7 +304,7 @@ async function download(r: GeneratedImage) {
   try {
     if (r.url) await downloadFile(r.url) // mock 的結果沒有檔案，跳過
     if (!r.adopted) {
-      await api.recordAdoption({ generationId: r.generationId, resultId: r.id })
+      await api.recordAdoption(r)
       r.adopted = true
     }
   } catch (e: unknown) {
@@ -296,26 +312,35 @@ async function download(r: GeneratedImage) {
   }
 }
 async function saveToLib(r: GeneratedImage) {
-  if (r.savedAssetId) return
+  if (r.savedAssetId || saving.has(r.id)) return
   errorMsg.value = ''
+  saving.add(r.id)
   try {
-    const a = await saveGenerated(t('image.savedName', { id: r.id }), { generationId: r.generationId, resultId: r.id })
+    const a = await saveGenerated(t('image.savedName', { id: r.id }), r)
     r.savedAssetId = a.id
     r.adopted = true // 後端 /save 自己會記採用，不必再送 events
   } catch (e: unknown) {
-    errorMsg.value = displayMessage(e, t('errors.submitFailed'))
+    // 前一發其實存進去了、只是回應在路上丟了：當成已存入。
+    // ponytail: 這時拿不到素材 id，畫面只看 savedAssetId 有沒有值；要用到 id 時改成重新查圖庫
+    if (hasErrorCode(e, API_ERROR_CODES.ALREADY_SAVED)) {
+      r.savedAssetId = 'unknown'
+      r.adopted = true
+    } else errorMsg.value = displayMessage(e, t('errors.submitFailed'))
+  } finally {
+    saving.delete(r.id)
   }
 }
 async function regen(r: GeneratedImage) {
   const reference = refImage.value
-  if (!reference || generating.value) return
+  const price = perImage.value
+  if (!reference || generating.value || price === undefined || seedRejected()) return
   errorMsg.value = ''
   generating.value = true
   try {
     const [next] = await tasksStore.createImageTask(
       () => api.generateImages(buildReq(reference.id, 1, r.id)),
       t('image.regenerationTaskName'),
-      perImage.value,
+      price,
     )
     const i = results.value.findIndex((x) => x.id === r.id)
     if (i >= 0 && next) results.value[i] = next

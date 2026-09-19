@@ -1,3 +1,4 @@
+import { i18n } from '@/lang'
 import { formatDimensions } from '@/utils/dimensions'
 import { ApiError, API_ERROR_CODES, CLIENT_ERROR_CODES, hasErrorCode, isApiError } from './errors'
 import { http } from './http'
@@ -394,11 +395,10 @@ async function listInspirations(): Promise<Inspiration[]> {
 // ── 付費生成（POST /generate、/marketing/image、/marketing/text）與輪詢（GET /generations/{id}）──
 // 契約以後端程式碼為準：app/schemas/generation.py、app/schemas/marketing.py、app/idempotency.py
 
+// 只宣告前端讀得到的欄位（同 getFeed 的取捨）；完整形狀以後端 schemas 為準
 interface WireResult {
   resultId: string
   tempUrl: string
-  expiresAt: string
-  seed: number | null
 }
 /** 200 回應與輪詢到 done 的共同部分：圖看 results，文案看 caption／hashtags */
 interface WireOutput {
@@ -409,11 +409,9 @@ interface WireOutput {
 }
 interface WirePending {
   generationId: string
-  status: 'processing'
   pollAfterMs?: number
 }
 interface WireStatus extends WireOutput {
-  type: string
   status: 'processing' | 'done' | 'failed'
 }
 
@@ -424,35 +422,42 @@ const PAID_TIMEOUT_MS = 100_000
 const PAID_MAX_ATTEMPTS = 3
 const PAID_RETRY_DELAY_MS = 5000
 // 409＝同一把 key 的前一發還在後端跑（回應在路上丟了）。後端要等 200 或 202 定案才停止回 409，
-// 而同步最多 80 秒，所以 409 一直重送到「第一次送出後 100＋20 秒」，期限內一定拿得到回放。
+// 而同步最多 80 秒，所以 409 一直重送到「最後一次不確定的送出後 100＋20 秒」，期限內一定拿得到回放。
 const PAID_IN_PROGRESS_MS = PAID_TIMEOUT_MS + 20_000
 // ponytail: 後端背景續問上限 600 秒（從 202 起算），到期後還要取結果、存 R2，所以多等 1 分鐘。
 // 前端沒有「之後回來看」的頁面，停太早使用者拿不到已扣點的結果；有生成紀錄頁之後再縮短。
 const POLL_MAX_MS = 11 * 60_000
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+// 「不確定有沒有送到」：逾時、斷線，以及閘道自己吐的 5xx（nginx 504、Cloudflare 524、部署中的 502）——
+// 那時後端可能還在跑、會扣點。後端自己回的錯誤一定帶 requestId（app/errors.py），那是確定的結果。
 const isTransient = (e: unknown) =>
-  hasErrorCode(e, CLIENT_ERROR_CODES.TIMEOUT) || hasErrorCode(e, CLIENT_ERROR_CODES.NETWORK_ERROR)
+  hasErrorCode(e, CLIENT_ERROR_CODES.TIMEOUT) ||
+  hasErrorCode(e, CLIENT_ERROR_CODES.NETWORK_ERROR) ||
+  (isApiError(e) && e.status >= 500 && !e.requestId)
 // 輪詢打的是 GET，本身冪等：網路抖動與 5xx（反向代理吐的 HTML 502／504）都等下一輪再問
 const isPollTransient = (e: unknown) => isTransient(e) || (isApiError(e) && e.status >= 500)
 
 /**
  * 付費端點：一次呼叫＝一次點擊，只產一把 Idempotency-Key。
  * 重送沿用同一把 key 與**同一個 body 物件**——後端比對 body 的 bytes，物件換了就會被當成新請求再扣一次點。
- * 只重送「不確定有沒有送到」的逾時／斷線（最多 PAID_MAX_ATTEMPTS 次），以及同 key 還在跑的 409
- * （重送到 PAID_IN_PROGRESS_MS 期限）；其他錯誤（402、400、CONTENT_BLOCKED、502…）直接往上丟。
+ * 只重送「不確定有沒有送到」的錯誤（isTransient，最多 PAID_MAX_ATTEMPTS 次），以及同 key 還在跑的 409
+ * （重送到 PAID_IN_PROGRESS_MS 期限）；其他錯誤（402、400、CONTENT_BLOCKED、後端的 5xx…）直接往上丟。
  */
 async function postPaid<T>(url: string, body: object) {
   const key = crypto.randomUUID()
-  const deadline = Date.now() + PAID_IN_PROGRESS_MS
+  let deadline = Date.now() + PAID_IN_PROGRESS_MS
   for (let failures = 0; ;) {
     try {
       return await http.post<T>(url, body, { headers: { 'Idempotency-Key': key }, timeout: PAID_TIMEOUT_MS })
     } catch (e) {
-      const giveUp = hasErrorCode(e, API_ERROR_CODES.IDEMPOTENCY_IN_PROGRESS)
-        ? Date.now() >= deadline
-        : !isTransient(e) || ++failures >= PAID_MAX_ATTEMPTS
-      if (giveUp) throw e
+      if (hasErrorCode(e, API_ERROR_CODES.IDEMPOTENCY_IN_PROGRESS)) {
+        if (Date.now() >= deadline) throw e
+      } else {
+        if (!isTransient(e) || ++failures >= PAID_MAX_ATTEMPTS) throw e
+        // 那一發可能才剛在後端開跑（例如逾時 100 秒後），409 期限從這裡重新算
+        deadline = Date.now() + PAID_IN_PROGRESS_MS
+      }
       await sleep(PAID_RETRY_DELAY_MS)
     }
   }
@@ -466,15 +471,19 @@ async function pollGeneration(generationId: string, pollAfterMs = 5000): Promise
     try {
       const { data } = await http.get<WireStatus>(`/generations/${generationId}`)
       if (data.status === 'done') return data
+      // failed 不一定退點（202 之後被審核擋下照樣結清），訊息不能叫人原樣重送
       if (data.status === 'failed')
-        throw new ApiError({ code: CLIENT_ERROR_CODES.GENERATION_FAILED, message: '這次生成沒有成功，請再試一次。' })
+        throw new ApiError({
+          code: CLIENT_ERROR_CODES.GENERATION_FAILED,
+          message: i18n.global.t('errors.backgroundGenerationFailed'),
+        })
     } catch (e) {
       if (!isPollTransient(e)) throw e // failed、404、401 直接丟
     }
     if (Date.now() >= deadline)
       throw new ApiError({
         code: CLIENT_ERROR_CODES.GENERATION_STILL_PROCESSING,
-        message: `生成時間異常地長，已停止等待（編號 ${generationId}）。完成時仍會結清飼料，請稍後重新整理確認餘額。`,
+        message: i18n.global.t('errors.generationStillProcessing', { id: generationId }),
       })
   }
 }
@@ -532,7 +541,7 @@ async function saveGenerated(name: string, from?: GenerationRef): Promise<Asset>
   // ponytail: 試穿還沒有後端，TryOnView 不帶 from，繼續用假資料；接試穿時拿掉這條
   if (!from) return mockApi.saveGenerated(name)
   const { data } = await http.post<WireImage>(`/generations/${from.generationId}/save`, {
-    resultId: from.resultId,
+    resultId: from.id,
     imageName: name,
   })
   return toAsset(data)
@@ -540,7 +549,7 @@ async function saveGenerated(name: string, from?: GenerationRef): Promise<Asset>
 
 async function recordAdoption(from: GenerationRef): Promise<void> {
   // 後端只收 downloaded（存入圖庫由 /save 自己記）；冪等，重送沒關係
-  await http.post(`/generations/${from.generationId}/events`, { event: 'downloaded', resultId: from.resultId })
+  await http.post(`/generations/${from.generationId}/events`, { event: 'downloaded', resultId: from.id })
 }
 
 export const realApi = {

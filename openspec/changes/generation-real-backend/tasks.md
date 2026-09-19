@@ -43,3 +43,17 @@
 - [ ] 4.6 實打 fal 的少量驗證（約 21 顆飼料）**先取得使用者同意才執行**：輔助描述 1 次（0）、標準 2 張（16，含 Copy as cURL 同 key 同 body 重送拿到同一個 `generationId` 且不再扣點）、存入圖庫（0）、下載並看到 `downloaded` 事件（0）、只要文案（0）、只要配圖（5，多半 202 → 輪詢）；最後餘額為起始值減 21，`CONTENT_BLOCKED` 另行記錄
 - [ ] 4.7 回報 design.md 的 Open Questions 六項採用的預設值（輪詢上限、行銷兩欄、`promptTemplate`、參考強度方向、儲值、品牌開關預設），請使用者或產品逐項確認；回報內容逐項列出目前預設值與改動位置
 - [ ] 4.8 Spectra 收尾：勾選已完成的任務後跑 `spectra analyze generation-real-backend`（Coverage 沒有 no-matching-task）與 `spectra validate generation-real-backend`（valid）；每組完成就 commit，只逐一 `git add` 本組改動的檔案（不含 `package-lock.json`），commit 後用 `git show --stat HEAD` 對照預期檔案清單
+
+## 5. 審查意見處理
+
+- [x] 5.1 對齊 Requirement「付費請求只在無法確定是否送達時重送」：`real.ts` 的 `isTransient` 納入閘道吐的非後端格式 5xx（`status >= 500` 且沒有 `requestId`），`postPaid` 的 409 期限在每次不確定的失敗後重新計算。驗證：`real.spec.ts` 新增「閘道吐的 HTML 5xx（524，沒有 requestId）…同一把 key 與 body 重送」「後端自己回的 5xx（帶 requestId）是確定的失敗，不重送」「第一發逾時（100 秒）後 409 的期限從逾時那一刻重算」三條全綠；快照後分別拿掉 5xx 條件、改成不看 `requestId`、拿掉期限重算，各自變紅，還原後全綠
+- [x] 5.2 對齊 Requirement「收到 202 後輪詢生成狀態直到定案」與 Requirement「生成錯誤顯示後端提供的訊息」：`GENERATION_FAILED`／`GENERATION_STILL_PROCESSING` 的訊息改用 `i18n.global.t`，新增 `errors.backgroundGenerationFailed`（說明被審核擋下不退點、請修改描述）與 `errors.generationStillProcessing`（帶 `{id}`），zh-Hant／en 同步。驗證：「輪詢到 failed」測試斷言訊息含「飼料不會退回」、「前端合成的訊息跟著語系走」測試在 en 語系斷言英文訊息；換回舊文案時變紅
+- [x] 5.3 對齊 Requirement「存入圖庫使用生成結果的保存端點」：`saveToLib` 以逐張的 `saving` 集合擋連點（按鈕 `:disabled` 同步），後端回 `ALREADY_SAVED` 時當成已存入；`API_ERROR_CODES` 新增 `ALREADY_SAVED`。驗證：mock 煙霧「存入圖庫送出中按鈕停用」「存入後按鈕變『已存入』」
+- [x] 5.4 對齊 Requirement「圖生圖檔位與單價由後端提供」：`imageTier` 直接存 modelKey（刪掉 `selectedModelKey`），所選檔位沒有價格時 `perImage` 為 `undefined`、預估顯示「…」、生成鈕與 `generate()`／`regen()` 擋下；價格載入後預設檔不在回傳中時改選第一張卡。驗證：mock 煙霧「預設選中標準檔」「點進階檔後選中第二張」「進階 2 張預估 24」
+- [x] 5.5 對齊 Requirement「圖生圖請求以參考圖為必要條件並使用後端欄位」與 Requirement「AI 輔助描述呼叫真後端」：生成鈕與輔助描述改看 `prompt.trim()`；種子欄加 `min="0" step="1"`，新增 `src/utils/generation.ts` 的 `toBackendStrength`、`parseSeed`（負數、小數回 `null`，由 `seedRejected` 在送出前顯示 `image.seedInvalid`）。驗證：`src/utils/generation.spec.ts` 全綠且破壞翻轉／0 判斷／整數判斷各自變紅；mock 煙霧「描述只有空白：生成鈕停用」「種子 -1 顯示種子錯誤」「種子 -1 沒有送出」
+- [x] 5.6 對齊 Requirement「生成中離開頁面先確認」：圖生圖頁與行銷頁以 `onBeforeRouteLeave`＋`useEventListener(window, 'beforeunload')` 在生成中確認（新增 `common.leaveWhileGenerating`）；`TaskCenterPanel` 對圖生圖任務改顯示 `taskCenter.imageCompleted`、拿掉「查看」與推算秒數，`taskCenter.notePrimary` 只對影片說離開不影響。驗證：mock 煙霧「生成中點側欄導頁跳出確認框」「取消確認後仍在圖生圖頁」「非生成中導頁沒有確認框」「圖生圖完成文案不說『已存入圖庫』」「圖生圖完成沒有『查看』鈕」
+- [x] 5.7 對齊 Requirement「行銷輸出類型價格由後端提供」與 Requirement「換一張圖與重寫文案只重做對應的一半」：`canGenerateFor` 要求價格已載入；只成功一半時以 `marketing.partialFailed.image`／`.text` 點名失敗的一半並指向該欄按鈕；合併邏輯改用 `mergePost`；`OUTPUT_TYPE_OPTIONS` 併進 `outputTypeOptions`。驗證：`generation.spec.ts` 的 `mergePost` 三條全綠且改成整包覆蓋時變紅；mock 煙霧「行銷頁價格載入後主按鈕可按」「換一張圖後文案保留」
+- [x] 5.8 對齊 Requirement「mock 模式與真後端介面同形」：mock 以 `db.imageGenerations` 只讓圖生圖結果計入採用；`GenerationRef` 改成 `Pick<GeneratedImage, 'id' | 'generationId'>`，三個呼叫點直接傳結果物件。驗證：`mock.spec.ts`「下載行銷海報不算採用」綠，拿掉 `imageGenerations` 檢查時變紅
+- [x] 5.9 對齊 Requirement「下載檔案走同一份共用邏輯」：圖庫 `downloadSelected` 開始時清掉上一次的 `batchError`
+- [x] 5.10 `real.ts` 的 wire 型別刪掉前端沒讀的欄位（`WireResult.expiresAt`／`seed`、`WirePending.status`、`WireStatus.type`），與 `getFeed` 只宣告用得到的欄位一致
+- [x] 5.11 收尾驗證：`npx vitest run` 0 failed、`npx vue-tsc --noEmit`、`npm run lint`、`npx prettier --check` 本 change 改動檔皆 exit 0，i18n 對齊檢查等於基準，mock 煙霧（另開 :5177）全數通過，`VITE_USE_MOCK= npx vite build --mode development` 成功，`spectra validate`／`spectra analyze` 通過

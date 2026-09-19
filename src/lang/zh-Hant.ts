@@ -38,6 +38,7 @@ export default {
     minutesSeconds: '{minutes} 分 {seconds} 秒',
     remainingMinutesSeconds: '約剩 {minutes} 分 {seconds} 秒',
     remainingSeconds: '約剩 {seconds} 秒',
+    leaveWhileGenerating: '生成還在進行中，離開這一頁就拿不到這次的結果，飼料仍會照扣。確定要離開嗎？',
   },
   errors: {
     insufficientFeed: '飼料不足，請先儲值。',
@@ -52,6 +53,10 @@ export default {
     unsupportedFormat: '不支援的檔案格式，請使用 jpg／png／webp。',
     loadFailed: '載入失敗，請重新整理頁面。',
     downloadFailed: '下載失敗：檔案可能已過期或暫時無法讀取，請稍後再試。',
+    backgroundGenerationFailed:
+      '這次生成沒有成功。若是內容被審核擋下，飼料不會退回，請修改描述後再試；實際扣點以右上角餘額為準。',
+    generationStillProcessing:
+      '生成時間異常地長，已停止等待（編號 {id}）。完成時仍會結清飼料，請稍後重新整理確認餘額。',
   },
   auth: {
     title: '登入 Manta Vision',
@@ -132,9 +137,10 @@ export default {
     pending: '等待中…',
     processing: '生成中…約 1–2 分鐘',
     completed: '已完成・已存入圖庫›{type}',
+    imageCompleted: '已完成・結果不會自動存入圖庫，請在圖生圖頁按「存入圖庫」',
     failed: '生成失敗',
     failedDetail: '生成失敗・模型逾時',
-    notePrimary: '完成的影片會自動存入圖庫›影片，離開頁面不影響生成。',
+    notePrimary: '完成的影片會自動存入圖庫›影片，離開頁面不影響影片生成；圖生圖請留在頁面上等結果。',
     notePolicy: '影片生成後無法取消；生成失敗不退還飼料。',
   },
   generationToast: {
@@ -203,6 +209,10 @@ export default {
     changeImage: '換一張圖',
     copyText: '複製文案',
     rewrite: '重寫文案',
+    partialFailed: {
+      image: '配圖沒有成功（{reason}）。文案已完成，只重做配圖請按「換一張圖」。',
+      text: '文案沒有成功（{reason}）。配圖已完成，只重寫文案請按「重寫文案」。',
+    },
     nextStep: '下一步：一鍵帶入群發訊息草稿（需與主產品介接，roadmap 項目）',
     pickerTitle: '選擇商品圖片',
     ratios: { post: '貼文', banner: '橫幅', story: '限動 / Reels' },
@@ -236,6 +246,7 @@ export default {
     seedRandom: '隨機',
     seedLock: '鎖定',
     seedHint: '鎖定同一組種子＋相同設定，可重現非常接近的結果，用來做同系列素材。',
+    seedInvalid: '種子要填 0 以上的整數，或留空改用隨機。',
     resetAdvanced: '恢復預設值',
     resetAdvancedHint: '進階設定不影響飼料消耗',
     modelHint: '倍率以標準模型 {count} 顆／張為基準',

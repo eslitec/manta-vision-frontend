@@ -38,6 +38,8 @@ export default {
     minutesSeconds: '{minutes}m {seconds}s',
     remainingMinutesSeconds: 'About {minutes}m {seconds}s remaining',
     remainingSeconds: 'About {seconds}s remaining',
+    leaveWhileGenerating:
+      'Generation is still in progress. If you leave this page you will not get this result, and the feed will still be charged. Leave anyway?',
   },
   errors: {
     insufficientFeed: 'Not enough feed. Please top up first.',
@@ -52,6 +54,10 @@ export default {
     unsupportedFormat: 'Unsupported file format. Please use jpg, png, or webp.',
     loadFailed: 'Failed to load. Please refresh the page.',
     downloadFailed: 'Download failed. The file may have expired or be temporarily unavailable. Please try again later.',
+    backgroundGenerationFailed:
+      'This generation did not succeed. If it was blocked by content moderation, the feed is not refunded, so please revise the description before trying again. Check the balance at the top right for the actual charge.',
+    generationStillProcessing:
+      'Generation is taking unusually long, so we stopped waiting (ID {id}). The feed will still be settled when it finishes; refresh later to check your balance.',
   },
   auth: {
     title: 'Log in to Manta Vision',
@@ -127,10 +133,11 @@ export default {
     pending: 'Pending…',
     processing: 'Generating… about 1–2 minutes',
     completed: 'Completed · Saved to Library › {type}',
+    imageCompleted: 'Completed · Results are not saved automatically. Use "Save to library" on the image page.',
     failed: 'Generation failed',
     failedDetail: 'Generation failed · Model timeout',
     notePrimary:
-      'Completed videos are saved automatically to Library › Videos, and leaving the page does not interrupt generation.',
+      'Completed videos are saved automatically to Library › Videos, and leaving the page does not interrupt video generation. For images, stay on the page until the results appear.',
     notePolicy: 'Video generation cannot be cancelled after it starts; failed generations are not refunded.',
   },
   generationToast: {
@@ -224,6 +231,10 @@ export default {
     changeImage: 'Change image',
     copyText: 'Copy text',
     rewrite: 'Rewrite',
+    partialFailed: {
+      image: 'The visual did not succeed ({reason}). The copy is ready; to redo only the visual, use "Change image".',
+      text: 'The copy did not succeed ({reason}). The visual is ready; to redo only the copy, use "Rewrite".',
+    },
     nextStep: 'Next: Add directly to a broadcast draft (requires main-product integration; roadmap item)',
     pickerTitle: 'Select product image',
     ratios: { post: 'Post', banner: 'Banner', story: 'Story / Reels' },
@@ -257,6 +268,7 @@ export default {
     seedRandom: 'Random',
     seedLock: 'Lock',
     seedHint: 'Locking the same seed and settings reproduces very similar results — useful for a matching series.',
+    seedInvalid: 'The seed must be a whole number of 0 or more. Leave it empty for a random seed.',
     resetAdvanced: 'Reset to defaults',
     resetAdvancedHint: 'Advanced settings do not affect feed cost',
     modelHint: 'Multipliers are based on Standard at {count} feed/image',

@@ -158,6 +158,8 @@ const db = {
   ]),
   // 已採用（存入圖庫或下載）的結果，key 為 generationId/resultId：模擬後端「同一張只算一次採用」
   adoptedResults: new Set<string>(),
+  // 圖生圖的 generationId：採用率只算 type='generate'（後端 metrics_calc），行銷海報的下載不計
+  imageGenerations: new Set<string>(),
   jobs: new Map<
     string,
     { req: VideoJobReq; created: number; cost: number; failed?: boolean; failedChecked?: boolean }
@@ -184,8 +186,8 @@ const priceOf = (modelKey: string) => MOCK_MODELS.find((m) => m.modelKey === mod
 
 // 後端的採用＝存入圖庫或下載過，同一張只算一次
 function markAdopted(from: GenerationRef) {
-  const key = `${from.generationId}/${from.resultId}`
-  if (db.adoptedResults.has(key)) return
+  const key = `${from.generationId}/${from.id}`
+  if (!db.imageGenerations.has(from.generationId) || db.adoptedResults.has(key)) return
   db.adoptedResults.add(key)
   db.adoptedGen += 1
 }
@@ -508,6 +510,7 @@ export const mockApi = {
     db.successGen += n
     await delay(900)
     const generationId = uid('gen')
+    db.imageGenerations.add(generationId)
     return Array.from({ length: n }, () => ({ id: uid('r'), generationId, url: '', adopted: false }))
   },
 

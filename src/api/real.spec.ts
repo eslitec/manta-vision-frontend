@@ -3,6 +3,7 @@ import type { AxiosAdapter, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { http } from './http'
 import { mockApi } from './mock'
 import { realApi } from './real'
+import { i18n } from '@/lang'
 import type { GenerateImageReq, GeneratePostReq } from '@/types/api'
 
 // 跟 http.spec.ts 一樣用假 adapter 取代網路，但這裡關心的是**上一層**：
@@ -19,8 +20,8 @@ interface Recorded {
   raw?: unknown
 }
 
-/** error：請求沒送達（不帶 response），讓 toApiError 翻成 TIMEOUT／NETWORK_ERROR */
-type Reply = { status?: number; data?: unknown; error?: 'timeout' | 'network' }
+/** error：請求沒送達（不帶 response），讓 toApiError 翻成 TIMEOUT／NETWORK_ERROR；delay：回應前先等幾毫秒 */
+type Reply = { status?: number; data?: unknown; error?: 'timeout' | 'network'; delay?: number }
 
 /**
  * 依 URL 回傳對應的假回應；同時記下每一次請求，供斷言檢查。
@@ -44,6 +45,7 @@ function stubRoutes(routes: Record<string, Reply | Reply[]>) {
     const entry = routes[url]
     const route = Array.isArray(entry) ? (entry.length > 1 ? entry.shift() : entry[0]) : entry
     if (!route) throw new Error(`測試沒有為 ${url} 準備回應`)
+    if (route.delay) await new Promise((resolve) => setTimeout(resolve, route.delay))
 
     if (route.error) {
       const error = new Error(route.error) as Error & { isAxiosError: boolean; code?: string }
@@ -689,13 +691,30 @@ describe('POST /generate', () => {
     expect(calls.filter((c) => c.url === '/generate')).toHaveLength(1)
   })
 
-  it('輪詢到 failed → GENERATION_FAILED', async () => {
+  it('輪詢到 failed → GENERATION_FAILED，訊息不叫人原樣重送（202 後被審核擋下照樣扣點）', async () => {
     stubRoutes({ '/generate': PENDING, '/generations/gen_1': FAILED })
 
-    const assertion = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({ code: 'GENERATION_FAILED' })
+    const assertion = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({
+      code: 'GENERATION_FAILED',
+      message: expect.stringContaining('飼料不會退回'),
+    })
     await vi.advanceTimersByTimeAsync(5000)
 
     await assertion
+  })
+
+  it('前端合成的訊息跟著語系走', async () => {
+    stubRoutes({ '/generate': PENDING, '/generations/gen_1': FAILED })
+    i18n.global.locale.value = 'en'
+    try {
+      const assertion = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({
+        message: expect.stringContaining('content moderation'),
+      })
+      await vi.advanceTimersByTimeAsync(5000)
+      await assertion
+    } finally {
+      i18n.global.locale.value = 'zh-Hant'
+    }
   })
 
   it('輪詢超過 11 分鐘仍 processing → GENERATION_STILL_PROCESSING 並停止輪詢', async () => {
@@ -771,6 +790,48 @@ describe('POST /generate', () => {
     const n = calls.length
     await vi.advanceTimersByTimeAsync(60_000)
     expect(calls).toHaveLength(n)
+  })
+
+  it('閘道吐的 HTML 5xx（524，沒有 requestId）＝不確定有沒有送到：同一把 key 與 body 重送', async () => {
+    // 後端可能還在跑、會扣點；不重送的話使用者再按一次就是新 key，重複扣點
+    const calls = stubRoutes({ '/generate': [{ status: 524, data: '<html>timeout</html>' }, GEN_OK] })
+
+    const p = realApi.generateImages(GEN_REQ)
+    await vi.advanceTimersByTimeAsync(5000)
+
+    await expect(p).resolves.toEqual(GENERATED)
+    expect(calls).toHaveLength(2)
+    expect(new Set(keysOf(calls)).size).toBe(1)
+    expect(calls[1].raw).toBe(calls[0].raw)
+  })
+
+  it('後端自己回的 5xx（帶 requestId）是確定的失敗，不重送', async () => {
+    const calls = stubRoutes({
+      '/generate': {
+        status: 502,
+        data: { code: 'UPSTREAM_ERROR', message: '上游失敗', fieldErrors: null, requestId: 'req_1' },
+      },
+    })
+
+    const assertion = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({ code: 'UPSTREAM_ERROR' })
+    await vi.advanceTimersByTimeAsync(20_000)
+    await assertion
+
+    expect(calls).toHaveLength(1)
+  })
+
+  it('第一發逾時（100 秒）後 409 的期限從逾時那一刻重算，後端跑到 130 秒仍拿得到回放', async () => {
+    // 期限若仍從第一次送出算（120 秒），第 120 秒的 409 就會放棄，使用者再按一次就重複扣點
+    const calls = stubRoutes({
+      '/generate': [{ delay: 100_000, error: 'timeout' }, ...Array(6).fill(CONFLICT), GEN_OK],
+    })
+
+    const p = realApi.generateImages(GEN_REQ)
+    await vi.advanceTimersByTimeAsync(100_000 + 7 * 5000)
+
+    await expect(p).resolves.toEqual(GENERATED)
+    expect(calls).toHaveLength(8)
+    expect(new Set(keysOf(calls)).size).toBe(1)
   })
 
   it('兩次呼叫（＝兩次點擊）用不同的 key', async () => {
@@ -935,7 +996,7 @@ describe('生成結果：存入圖庫／下載事件／靈感', () => {
       '/generations/gen_1/save': { status: 201, data: { ...WIRE_IMAGE, source: 'aiGenerate' } },
     })
 
-    const asset = await realApi.saveGenerated('圖生圖_x', { generationId: 'gen_1', resultId: 'res_1' })
+    const asset = await realApi.saveGenerated('圖生圖_x', { generationId: 'gen_1', id: 'res_1' })
 
     expect(calls[0].body).toEqual({ resultId: 'res_1', imageName: '圖生圖_x' })
     expect(calls[0].headers?.['Idempotency-Key']).toBeUndefined()
@@ -957,7 +1018,7 @@ describe('生成結果：存入圖庫／下載事件／靈感', () => {
   it('recordAdoption 只送 downloaded 與 resultId', async () => {
     const calls = stubRoutes({ '/generations/gen_1/events': { data: { recorded: true } } })
 
-    await realApi.recordAdoption({ generationId: 'gen_1', resultId: 'res_1' })
+    await realApi.recordAdoption({ generationId: 'gen_1', id: 'res_1' })
 
     expect(calls[0].method).toBe('post')
     expect(calls[0].body).toEqual({ event: 'downloaded', resultId: 'res_1' })
