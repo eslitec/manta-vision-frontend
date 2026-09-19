@@ -65,3 +65,4 @@
 - [x] 6.3 對齊 Requirement「行銷輸出類型價格由後端提供」：`costOf` 只要求該輸出類型用到的單價，沒有價格的輸出類型卡片 `:disabled`（樣式 `opacity: 0.5`、`cursor: not-allowed`）。驗證：mock 煙霧 patch `api.listModels` 拿掉 `marketingImage` 時三張卡的停用狀態為 `[true,false,true]` 且「只要文案」標 0 顆，價格齊全時為 `[false,false,false]`；`costOf` 改回要求兩個單價時變紅
 - [x] 6.4 design.md「Risks / Trade-offs」記錄不修的兩條與一條取捨：codex #2（202 的 generationId 沒有持久化）、codex #4（前端沒保留 `expiresAt`）、`CONTENT_BLOCKED` 後原樣再按一次會再扣；每條寫明原因與之後的升級做法
 - [x] 6.5 收尾驗證：`npx vitest run` 0 failed、`npx vue-tsc --noEmit`、`npm run lint`、`npx prettier --check` 本組改動檔皆 exit 0，i18n 對齊檢查等於基準，`spectra validate generation-real-backend` valid，`spectra analyze generation-real-backend` 的 Coverage、Consistency、Gaps 為 0
+- [x] 6.6 對齊 Requirement「換一張圖與重寫文案只重做對應的一半」：生成途中改了輸入或輸出類型時，回應回來不再把主按鈕設成只重做一半（`MarketingPostView.vue` 以 `inputVersion` 比對送出前後；`resultType` 改用送出時的類型 `sentType`）。驗證：mock 煙霧 `smoke-retry2.mjs`「生成途中改輸入：配圖失敗後主按鈕仍是『產生貼文』」通過（15/15），拿掉版本比對時該案例變紅（主按鈕變成「只重做配圖」），還原後全綠

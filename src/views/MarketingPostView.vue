@@ -189,9 +189,12 @@ const ratios = computed(() => [
   { v: '9:16', label: '9:16', desc: t('marketing.ratios.story'), ar: '9 / 16' },
 ])
 const ratio = ref('1:1')
-// 改任何輸入或輸出類型：主按鈕回到照所選類型兩半重做（retryHalf 的說明在上面）
+// 改任何輸入或輸出類型：主按鈕回到照所選類型兩半重做（retryHalf 的說明在上面）。
+// inputVersion 讓「生成途中改了輸入」的那次回應不再把 retryHalf 設回去
+let inputVersion = 0
 watch([outputType, productImage, intro, posterText, inspirationId, applyBrand, ratio], () => {
   retryHalf.value = undefined
+  inputVersion++
 })
 const aspect = computed(() => ratios.value.find((r) => r.v === ratio.value)?.ar ?? '1 / 1')
 
@@ -208,12 +211,14 @@ const failText = (e: unknown) =>
 // 模板點擊一律寫成 generate() 或 generate('imageOnly')，不能只寫函式名（Vue 會把 MouseEvent 當成 only 傳進來）
 async function generate(only?: 'imageOnly' | 'textOnly') {
   if (generating.value) return
+  const sentType = only ?? outputType.value
+  const sentVersion = inputVersion
   errorMsg.value = ''
   generating.value = true
   copied.value = false
   try {
     const next = await api.generatePost({
-      outputType: only ?? outputType.value,
+      outputType: sentType,
       useBrand: applyBrand.value,
       imageId: productImage.value?.id,
       posterText: posterText.value,
@@ -221,9 +226,9 @@ async function generate(only?: 'imageOnly' | 'textOnly') {
       inspirationId: inspirationId.value || undefined,
       productDesc: intro.value,
     })
-    if (!result.value || !only) resultType.value = only ?? outputType.value
+    if (!result.value || !only) resultType.value = sentType
     result.value = mergePost(result.value, next, only)
-    retryHalf.value = retryTarget(retryHalf.value, next, only)
+    retryHalf.value = sentVersion === inputVersion ? retryTarget(retryHalf.value, next, only) : undefined
     // 只成功一半：點名失敗的是哪一半（主按鈕與那一欄的重試鈕都只重做那一半）
     if (next.partialError)
       errorMsg.value = t(next.poster ? 'marketing.partialFailed.text' : 'marketing.partialFailed.image', {
