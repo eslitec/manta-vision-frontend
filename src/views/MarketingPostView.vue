@@ -72,6 +72,7 @@
             IconImagePlaceholder(v-else)
           .postresult__act
             button.linkbtn(:disabled="generating || !canGenerateFor('imageOnly')" @click="generate('imageOnly')") {{ t('marketing.changeImage') }}
+            button.linkbtn(:disabled="!result.poster || !!result.poster.savedAssetId || generating || savingPoster" @click="savePoster") {{ result.poster?.savedAssetId ? t('common.saved') : t('common.saveToLibrary') }}
             button.linkbtn(:disabled="!result.poster" @click="downloadPoster") {{ t('common.download') }}
         .postresult__col(v-if="resultType !== 'imageOnly'")
           .copy(v-if="result.copy !== undefined")
@@ -102,7 +103,9 @@ import BrandToggle from '@/components/BrandToggle.vue'
 import { IconFeedBottleSmall, IconAddObject, IconCopy, IconImagePlaceholder, IconLoader } from '@/components/icons'
 import postNextStepIconUrl from '@/assets/images/marketing-next-step-alert.svg'
 import { useFeedStore } from '@/stores/feed'
+import { useAssets } from '@/composables/useAssets'
 import { api } from '@/api'
+import { API_ERROR_CODES, hasErrorCode } from '@/api/errors'
 import { displayMessage, isInsufficientFeed } from '@/utils/error'
 import { downloadFile } from '@/utils/download'
 import { mergePost, retryTarget } from '@/utils/generation'
@@ -110,6 +113,7 @@ import type { Asset, GeneratedPost, Inspiration, PostOutputType } from '@/types/
 
 const router = useRouter()
 const feed = useFeedStore()
+const { saveGenerated } = useAssets()
 const { t } = useI18n()
 
 const productImage = ref<Asset | null>(null)
@@ -125,6 +129,7 @@ const topUpOpen = ref(false)
 const generating = ref(false)
 const errorMsg = ref('')
 const result = ref<GeneratedPost | null>(null)
+const savingPoster = ref(false) // 存入圖庫送出中：連點兩下只送一發；換一張圖後新海報沒有 savedAssetId，按鈕自然回到「存入圖庫」
 const resultType = ref<PostOutputType>('both') // 目前的結果「要求了」哪幾半；只成功一半時，失敗那一欄仍要顯示重試按鈕
 const copied = ref(false)
 
@@ -254,6 +259,26 @@ async function downloadPoster() {
     }
   } catch (e: unknown) {
     errorMsg.value = displayMessage(e, t('errors.downloadFailed'))
+  }
+}
+// 結果只是 24 小時的 tempUrl，存入圖庫才會出現在圖庫的「AI 生成」；流程同圖生圖頁的 saveToLib
+async function savePoster() {
+  const poster = result.value?.poster
+  if (!poster || poster.savedAssetId || savingPoster.value) return
+  errorMsg.value = ''
+  savingPoster.value = true
+  try {
+    const a = await saveGenerated(t('marketing.savedName', { id: poster.id }), poster)
+    poster.savedAssetId = a.id
+    poster.adopted = true // 後端 /save 自己會記採用，不必再送 events
+  } catch (e: unknown) {
+    // 前一發其實存進去了、只是回應在路上丟了：當成已存入（拿不到素材 id，畫面只看有沒有值）
+    if (hasErrorCode(e, API_ERROR_CODES.ALREADY_SAVED)) {
+      poster.savedAssetId = 'unknown'
+      poster.adopted = true
+    } else errorMsg.value = displayMessage(e, t('errors.submitFailed'))
+  } finally {
+    savingPoster.value = false
   }
 }
 async function copyText() {

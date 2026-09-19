@@ -238,6 +238,7 @@ export default {
     },
     nextStep: 'Next: Add directly to a broadcast draft (requires main-product integration; roadmap item)',
     pickerTitle: 'Select product image',
+    savedName: 'Marketing poster_{id}',
     ratios: { post: 'Post', banner: 'Banner', story: 'Story / Reels' },
     outputType: {
       title: 'What to generate',

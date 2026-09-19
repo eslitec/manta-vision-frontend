@@ -1,6 +1,6 @@
 ## Purpose
 
-定義行銷 PO 文頁（MV-03）接上真後端後的行為：價格來源、依輸出類型呼叫 `/marketing/image` 與 `/marketing/text`、商品介紹與海報文字兩個欄位、靈感素材、只成功一半時的呈現與單獨重做，以及下載海報。付費請求共通的冪等、重送與輪詢規則見 paid-generation-requests。
+定義行銷 PO 文頁（MV-03）接上真後端後的行為：價格來源、依輸出類型呼叫 `/marketing/image` 與 `/marketing/text`、商品介紹與海報文字兩個欄位、靈感素材、只成功一半時的呈現與單獨重做，以及下載與存入海報。付費請求共通的冪等、重送與輪詢規則見 paid-generation-requests。
 
 ## ADDED Requirements
 
@@ -153,3 +153,22 @@
 
 - **WHEN** 「只要文案」的結果顯示中
 - **THEN** 結果區不顯示配圖欄，也就沒有海報的「下載」按鈕
+
+### Requirement: 海報可存入圖庫
+
+海報欄的「換一張圖」「下載」同一列 SHALL 有「存入圖庫」按鈕（同樣式）。按下時 SHALL 以海報呼叫 `saveGenerated(name, poster)`（真後端為 `POST /generations/{generationId}/save`，body `{ resultId, imageName }`，後端存成 `images.source = ai_generate`），名稱 SHALL 是 `marketing.savedName`（「行銷海報\_{id}」，`id` 為海報的 resultId）。送出中按鈕 SHALL 停用；成功後或後端回 400 `ALREADY_SAVED` 時 SHALL 標記為已存入並記為已採用，按鈕文字改為「已存入」且停用；其他失敗 SHALL 顯示「送出失敗，請稍後再試」類的既有錯誤訊息並恢復可按。沒有海報或生成中時按鈕 SHALL 停用。「換一張圖」得到新海報後，按鈕 SHALL 回到「存入圖庫」。
+
+#### Scenario: 存入海報
+
+- **WHEN** 海報為 `{ id: 'res_9', generationId: 'gen_9' }`，使用者按「存入圖庫」
+- **THEN** 送出 `POST /generations/gen_9/save`，body 為 `{ resultId: 'res_9', imageName: '行銷海報_res_9' }`；回 201 後按鈕顯示「已存入」且停用，圖庫的「AI 生成」看得到這張素材
+
+#### Scenario: 重複存入
+
+- **WHEN** 同一張海報再送一次存入，後端回 400 `ALREADY_SAVED`
+- **THEN** 不顯示錯誤，按鈕顯示「已存入」且停用
+
+#### Scenario: 換一張圖後可再存
+
+- **WHEN** 海報已存入，使用者按「換一張圖」並得到新海報
+- **THEN** 按鈕回到「存入圖庫」且可按

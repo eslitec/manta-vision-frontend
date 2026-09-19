@@ -216,6 +216,7 @@ export default {
     },
     nextStep: '下一步：一鍵帶入群發訊息草稿（需與主產品介接，roadmap 項目）',
     pickerTitle: '選擇商品圖片',
+    savedName: '行銷海報_{id}',
     ratios: { post: '貼文', banner: '橫幅', story: '限動 / Reels' },
     outputType: {
       title: '要產出什麼',
