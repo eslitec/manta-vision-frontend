@@ -57,3 +57,11 @@
 - [x] 5.9 對齊 Requirement「下載檔案走同一份共用邏輯」：圖庫 `downloadSelected` 開始時清掉上一次的 `batchError`
 - [x] 5.10 `real.ts` 的 wire 型別刪掉前端沒讀的欄位（`WireResult.expiresAt`／`seed`、`WirePending.status`、`WireStatus.type`），與 `getFeed` 只宣告用得到的欄位一致
 - [x] 5.11 收尾驗證：`npx vitest run` 0 failed、`npx vue-tsc --noEmit`、`npm run lint`、`npx prettier --check` 本 change 改動檔皆 exit 0，i18n 對齊檢查等於基準，mock 煙霧（另開 :5177）全數通過，`VITE_USE_MOCK= npx vite build --mode development` 成功，`spectra validate`／`spectra analyze` 通過
+
+## 6. codex 審查意見處理
+
+- [x] 6.1 對齊 Requirement「付費生成請求每次點擊使用一把冪等鍵」與 Requirement「付費請求只在無法確定是否送達時重送」，落實設計決策「Idempotency-Key 一次點擊一把」：`real.ts` 新增模組層 `openKeys`（「端點＋`JSON.stringify(body)`」→ key）與 `isSettledFailure`，`postPaid` 同一份輸入沿用還沒有確定結果的 key；2xx（含 202）、4xx、`UPSTREAM_ERROR` 從 `openKeys` 刪除，其餘失敗保留；`API_ERROR_CODES` 新增 `UPSTREAM_ERROR`。驗證：`real.spec.ts` 新增「$name 之後同一份輸入再按一次：沿用 key＝$reuse」五個案例（逾時、未知的 500 沿用；402、502 `UPSTREAM_ERROR`、成功換新）與「輸入不同就是新的操作」全綠；快照後分別拿掉沿用、拿掉已確定失敗的刪除、拿掉成功後的刪除、把 Map 鍵改成只有端點，對應測試各自變紅，還原後全綠
+- [x] 6.2 對齊 Requirement「換一張圖與重寫文案只重做對應的一半」，落實設計決策「行銷頁只成功一半時主按鈕只重做失敗那半」：`src/utils/generation.ts` 新增 `retryTarget`，`MarketingPostView.vue` 以 `retryHalf` 決定主按鈕的目標、文字（新增 `marketing.retryOnly.imageOnly`／`.textOnly`，zh-Hant／en 同步）、預估消耗與啟用條件，改任何輸入或輸出類型時清掉。驗證：`generation.spec.ts` 的 `retryTarget` 三條全綠，破壞部分失敗判斷或解除條件各自變紅；mock 煙霧（:5174，頁面內 patch `api.generatePost` 製造部分失敗）「配圖失敗後主按鈕寫『只重做配圖』」「按主按鈕只送 imageOnly」「改輸入後主按鈕回到『產生貼文』」「重做另一半後主按鈕仍是『只重做文案』」通過，主按鈕改回 `generate()` 或拿掉清除時變紅
+- [x] 6.3 對齊 Requirement「行銷輸出類型價格由後端提供」：`costOf` 只要求該輸出類型用到的單價，沒有價格的輸出類型卡片 `:disabled`（樣式 `opacity: 0.5`、`cursor: not-allowed`）。驗證：mock 煙霧 patch `api.listModels` 拿掉 `marketingImage` 時三張卡的停用狀態為 `[true,false,true]` 且「只要文案」標 0 顆，價格齊全時為 `[false,false,false]`；`costOf` 改回要求兩個單價時變紅
+- [x] 6.4 design.md「Risks / Trade-offs」記錄不修的兩條與一條取捨：codex #2（202 的 generationId 沒有持久化）、codex #4（前端沒保留 `expiresAt`）、`CONTENT_BLOCKED` 後原樣再按一次會再扣；每條寫明原因與之後的升級做法
+- [x] 6.5 收尾驗證：`npx vitest run` 0 failed、`npx vue-tsc --noEmit`、`npm run lint`、`npx prettier --check` 本組改動檔皆 exit 0，i18n 對齊檢查等於基準，`spectra validate generation-real-backend` valid，`spectra analyze generation-real-backend` 的 Coverage、Consistency、Gaps 為 0

@@ -231,6 +231,7 @@ export default {
     changeImage: 'Change image',
     copyText: 'Copy text',
     rewrite: 'Rewrite',
+    retryOnly: { imageOnly: 'Redo visual only', textOnly: 'Redo copy only' },
     partialFailed: {
       image: 'The visual did not succeed ({reason}). The copy is ready; to redo only the visual, use "Change image".',
       text: 'The copy did not succeed ({reason}). The visual is ready; to redo only the copy, use "Rewrite".',

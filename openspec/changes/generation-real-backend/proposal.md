@@ -5,11 +5,11 @@
 ## What Changes
 
 - `VITE_USE_MOCK=false` 時，圖生圖頁與行銷 PO 文頁的每個動作都改打真後端；沒設或不是 `false` 時，兩頁照樣用 mock 跑完整流程（mock 與 real 的方法簽名一致）。
-- 付費端點（`/generate`、`/marketing/image`、`/marketing/text`）一次點擊產一把 `Idempotency-Key`，逾時上限 100 秒；只有逾時、斷線、`409 IDEMPOTENCY_IN_PROGRESS` 會用同一把 key 與同一份 body 重送。
+- 付費端點（`/generate`、`/marketing/image`、`/marketing/text`）一次點擊產一把 `Idempotency-Key`，逾時上限 100 秒；只有逾時、斷線、`409 IDEMPOTENCY_IN_PROGRESS` 會用同一把 key 與同一份 body 重送。前一次結果不確定時，同一份輸入再按一次沿用那把 key（codex 審查後補）。
 - 收到 202 時在 API 層輪詢 `GET /generations/{id}` 直到 `done` 或 `failed`（上限 11 分鐘），view 與 `generationTasks` store 的結構不變。
 - 飼料餘額改讀 `GET /feeds`，每次生成結束（不論成敗）刷新一次；真後端模式明確停用模擬儲值（`topUpFeed` 設為 `undefined`）。
 - 圖生圖：檔位單價改讀 `GET /ai-models?modelType=image`、預估消耗改成單價乘張數、參考圖改為必填、請求欄位直接使用後端名稱（含 `strength` 方向翻轉、`seed` 為 0 不被丟掉、`useBrand`、`regenOf`）、結果顯示真圖、存入圖庫改打 `POST /generations/{id}/save`、下載後回報 `downloaded` 採用事件、AI 輔助描述顯示錯誤、品牌開關說明改成「品牌色票」。
-- 行銷 PO 文：依輸出類型分別呼叫 `/marketing/image` 與 `/marketing/text`（兩支平行、各自一把 key）、價格改讀 `GET /ai-models?modelType=marketing`、「商品介紹」與「海報文字」拆成兩個欄位、靈感素材改讀 `GET /inspirations`、只成功一半時保留成功那一半並保留失敗那一欄的重試按鈕、海報可真的下載並回報採用。
+- 行銷 PO 文：依輸出類型分別呼叫 `/marketing/image` 與 `/marketing/text`（兩支平行、各自一把 key）、價格改讀 `GET /ai-models?modelType=marketing`、「商品介紹」與「海報文字」拆成兩個欄位、靈感素材改讀 `GET /inspirations`、只成功一半時保留成功那一半並保留失敗那一欄的重試按鈕（主按鈕也只重做失敗那半）、海報可真的下載並回報採用。
 - 新增共用下載工具，圖庫的批次下載一併改用它（HTTP 非 2xx 時顯示錯誤，不再把錯誤頁存成檔案）。
 - **BREAKING（前端內部介面）**：`AiModel`、`GenerateImageReq`、`GeneratedImage`、`GeneratePostReq`、`GeneratedPost` 改成後端欄位形狀；`generateImages` 拿掉 `costPerImage` 參數；`recordAdoption` 與 `saveGenerated` 改為接收 `GenerationRef`。
 

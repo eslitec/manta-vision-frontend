@@ -42,9 +42,15 @@
 
 ### Idempotency-Key 一次點擊一把
 
-`postPaid(url, body)` 在進入迴圈前 `crypto.randomUUID()` 產一把 key，迴圈內每次重送沿用同一把 key 與**同一個 body 物件**（後端比對 body bytes，物件換了就會被當成新請求再扣一次點）。一次 API 呼叫＝一次使用者點擊；view 不碰 key。`generatePost` 的 `both` 兩支端點各自呼叫 `postPaid`，所以各自一把 key。非付費端點（`/prompt/enhance`、`/save`、`/events`）不帶 key。
+`postPaid(url, body)` 在進入迴圈前決定 key：模組層的 `openKeys`（`Map`，鍵是「端點＋`JSON.stringify(body)`」）有同一份輸入就沿用那把，沒有就 `crypto.randomUUID()` 產新的並記進去；迴圈內每次重送沿用同一把 key 與**同一個 body 物件**（後端比對 body bytes，物件換了就會被當成新請求再扣一次點）。view 不碰 key。`generatePost` 的 `both` 兩支端點各自呼叫 `postPaid`，所以各自一把 key。非付費端點（`/prompt/enhance`、`/save`、`/events`）不帶 key。
 
-替代方案：view 產 key 並在使用者重按時沿用——使用者重按代表想要新的一次，而且要改所有呼叫端，否決。
+結果確定才從 `openKeys` 刪掉，下次按是真的想再生成一次：任何 2xx（含 202，之後輪詢）、任何 4xx（409 `IDEMPOTENCY_IN_PROGRESS` 除外）、`UPSTREAM_ERROR`（502／504）。結果不確定就留著、錯誤照常丟給畫面：逾時、斷線、閘道 5xx（沒有 `requestId`）用完重送次數、409 等到期限、`UPSTREAM_ERROR` 以外的後端 5xx。使用者用同一份輸入再按一次會沿用同一把 key，前一發若已扣點，後端回放 200／202 或回 409，不會再扣。
+
+`UPSTREAM_ERROR` 是唯一列為「已確定」的 5xx，依據是 manta-vision-backend `feat/mv-07-metrics` 的程式碼：`app/services/generation.py` `_execute` 的 docstring 寫「UpstreamError: 其餘失敗（**已釋放**）」，兜底 `except Exception` 先 `billing.release` 再往上拋；`app/services/exceptions.py` 的 `UpstreamError` 註明計費語意是「釋放」；`app/errors.py` 把 `UpstreamError`／`UpstreamTimeout` 對到 502／504 `UPSTREAM_ERROR`（`billing.release` 自己失敗時會變成 500 `INTERNAL_ERROR`，不會帶這個碼）。其他 5xx 分不出來：`WalletMissing` 雖然擋在扣款前，對外卻與未預期例外同為 500 `INTERNAL_ERROR`；後端沒有 `STORAGE_ERROR` 這個碼，存 R2 失敗會釋放預留，但往上拋的是原例外，對外同樣是 500 `INTERNAL_ERROR`。
+
+上限（程式碼裡的 `ponytail:` 註解寫著同一段）：只存在記憶體，重新整理就消失；輸入差一個字就是新的操作。後端在 5xx 後只把佔位留 `IDEMPOTENCY_CLAIM_TTL_SECONDS`（預設 300 秒），過了之後同一把 key 也會重新執行，所以這把 key 擋的是「結果不確定後短時間內再按一次」。
+
+替代方案：一次呼叫一把、使用者重按一律換新 key——前一發逾時或回應遺失而其實已扣點時，再按一次就重複扣點（codex 審查 high），否決。view 產 key：要改所有呼叫端，否決。
 
 ### 只在不確定是否送達時重送
 
@@ -60,7 +66,7 @@
 
 ### 錯誤碼對應
 
-- `API_ERROR_CODES` 新增 `IDEMPOTENCY_IN_PROGRESS`（重送邏輯要用）與 `ALREADY_SAVED`（圖生圖頁把它當成已存入：前一發其實存進去了、回應遺失）。`CONTENT_BLOCKED`、`UPSTREAM_ERROR`、`MONTHLY_LIMIT_EXCEEDED`、`INSPIRATION_UNAVAILABLE` 不加：沒有分流需求，`displayMessage` 直接顯示後端 message。
+- `API_ERROR_CODES` 新增 `IDEMPOTENCY_IN_PROGRESS`（重送邏輯要用）、`ALREADY_SAVED`（圖生圖頁把它當成已存入：前一發其實存進去了、回應遺失）與 `UPSTREAM_ERROR`（`postPaid` 據此判定預留已釋放、放掉 key，見「Idempotency-Key 一次點擊一把」）。`CONTENT_BLOCKED`、`MONTHLY_LIMIT_EXCEEDED`、`INSPIRATION_UNAVAILABLE` 不加：沒有分流需求，`displayMessage` 直接顯示後端 message。
 - `CLIENT_ERROR_CODES` 新增前端依輪詢結果合成的兩個碼，訊息以 `i18n.global.t` 依目前語系產生：`GENERATION_FAILED`（輪詢到 `failed`，`errors.backgroundGenerationFailed`：「若是內容被審核擋下，飼料不會退回，請修改描述後再試」——202 之後被審核擋下，後端的 `failed` 是結清扣點，不能叫人原樣重送）、`GENERATION_STILL_PROCESSING`（輪詢逾期，`errors.generationStillProcessing`，帶 generationId，說明完成時仍會結清飼料、請稍後重新整理確認餘額）。`CLIENT_ERROR_CODES` 的註解補一句「也包含前端依輪詢結果合成的碼」。
 - 402 `INSUFFICIENT_FEEDS` 沿用 `isInsufficientFeed` 與既有飼料不足文案。
 
@@ -100,6 +106,12 @@
 
 `generatePost` 維持一支方法，在 real 裡依 `outputType` 以 `Promise.allSettled` 平行呼叫 `runGeneration('/marketing/image', imageBody)` 與 `runGeneration('/marketing/text', textBody)`，兩份 body 分開組。這樣「三種輸出打對的端點」可以在 `real.spec.ts` 測到，不需要元件測試。只成功一半時回傳成功那一半並附 `partialError`；兩半都失敗才 throw。view 端用 `resultType`（這次要求了哪幾半）決定顯示哪幾欄，`generate(only?)` 的 `only` 為 `imageOnly`／`textOnly` 時只替換對應的一半。
 
+### 行銷頁只成功一半時主按鈕只重做失敗那半
+
+「文案＋配圖」只成功一半時，主按鈕改呼叫 `generate(<失敗那半>)`，文字改成 `marketing.retryOnly.imageOnly`／`.textOnly`（只重做配圖／只重做文案），預估消耗與啟用條件也改看那一半；目標由 `src/utils/generation.ts` 的 `retryTarget(prev, next, only)` 決定：兩半都要求時，部分失敗回失敗那半、全成功回 `undefined`；單獨重做時，重做的正是目標那半才解除，重做另一半不影響。改任何輸入（商品圖、商品介紹、海報文字、靈感、品牌開關、比例）或輸出類型時清掉目標，主按鈕回到照所選類型兩半重做——這是使用者要兩半都重做的方式，不另做確認框。
+
+替代方案：主按鈕維持兩半重做、只在錯誤訊息指向那一欄的按鈕——已成功的海報會再扣一次（codex 審查 high），否決。按主按鈕時跳確認框問要不要兩半重做——多一個對話框，而改輸入本來就代表要新的一份，否決。
+
 ### 真後端模式停用模擬儲值
 
 `realApi` 加一行 `topUpFeed: undefined`。理由：`...mockApi` 會把假儲值帶進 real 模式，儲值成功會把 mock 的假餘額寫進 feed store，而右上角已改讀真的 `GET /feeds`，畫面會出現「儲值成功、生成卻 402」。TopUpDialog 既有的「不支援」分支直接生效，影響全站 9 個開啟儲值彈窗的入口。
@@ -131,25 +143,26 @@
 
 **i18n（`src/lang/zh-Hant.ts` 與 `src/lang/en.ts` 同步，key 結構一致）**
 
-| key                                              | zh-Hant                                                                                          | en                                                                                                  |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| `errors.loadFailed`（新增）                      | 載入失敗，請重新整理頁面。                                                                       | Failed to load. Please refresh the page.                                                            |
-| `errors.downloadFailed`（新增）                  | 下載失敗：檔案可能已過期或暫時無法讀取，請稍後再試。                                             | Download failed. The file may have expired or be temporarily unavailable. Please try again later.   |
-| `image.brandDescription`（新增）                 | 品牌色票                                                                                         | Brand colors                                                                                        |
-| `image.modelHint`（改）                          | 倍率以標準模型 {count} 顆／張為基準                                                              | Multipliers are based on Standard at {count} feed/image                                             |
-| `image.resultHint`（改）                         | 結果只暫存 24 小時，按「存入圖庫」才會保留                                                       | Results are kept for 24 hours. Save to library to keep them.                                        |
-| `marketing.steps.intro`（改）                    | 2. 文字內容                                                                                      | 2. Text                                                                                             |
-| `marketing.introLabel`（新增）                   | 商品介紹（寫貼文用）                                                                             | Product description (for the post copy)                                                             |
-| `marketing.posterTextLabel`（新增）              | 海報上的文字（會印在圖上）                                                                       | Poster text (printed on the image)                                                                  |
-| `marketing.posterTextPlaceholder`（新增）        | 例：春季新品\n限時 8 折                                                                          | e.g. Spring arrivals\n20% off                                                                       |
-| `marketing.inspirationHint`（改）                | 選一張當海報的版型與色調參考                                                                     | Pick one as a layout and color reference for the poster                                             |
-| `errors.backgroundGenerationFailed`（新增）      | 這次生成沒有成功。若是內容被審核擋下，飼料不會退回，請修改描述後再試；實際扣點以右上角餘額為準。 | This generation did not succeed. If it was blocked by content moderation, the feed is not refunded… |
-| `errors.generationStillProcessing`（新增）       | 生成時間異常地長，已停止等待（編號 {id}）。…                                                     | Generation is taking unusually long, so we stopped waiting (ID {id})…                               |
-| `common.leaveWhileGenerating`（新增）            | 生成還在進行中，離開這一頁就拿不到這次的結果，飼料仍會照扣。確定要離開嗎？                       | Generation is still in progress… Leave anyway?                                                      |
-| `image.seedInvalid`（新增）                      | 種子要填 0 以上的整數，或留空改用隨機。                                                          | The seed must be a whole number of 0 or more…                                                       |
-| `marketing.partialFailed.image`／`.text`（新增） | 配圖（文案）沒有成功（{reason}）。…請按「換一張圖」（「重寫文案」）。                            | The visual (copy) did not succeed ({reason})…                                                       |
-| `taskCenter.imageCompleted`（新增）              | 已完成・結果不會自動存入圖庫，請在圖生圖頁按「存入圖庫」                                         | Completed · Results are not saved automatically…                                                    |
-| `taskCenter.notePrimary`（改）                   | 完成的影片會自動存入圖庫›影片，離開頁面不影響影片生成；圖生圖請留在頁面上等結果。                | …does not interrupt video generation. For images, stay on the page until the results appear.        |
+| key                                                  | zh-Hant                                                                                          | en                                                                                                  |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `errors.loadFailed`（新增）                          | 載入失敗，請重新整理頁面。                                                                       | Failed to load. Please refresh the page.                                                            |
+| `errors.downloadFailed`（新增）                      | 下載失敗：檔案可能已過期或暫時無法讀取，請稍後再試。                                             | Download failed. The file may have expired or be temporarily unavailable. Please try again later.   |
+| `image.brandDescription`（新增）                     | 品牌色票                                                                                         | Brand colors                                                                                        |
+| `image.modelHint`（改）                              | 倍率以標準模型 {count} 顆／張為基準                                                              | Multipliers are based on Standard at {count} feed/image                                             |
+| `image.resultHint`（改）                             | 結果只暫存 24 小時，按「存入圖庫」才會保留                                                       | Results are kept for 24 hours. Save to library to keep them.                                        |
+| `marketing.steps.intro`（改）                        | 2. 文字內容                                                                                      | 2. Text                                                                                             |
+| `marketing.introLabel`（新增）                       | 商品介紹（寫貼文用）                                                                             | Product description (for the post copy)                                                             |
+| `marketing.posterTextLabel`（新增）                  | 海報上的文字（會印在圖上）                                                                       | Poster text (printed on the image)                                                                  |
+| `marketing.posterTextPlaceholder`（新增）            | 例：春季新品\n限時 8 折                                                                          | e.g. Spring arrivals\n20% off                                                                       |
+| `marketing.inspirationHint`（改）                    | 選一張當海報的版型與色調參考                                                                     | Pick one as a layout and color reference for the poster                                             |
+| `errors.backgroundGenerationFailed`（新增）          | 這次生成沒有成功。若是內容被審核擋下，飼料不會退回，請修改描述後再試；實際扣點以右上角餘額為準。 | This generation did not succeed. If it was blocked by content moderation, the feed is not refunded… |
+| `errors.generationStillProcessing`（新增）           | 生成時間異常地長，已停止等待（編號 {id}）。…                                                     | Generation is taking unusually long, so we stopped waiting (ID {id})…                               |
+| `common.leaveWhileGenerating`（新增）                | 生成還在進行中，離開這一頁就拿不到這次的結果，飼料仍會照扣。確定要離開嗎？                       | Generation is still in progress… Leave anyway?                                                      |
+| `image.seedInvalid`（新增）                          | 種子要填 0 以上的整數，或留空改用隨機。                                                          | The seed must be a whole number of 0 or more…                                                       |
+| `marketing.retryOnly.imageOnly`／`.textOnly`（新增） | 只重做配圖／只重做文案                                                                           | Redo visual only／Redo copy only                                                                    |
+| `marketing.partialFailed.image`／`.text`（新增）     | 配圖（文案）沒有成功（{reason}）。…請按「換一張圖」（「重寫文案」）。                            | The visual (copy) did not succeed ({reason})…                                                       |
+| `taskCenter.imageCompleted`（新增）                  | 已完成・結果不會自動存入圖庫，請在圖生圖頁按「存入圖庫」                                         | Completed · Results are not saved automatically…                                                    |
+| `taskCenter.notePrimary`（改）                       | 完成的影片會自動存入圖庫›影片，離開頁面不影響影片生成；圖生圖請留在頁面上等結果。                | …does not interrupt video generation. For images, stay on the page until the results appear.        |
 
 **i18n 對齊檢查**：vue-tsc 不比對兩個語系檔的 key，改用下面這行（在前端根目錄執行）。改動前的基準是 zh-Hant 獨有 8 個 `editor.retouch.*` 鍵（既有問題，不在本 change 範圍）、en 獨有 0 個；改動後必須完全等於這個基準。
 
@@ -181,7 +194,10 @@ node --experimental-strip-types --input-type=module -e "const f=(o,p='')=>Object
 
 - [R2 暫存網址的 CORS 白名單只有 `http://localhost:5173`] → 開發環境可真的下載；另開的 :5174 與未加白名單的正式網域會退化成開新分頁（仍記一次 downloaded）。上線前要把正式網域加進 R2 CORS。
 - [`crypto.randomUUID()` 只能在 https 或 localhost 使用] → 上線環境必須是 https；否則要補 fallback。
-- [409 仍可能收尾] 第一發在後端以 5xx 收尾（已退點、佔位 300 秒才過期），或第一發被內容審核擋下而回應遺失 → 顯示後端訊息「前一次相同的請求還在處理中」，使用者再按一次是新的 key。發生機率低，只記錄。
+- [409 仍可能收尾] 第一發在後端以 5xx 收尾（已退點、佔位 300 秒才過期），或第一發被內容審核擋下而回應遺失 → 顯示後端訊息「前一次相同的請求還在處理中」；409 等到期限算結果不確定，key 留在 `openKeys`，同一份輸入在佔位 300 秒內再按仍會看到 409，之後同一把 key 會重新執行。發生機率低，只記錄。
+- [`CONTENT_BLOCKED` 後原樣再按一次會再扣] 後端對審核擋下保留佔位不放 key（`_KEEP_THE_KEY`），但前端照「4xx 結果已確定」換新 key → 一字不改再送會再扣一次。沿用 key 的話會在 120 秒內一直等 409、最後顯示「還在處理中」，比再扣一次更難懂；改描述本來就是新的操作。之後若要擋，`isSettledFailure` 排除 `CONTENT_BLOCKED` 並另給 409 的訊息。
+- [codex #2：202 的 generationId 沒有持久化] 重新整理、關分頁或輪詢逾時之後，就拿不回已扣點的結果 → 根治要做生成紀錄頁，需要後端提供列表端點或前端持久化 pending id，屬於產品決策；目前靠生成中離開前的確認減輕。
+- [codex #4：前端沒保留 `expiresAt`] 結果只存在元件狀態、離開頁面就消失，所以 24 小時到期在同一個頁面生命週期內實際上碰不到；過期後存入會拿到後端 400，錯誤訊息照樣顯示 → 之後有生成紀錄頁（結果跨頁面留存）時再保留 `expiresAt`、到期前停用存入。
 - [生成中離開頁面] 同步等待（最多 80 秒）與 202 輪詢期間離開，promise 仍在背景跑完、後端照樣結清，但結果只在頁面元件裡，沒有地方看（後端不會自動存進圖庫，也沒有生成紀錄頁）→ 兩頁以 `onBeforeRouteLeave`＋`beforeunload` 在生成中先確認（用原生 `window.confirm`，沒有另做對話框）；任務中心的圖生圖任務不再說「已存入圖庫」、拿掉「查看」與假的剩餘秒數。確認離開仍拿不到結果，要根治得做生成紀錄頁。
 - [「文案＋配圖」時文案要等配圖] `Promise.allSettled` 等兩支都定案，配圖 202 時文案最久等 11 分鐘 → 刻意接受；要文案先出來得讓 `generatePost` 分兩段回傳。
 - [後端值域錯誤只有籠統訊息] prompt 前端上限 500、後端 2000（AI 擴寫可能超過 500 但仍合法）→ 前端擋下「描述只有空白」「種子負數或小數」「換一張圖／重寫文案時欄位已清空」；重新生成時描述被清空仍會送出（後端回值域錯），不另處理。
@@ -190,7 +206,7 @@ node --experimental-strip-types --input-type=module -e "const f=(o,p='')=>Object
 - [換帳號後餘額殘留、`onMounted` 的 `feed.refresh()` 沒有 catch] 既有問題 → 記錄，不在範圍。
 - [用量頁「剩餘」寫死 1,240] 接上 `/feeds` 後與右上角真餘額不一致 → 記錄，用量頁不在範圍。
 - [反向代理讀取逾時] nginx `proxy_read_timeout` 預設 60 秒短於後端 80 秒 → 閘道吐的 HTML 5xx（沒有 `requestId`）已改成同 key 重送，後端還在跑時拿 409 等回放，不會雙扣；但每次多等一輪，上線前仍要確認正式環境 ≥ 100 秒（設定不在兩個 repo 裡）。
-- [價格沒載入仍能送出] 已改成所選檔位沒有價格時生成鈕停用、預估顯示「…」（行銷頁同理），避免畫面標 0 顆、後端照價扣點。
+- [價格沒載入仍能送出] 已改成所選檔位沒有價格時生成鈕停用、預估顯示「…」（行銷頁同理），避免畫面標 0 顆、後端照價扣點。行銷頁每個輸出類型只要求自己用到的單價（「只要文案」只看 `marketingText`、「只要配圖」只看 `marketingImage`）；後端沒回傳（`enabled=false`）的那一支，用到它的輸出類型卡片停用。沒有自動改選：預設的「文案＋配圖」若被停用，主按鈕停用，使用者要自己點可用的卡片。
 - [`ALREADY_SAVED` 時拿不到素材 id] 回應遺失後再按一次，後端只回「已存過」→ `savedAssetId` 填 `'unknown'`，畫面只看它有沒有值；之後若要用到素材 id，改成重新查圖庫。
 - [real 模式其他功能扣的是 mock 餘額] 修圖、加物件、圖生影、試穿仍從 `...mockApi` 繼承，扣的是 mock 的假餘額，右上角讀的是真 `GET /feeds` → 兩邊數字不會連動，mock 餘額耗盡時會跳「飼料不足」而真餘額充足。這些功能不在本 change 範圍，接上各自後端時一併消失；在那之前只記錄。
 - [後端分支未合併] `feat/mv-07-metrics` 比 main 多 72 個 commit，後端合併內容一改就要重跑測試與驗收。

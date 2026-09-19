@@ -846,6 +846,43 @@ describe('POST /generate', () => {
     expect(a).not.toBe(b)
   })
 
+  const backendError = (status: number, code: string) => ({
+    status,
+    data: { code, message: code, fieldErrors: null, requestId: 'req_1' },
+  })
+  it.each<{ name: string; first: Reply; reuse: boolean }>([
+    { name: '逾時用完重送次數', first: { error: 'timeout' }, reuse: true },
+    { name: '未知的 500（INTERNAL_ERROR）', first: backendError(500, 'INTERNAL_ERROR'), reuse: true },
+    { name: '4xx（402 飼料不足）', first: backendError(402, 'INSUFFICIENT_FEEDS'), reuse: false },
+    { name: '已釋放預留的 5xx（502 UPSTREAM_ERROR）', first: backendError(502, 'UPSTREAM_ERROR'), reuse: false },
+    { name: '成功', first: GEN_OK, reuse: false },
+  ])('$name 之後同一份輸入再按一次：沿用 key＝$reuse', async ({ name, first, reuse }) => {
+    // 前一發結果不確定時換新 key，後端若已扣點就會再扣一次
+    const req = { ...GEN_REQ, prompt: `沿用：${name}` }
+    // 逾時會自動重送到 3 次才丟錯，其他錯誤第一次就丟
+    const calls = stubRoutes({ '/generate': [...Array(first.error ? 3 : 1).fill(first), GEN_OK] })
+
+    const p = realApi.generateImages(req).catch(() => undefined)
+    await vi.advanceTimersByTimeAsync(2 * 5000)
+    await p
+    await realApi.generateImages(req)
+
+    const keys = keysOf(calls)
+    expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/)
+    expect(keys.at(-1) === keys[0]).toBe(reuse)
+  })
+
+  it('輸入不同就是新的操作：前一發結果不確定也不沿用它的 key', async () => {
+    const req = { ...GEN_REQ, prompt: '輸入 A' }
+    const calls = stubRoutes({ '/generate': [backendError(500, 'INTERNAL_ERROR'), GEN_OK] })
+
+    await realApi.generateImages(req).catch(() => undefined)
+    await realApi.generateImages({ ...req, prompt: '輸入 B' })
+
+    const [a, b] = keysOf(calls)
+    expect(a).not.toBe(b)
+  })
+
   it('402 不重送，把錯誤往上丟', async () => {
     const calls = stubRoutes({
       '/generate': {

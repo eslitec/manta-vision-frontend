@@ -209,6 +209,7 @@ export default {
     changeImage: '換一張圖',
     copyText: '複製文案',
     rewrite: '重寫文案',
+    retryOnly: { imageOnly: '只重做配圖', textOnly: '只重做文案' },
     partialFailed: {
       image: '配圖沒有成功（{reason}）。文案已完成，只重做配圖請按「換一張圖」。',
       text: '文案沒有成功（{reason}）。配圖已完成，只重寫文案請按「重寫文案」。',

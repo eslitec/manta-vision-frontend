@@ -5,7 +5,7 @@
     .step
       .step__title {{ t('marketing.outputType.title') }}
       .outputTypes
-        button.outputTypeCard(v-for="o in outputTypeOptions" :key="o.value" :aria-pressed="outputType === o.value" :class="{ isActive: outputType === o.value }" @click="outputType = o.value")
+        button.outputTypeCard(v-for="o in outputTypeOptions" :key="o.value" :aria-pressed="outputType === o.value" :class="{ isActive: outputType === o.value }" :disabled="typeof o.cost !== 'number'" @click="outputType = o.value")
           span.outputTypeCard__label {{ o.label }}
           span.outputTypeCard__cost
             IconFeedBottleSmall.outputTypeCard__icon
@@ -55,9 +55,9 @@
           button.cost__feedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true")
             IconFeedBottleSmall.cost__icon
           span {{ t('units.feed', { count: outputTypeCost }) }}
-      AppButton(:disabled="generating || !canGenerate" @click="generate()")
+      AppButton(:disabled="generating || !canGenerate" @click="generate(retryHalf)")
         component(:is="generating ? IconLoader : IconAddObject" :class="{ spin: generating }")
-        span {{ generating ? t('common.generating') : t('marketing.generate') }}
+        span {{ generating ? t('common.generating') : retryHalf ? t(`marketing.retryOnly.${retryHalf}`) : t('marketing.generate') }}
 
   section.panel.post__result
     h2.result__title {{ t('common.generationResult') }}
@@ -91,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useEventListener } from '@vueuse/core'
@@ -105,7 +105,7 @@ import { useFeedStore } from '@/stores/feed'
 import { api } from '@/api'
 import { displayMessage, isInsufficientFeed } from '@/utils/error'
 import { downloadFile } from '@/utils/download'
-import { mergePost } from '@/utils/generation'
+import { mergePost, retryTarget } from '@/utils/generation'
 import type { Asset, GeneratedPost, Inspiration, PostOutputType } from '@/types/api'
 
 const router = useRouter()
@@ -132,11 +132,11 @@ const copied = ref(false)
 const outputType = ref<PostOutputType>('both')
 const wantImage = computed(() => outputType.value !== 'textOnly')
 const wantText = computed(() => outputType.value !== 'imageOnly')
+// 只看這個類型用得到的單價：後端停用（沒回傳）的那一支沒有價格，只有用到它的類型停用
 function costOf(type: PostOutputType): number | '…' {
-  const img = prices.value.marketingImage
-  const txt = prices.value.marketingText
-  if (img === undefined || txt === undefined) return '…'
-  return (type !== 'textOnly' ? img : 0) + (type !== 'imageOnly' ? txt : 0)
+  const img = type === 'textOnly' ? 0 : prices.value.marketingImage
+  const txt = type === 'imageOnly' ? 0 : prices.value.marketingText
+  return img === undefined || txt === undefined ? '…' : img + txt
 }
 const outputTypeOptions = computed(() =>
   (['both', 'textOnly', 'imageOnly'] as const).map((value) => ({
@@ -145,14 +145,17 @@ const outputTypeOptions = computed(() =>
     cost: costOf(value),
   })),
 )
-const outputTypeCost = computed(() => costOf(outputType.value))
-// 主按鈕看目前選的類型；「換一張圖」「重寫文案」各看自己那一半（欄位被清空時擋在前端，後端只會回籠統的值域錯）。
+// 「文案＋配圖」只成功一半時，主按鈕只重做失敗的那一半（已成功的那半不再扣點）；改任何輸入或輸出類型就回到照所選類型
+const retryHalf = ref<'imageOnly' | 'textOnly'>()
+const mainTarget = computed(() => retryHalf.value ?? outputType.value)
+const outputTypeCost = computed(() => costOf(mainTarget.value))
+// 主按鈕看 mainTarget；「換一張圖」「重寫文案」各看自己那一半（欄位被清空時擋在前端，後端只會回籠統的值域錯）。
 // 價格沒載入（顯示「…」）也不給送：畫面沒有標價，後端照樣扣點
 const canGenerateFor = (type: PostOutputType) =>
   typeof costOf(type) === 'number' &&
   (type === 'textOnly' || (!!productImage.value && !!posterText.value.trim())) &&
   (type === 'imageOnly' || !!intro.value.trim())
-const canGenerate = computed(() => canGenerateFor(outputType.value))
+const canGenerate = computed(() => canGenerateFor(mainTarget.value))
 
 // 生成中離開頁面，結果只活在這個元件裡、卸載就沒了，後端卻照樣結清飼料
 onBeforeRouteLeave(() => !generating.value || window.confirm(t('common.leaveWhileGenerating')))
@@ -186,6 +189,10 @@ const ratios = computed(() => [
   { v: '9:16', label: '9:16', desc: t('marketing.ratios.story'), ar: '9 / 16' },
 ])
 const ratio = ref('1:1')
+// 改任何輸入或輸出類型：主按鈕回到照所選類型兩半重做（retryHalf 的說明在上面）
+watch([outputType, productImage, intro, posterText, inspirationId, applyBrand, ratio], () => {
+  retryHalf.value = undefined
+})
 const aspect = computed(() => ratios.value.find((r) => r.v === ratio.value)?.ar ?? '1 / 1')
 
 const goBrandSettings = () => router.push('/settings')
@@ -216,7 +223,8 @@ async function generate(only?: 'imageOnly' | 'textOnly') {
     })
     if (!result.value || !only) resultType.value = only ?? outputType.value
     result.value = mergePost(result.value, next, only)
-    // 只成功一半：點名失敗的是哪一半，引導去按那一欄自己的重試鈕（主按鈕會兩半重做、已成功的那半再扣一次）
+    retryHalf.value = retryTarget(retryHalf.value, next, only)
+    // 只成功一半：點名失敗的是哪一半（主按鈕與那一欄的重試鈕都只重做那一半）
     if (next.partialError)
       errorMsg.value = t(next.poster ? 'marketing.partialFailed.text' : 'marketing.partialFailed.image', {
         reason: failText(next.partialError),
@@ -417,6 +425,10 @@ async function copyText() {
     width: 0.6875rem;
     height: 0.6875rem;
     flex-shrink: 0;
+  }
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
   }
   &.isActive {
     background: $white;
