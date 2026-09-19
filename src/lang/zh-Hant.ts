@@ -231,7 +231,7 @@ export default {
     assistHint: '把白話需求擴寫成完整 prompt',
     advancedSettings: '進階設定（參考強度・負面提示・種子）',
     referenceStrength: '參考強度',
-    strengthHint: '越高越貼近參考圖，越低 AI 自由發揮空間越大',
+    strengthHint: '越高越貼近參考圖，越低越照描述生成；描述和參考圖無關時請調低',
     referenceRequired: '（需先選參考圖）',
     negativePrompt: '負面提示',
     negativePlaceholder: '模糊、變形手指、雜亂背景',

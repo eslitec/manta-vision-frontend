@@ -66,3 +66,4 @@
 - [x] 6.4 design.md「Risks / Trade-offs」記錄不修的兩條與一條取捨：codex #2（202 的 generationId 沒有持久化）、codex #4（前端沒保留 `expiresAt`）、`CONTENT_BLOCKED` 後原樣再按一次會再扣；每條寫明原因與之後的升級做法
 - [x] 6.5 收尾驗證：`npx vitest run` 0 failed、`npx vue-tsc --noEmit`、`npm run lint`、`npx prettier --check` 本組改動檔皆 exit 0，i18n 對齊檢查等於基準，`spectra validate generation-real-backend` valid，`spectra analyze generation-real-backend` 的 Coverage、Consistency、Gaps 為 0
 - [x] 6.6 對齊 Requirement「換一張圖與重寫文案只重做對應的一半」：生成途中改了輸入或輸出類型時，回應回來不再把主按鈕設成只重做一半（`MarketingPostView.vue` 以 `inputVersion` 比對送出前後；`resultType` 改用送出時的類型 `sentType`）。驗證：mock 煙霧 `smoke-retry2.mjs`「生成途中改輸入：配圖失敗後主按鈕仍是『產生貼文』」通過（15/15），拿掉版本比對時該案例變紅（主按鈕變成「只重做配圖」），還原後全綠
+- [x] 6.7 對齊 Requirement「圖生圖請求以參考圖為必要條件並使用後端欄位」：參考強度預設值由 0.5 改為 0.3（送 `strength` 0.7），`image.strengthHint` 兩份語系檔補上「描述和參考圖無關時請調低」；原因記在 design.md Open Questions。驗證：`npx vitest run` 0 failed、`npx vue-tsc --noEmit`、`npm run lint` 通過，dev server 供出的 `GenerateImageView.vue` 含 `DEFAULT_REFERENCE_STRENGTH = 0.3`

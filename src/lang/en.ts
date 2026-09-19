@@ -253,7 +253,8 @@ export default {
     assistHint: 'Expand a simple request into a complete prompt',
     advancedSettings: 'Advanced settings (reference strength, negative prompt, seed)',
     referenceStrength: 'Reference strength',
-    strengthHint: 'Higher stays closer to the reference; lower gives the AI more creative freedom',
+    strengthHint:
+      'Higher stays closer to the reference; lower follows your description more. Turn it down when the description is unrelated to the reference',
     referenceRequired: ' (select a reference first)',
     negativePrompt: 'Negative prompt',
     negativePlaceholder: 'Blurry, deformed fingers, messy background',
