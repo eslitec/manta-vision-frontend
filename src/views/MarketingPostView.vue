@@ -56,7 +56,7 @@
     template(v-else)
       .visuallyHidden(role="status" aria-live="polite") {{ t('common.generationResult') }}
       .postresult
-        .postresult__col(v-if="result.posterUrl")
+        .postresult__col(v-if="result.poster")
           .poster(:class="{ isPortrait: ratio === '9:16' }" :style="{ aspectRatio: aspect }")
             IconImagePlaceholder
           .postresult__act
@@ -129,7 +129,7 @@ const ratio = ref('1:1')
 const aspect = computed(() => ratios.value.find((r) => r.v === ratio.value)?.ar ?? '1 / 1')
 
 const goBrandSettings = () => router.push('/settings')
-const copyLines = computed(() => (result.value ? result.value.copy.split('\n\n') : []))
+const copyLines = computed(() => result.value?.copy?.split('\n\n') ?? [])
 const onPick = (a: Asset) => {
   productImage.value = a
 }
@@ -140,9 +140,9 @@ async function generate() {
   copied.value = false
   try {
     result.value = await api.generatePost({
-      productImageId: productImage.value?.id,
-      intro: intro.value,
-      applyBrand: applyBrand.value,
+      imageId: productImage.value?.id,
+      productDesc: intro.value,
+      useBrand: applyBrand.value,
       ratio: ratio.value, // 版位比例一併送給後端，影響構圖
       outputType: outputType.value,
     })
@@ -154,12 +154,12 @@ async function generate() {
   }
 }
 function downloadPoster() {
-  // TODO: 後端回傳 posterUrl 後觸發實際下載
-  if (result.value?.posterUrl) window.open(result.value.posterUrl, '_blank')
+  // TODO: 後端回傳 poster.url 後觸發實際下載
+  if (result.value?.poster?.url) window.open(result.value.poster.url, '_blank')
 }
 async function copyText() {
   if (!result.value) return
-  const text = result.value.copy + '\n\n' + result.value.hashtags.join(' ')
+  const text = (result.value.copy ?? '') + '\n\n' + result.value.hashtags.join(' ')
   try {
     await navigator.clipboard.writeText(text)
     copied.value = true

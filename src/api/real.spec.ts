@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AxiosAdapter, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { http } from './http'
+import { mockApi } from './mock'
 import { realApi } from './real'
+import type { GenerateImageReq, GeneratePostReq } from '@/types/api'
 
 // 跟 http.spec.ts 一樣用假 adapter 取代網路，但這裡關心的是**上一層**：
 // 送出去的 URL 與 body 對不對、後端的回應有沒有被正確翻成 Session。
@@ -11,10 +13,20 @@ interface Recorded {
   body: unknown
   method?: string
   params?: unknown
+  headers?: Record<string, unknown>
+  timeout?: number
+  /** 原始 body（字串）：後端比對的是 body 的 bytes，重送時要逐字相同 */
+  raw?: unknown
 }
 
-/** 依 URL 回傳對應的假回應；同時記下每一次請求，供斷言檢查。 */
-function stubRoutes(routes: Record<string, { status?: number; data: unknown }>) {
+/** error：請求沒送達（不帶 response），讓 toApiError 翻成 TIMEOUT／NETWORK_ERROR */
+type Reply = { status?: number; data?: unknown; error?: 'timeout' | 'network' }
+
+/**
+ * 依 URL 回傳對應的假回應；同時記下每一次請求，供斷言檢查。
+ * 給陣列時依序回應，用到最後一個就一直重複它。
+ */
+function stubRoutes(routes: Record<string, Reply | Reply[]>) {
   const calls: Recorded[] = []
 
   const adapter: AxiosAdapter = async (config: AxiosRequestConfig) => {
@@ -24,10 +36,21 @@ function stubRoutes(routes: Record<string, { status?: number; data: unknown }>) 
       method: config.method,
       params: config.params,
       body: typeof config.data === 'string' ? JSON.parse(config.data) : config.data,
+      headers: JSON.parse(JSON.stringify(config.headers ?? {})),
+      timeout: config.timeout,
+      raw: config.data,
     })
 
-    const route = routes[url]
+    const entry = routes[url]
+    const route = Array.isArray(entry) ? (entry.length > 1 ? entry.shift() : entry[0]) : entry
     if (!route) throw new Error(`測試沒有為 ${url} 準備回應`)
+
+    if (route.error) {
+      const error = new Error(route.error) as Error & { isAxiosError: boolean; code?: string }
+      error.isAxiosError = true
+      if (route.error === 'timeout') error.code = 'ECONNABORTED'
+      throw error
+    }
 
     const response = {
       status: route.status ?? 200,
@@ -170,13 +193,29 @@ describe('logout', () => {
 describe('尚未接上的方法', () => {
   it('後端還沒實作的端點沿用假資料，不會是 undefined', async () => {
     // realApi 是 { ...mockApi, login, register, logout, ... }。這個測試釘住那個
-    // 展開——有人把它拿掉的話，整站會在執行期才炸「api.listModels is not a
+    // 展開——有人把它拿掉的話，整站會在執行期才炸「api.editImage is not a
     // function」，而不是在這裡。
-    expect(typeof realApi.listModels).toBe('function')
-    expect(typeof realApi.getFeed).toBe('function')
-    // 圖庫「編輯產物」與生成結果存檔目前後端沒有對應端點，仍然吃假資料
+    // 圖庫「編輯產物」與試穿目前後端沒有對應端點，仍然吃假資料
     expect(typeof realApi.editImage).toBe('function')
-    expect(typeof realApi.saveGenerated).toBe('function')
+    expect(typeof realApi.tryOn).toBe('function')
+  })
+
+  it('已接上的方法不是 mock 的那一份', () => {
+    // 有人把方法從 realApi 拿掉時，`...mockApi` 會默默補上假資料——這裡會變紅
+    expect(realApi.getFeed).not.toBe(mockApi.getFeed)
+    expect(realApi.listModels).not.toBe(mockApi.listModels)
+    expect(realApi.enhancePrompt).not.toBe(mockApi.enhancePrompt)
+    expect(realApi.generateImages).not.toBe(mockApi.generateImages)
+    expect(realApi.generatePost).not.toBe(mockApi.generatePost)
+    expect(realApi.saveGenerated).not.toBe(mockApi.saveGenerated)
+    expect(realApi.recordAdoption).not.toBe(mockApi.recordAdoption)
+    expect(realApi.listInspirations).not.toBe(mockApi.listInspirations)
+  })
+
+  it('儲值在真後端模式明確停用（TopUpDialog 走「不支援」分支）', () => {
+    expect(realApi.topUpFeed).toBeUndefined()
+    // 證明不是 mock 本來就沒有這支
+    expect(typeof mockApi.topUpFeed).toBe('function')
   })
 })
 
@@ -539,5 +578,410 @@ describe('內建素材（materials）', () => {
 
     expect(calls[0].params).toEqual({ category: 'background' })
     expect(calls[1].params).toBeUndefined()
+  })
+})
+
+// ── 飼料、模型價格、輔助描述 ──
+
+describe('GET /feeds', () => {
+  it('只取 balance', async () => {
+    const calls = stubRoutes({
+      '/feeds': { data: { balance: 1224, monthlyLimit: null, monthUsed: 0, estImages: 153, estVideos: 27 } },
+    })
+
+    const feed = await realApi.getFeed()
+
+    expect(calls[0].url).toBe('/feeds')
+    expect(feed).toEqual({ balance: 1224 })
+  })
+})
+
+describe('GET /ai-models', () => {
+  it('帶 modelType 查詢並原樣回傳 items', async () => {
+    const items = [{ modelKey: 'imageStandard', name: '標準', modelType: 'image', costFeeds: 8 }]
+    const calls = stubRoutes({ '/ai-models': { data: { items } } })
+
+    const models = await realApi.listModels('image')
+
+    expect(calls[0].params).toEqual({ modelType: 'image' })
+    expect(models).toEqual(items)
+  })
+})
+
+describe('POST /prompt/enhance', () => {
+  it('送 target=image，回 enhancedPrompt，不帶 Idempotency-Key', async () => {
+    const calls = stubRoutes({ '/prompt/enhance': { data: { enhancedPrompt: '白T放木桌上，自然光' } } })
+
+    const out = await realApi.enhancePrompt('白T')
+
+    expect(calls[0].body).toEqual({ target: 'image', prompt: '白T' })
+    expect(calls[0].headers?.['Idempotency-Key']).toBeUndefined()
+    expect(calls[0].timeout).toBe(40000)
+    expect(out).toBe('白T放木桌上，自然光')
+  })
+})
+
+// ── 付費生成：冪等鍵、重送、202 輪詢 ──
+
+const GEN_REQ: GenerateImageReq = {
+  modelKey: 'imageStandard',
+  imageId: 'img_1',
+  prompt: '白T',
+  count: 2,
+  useBrand: false,
+}
+const WIRE_RESULT = {
+  resultId: 'res_1',
+  tempUrl: 'https://r2.example.com/results/bot_1/a.png',
+  expiresAt: '2026-01-02T00:00:00Z',
+  seed: 1,
+}
+const GEN_OK = {
+  data: { generationId: 'gen_1', results: [WIRE_RESULT], durationMs: 4210, costFeeds: 16, balance: 1224 },
+}
+const PENDING = { status: 202, data: { generationId: 'gen_1', status: 'processing', pollAfterMs: 5000 } }
+const PROCESSING = {
+  data: {
+    generationId: 'gen_1',
+    type: 'generate',
+    status: 'processing',
+    results: [],
+    durationMs: null,
+    costFeeds: 16,
+    balance: 1224,
+  },
+}
+const DONE = { data: { ...PROCESSING.data, status: 'done', results: [WIRE_RESULT], durationMs: 90000 } }
+const FAILED = { data: { ...PROCESSING.data, status: 'failed' } }
+const CONFLICT = {
+  status: 409,
+  data: {
+    code: 'IDEMPOTENCY_IN_PROGRESS',
+    message: '前一次相同的請求還在處理中，請稍候',
+    fieldErrors: null,
+    requestId: 'r',
+  },
+}
+const GENERATED = [{ id: 'res_1', generationId: 'gen_1', url: WIRE_RESULT.tempUrl, adopted: false }]
+const keysOf = (calls: Recorded[]) => calls.map((c) => c.headers?.['Idempotency-Key'])
+
+describe('POST /generate', () => {
+  it('200：body 用後端欄位名、帶 Idempotency-Key、timeout 100 秒，結果翻成 GeneratedImage', async () => {
+    const calls = stubRoutes({ '/generate': GEN_OK })
+
+    const res = await realApi.generateImages(GEN_REQ)
+
+    expect(calls[0].body).toEqual(GEN_REQ)
+    expect(calls[0].headers?.['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/)
+    expect(calls[0].timeout).toBe(100000)
+    expect(res).toEqual(GENERATED)
+  })
+
+  it('202 → 每 pollAfterMs 輪詢 GET /generations/{id} 直到 done，不會再送 /generate', async () => {
+    const calls = stubRoutes({ '/generate': PENDING, '/generations/gen_1': [PROCESSING, DONE] })
+
+    const p = realApi.generateImages(GEN_REQ)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(calls.map((c) => c.url)).toEqual(['/generate', '/generations/gen_1'])
+    await vi.advanceTimersByTimeAsync(5000)
+
+    await expect(p).resolves.toEqual(GENERATED)
+    expect(calls.filter((c) => c.url === '/generate')).toHaveLength(1)
+  })
+
+  it('輪詢到 failed → GENERATION_FAILED', async () => {
+    stubRoutes({ '/generate': PENDING, '/generations/gen_1': FAILED })
+
+    const assertion = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({ code: 'GENERATION_FAILED' })
+    await vi.advanceTimersByTimeAsync(5000)
+
+    await assertion
+  })
+
+  it('輪詢超過 11 分鐘仍 processing → GENERATION_STILL_PROCESSING 並停止輪詢', async () => {
+    const calls = stubRoutes({ '/generate': PENDING, '/generations/gen_1': PROCESSING })
+
+    const assertion = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({
+      code: 'GENERATION_STILL_PROCESSING',
+      message: expect.stringContaining('gen_1'),
+    })
+    await vi.advanceTimersByTimeAsync(12 * 60_000)
+    await assertion
+
+    const n = calls.length
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(calls).toHaveLength(n)
+  })
+
+  it('輪詢遇到 5xx（代理吐的 HTML 502）繼續等下一輪', async () => {
+    const calls = stubRoutes({
+      '/generate': PENDING,
+      '/generations/gen_1': [{ status: 502, data: '<html>bad gateway</html>' }, DONE],
+    })
+
+    const p = realApi.generateImages(GEN_REQ)
+    await vi.advanceTimersByTimeAsync(2 * 5000)
+
+    await expect(p).resolves.toEqual(GENERATED)
+    expect(calls.filter((c) => c.url === '/generate')).toHaveLength(1)
+  })
+
+  it('逾時後自動重送沿用同一把 key 與同一份 body', async () => {
+    const calls = stubRoutes({ '/generate': [{ error: 'timeout' }, GEN_OK] })
+
+    const p = realApi.generateImages(GEN_REQ)
+    await vi.advanceTimersByTimeAsync(5000)
+
+    await expect(p).resolves.toEqual(GENERATED)
+    expect(calls).toHaveLength(2)
+    expect(calls[1].headers?.['Idempotency-Key']).toBe(calls[0].headers?.['Idempotency-Key'])
+    expect(calls[1].raw).toBe(calls[0].raw)
+  })
+
+  it('409 IDEMPOTENCY_IN_PROGRESS 也用同一把 key 重送', async () => {
+    const calls = stubRoutes({ '/generate': [CONFLICT, GEN_OK] })
+
+    const p = realApi.generateImages(GEN_REQ)
+    await vi.advanceTimersByTimeAsync(5000)
+
+    await expect(p).resolves.toEqual(GENERATED)
+    expect(calls).toHaveLength(2)
+    expect(new Set(keysOf(calls)).size).toBe(1)
+  })
+
+  it('斷線後 409 持續 60 秒才回 GEN_OK，仍然 resolve，而且只用一把 key', async () => {
+    // 回應在路上遺失、後端還要跑一陣子：409 若算進 3 次上限，這條會紅
+    const calls = stubRoutes({ '/generate': [{ error: 'network' }, ...Array(12).fill(CONFLICT), GEN_OK] })
+
+    const p = realApi.generateImages(GEN_REQ)
+    await vi.advanceTimersByTimeAsync(13 * 5000)
+
+    await expect(p).resolves.toEqual(GENERATED)
+    expect(calls).toHaveLength(14)
+    expect(new Set(keysOf(calls)).size).toBe(1)
+  })
+
+  it('409 一直持續到期限（第一次送出後 120 秒）才放棄', async () => {
+    const calls = stubRoutes({ '/generate': CONFLICT })
+
+    const assertion = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({ code: 'IDEMPOTENCY_IN_PROGRESS' })
+    await vi.advanceTimersByTimeAsync(125_000)
+    await assertion
+
+    const n = calls.length
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(calls).toHaveLength(n)
+  })
+
+  it('兩次呼叫（＝兩次點擊）用不同的 key', async () => {
+    const calls = stubRoutes({ '/generate': GEN_OK })
+
+    await realApi.generateImages(GEN_REQ)
+    await realApi.generateImages(GEN_REQ)
+
+    const [a, b] = keysOf(calls)
+    expect(a).toMatch(/^[0-9a-f-]{36}$/)
+    expect(b).toMatch(/^[0-9a-f-]{36}$/)
+    expect(a).not.toBe(b)
+  })
+
+  it('402 不重送，把錯誤往上丟', async () => {
+    const calls = stubRoutes({
+      '/generate': {
+        status: 402,
+        data: { code: 'INSUFFICIENT_FEEDS', message: '飼料不足', fieldErrors: null, requestId: 'r' },
+      },
+    })
+
+    const assertion = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({ code: 'INSUFFICIENT_FEEDS' })
+    await vi.advanceTimersByTimeAsync(20_000)
+    await assertion
+
+    expect(calls).toHaveLength(1)
+  })
+
+  it('連續逾時 3 次就放棄，丟 TIMEOUT', async () => {
+    const calls = stubRoutes({ '/generate': { error: 'timeout' } })
+
+    const assertion = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({ code: 'TIMEOUT' })
+    await vi.advanceTimersByTimeAsync(2 * 5000)
+    await assertion
+
+    expect(calls).toHaveLength(3)
+    expect(new Set(keysOf(calls)).size).toBe(1)
+  })
+
+  it('重新生成帶 regenOf', async () => {
+    const calls = stubRoutes({ '/generate': GEN_OK })
+
+    await realApi.generateImages({ ...GEN_REQ, count: 1, regenOf: 'res_1' })
+
+    expect(calls[0].body).toMatchObject({ regenOf: 'res_1', count: 1 })
+  })
+})
+
+const POST_REQ: GeneratePostReq = {
+  outputType: 'both',
+  useBrand: true,
+  imageId: 'img_1',
+  posterText: '春季新品',
+  ratio: '1:1',
+  inspirationId: 'insp_1',
+  productDesc: '純棉透氣',
+}
+const IMG_OK = { data: { generationId: 'gen_img', results: [WIRE_RESULT], durationMs: 1, costFeeds: 5, balance: 1 } }
+const TEXT_OK = {
+  data: { generationId: 'gen_txt', caption: '春天新品', hashtags: ['#新品'], durationMs: 1, costFeeds: 0, balance: 1 },
+}
+const POSTER = { id: 'res_1', generationId: 'gen_img', url: WIRE_RESULT.tempUrl, adopted: false }
+const BLOCKED = {
+  status: 400,
+  data: {
+    code: 'CONTENT_BLOCKED',
+    message: '這段描述被內容政策擋下了，請修改後再試',
+    fieldErrors: null,
+    requestId: 'r',
+  },
+}
+
+describe('generatePost（行銷）', () => {
+  it.each([
+    { type: 'both', urls: ['/marketing/image', '/marketing/text'] },
+    { type: 'textOnly', urls: ['/marketing/text'] },
+    { type: 'imageOnly', urls: ['/marketing/image'] },
+  ] as const)('outputType=$type 只打對應的端點', async ({ type, urls }) => {
+    const calls = stubRoutes({ '/marketing/image': IMG_OK, '/marketing/text': TEXT_OK })
+
+    await realApi.generatePost({ ...POST_REQ, outputType: type })
+
+    expect(calls.map((c) => c.url).sort()).toEqual(urls)
+  })
+
+  it('image 與 text 的 body 各自只帶自己的欄位', async () => {
+    const calls = stubRoutes({ '/marketing/image': IMG_OK, '/marketing/text': TEXT_OK })
+
+    const post = await realApi.generatePost(POST_REQ)
+
+    const image = calls.find((c) => c.url === '/marketing/image')
+    const text = calls.find((c) => c.url === '/marketing/text')
+    expect(image?.body).toEqual({
+      imageId: 'img_1',
+      posterText: '春季新品',
+      ratio: '1:1',
+      inspirationId: 'insp_1',
+      useBrand: true,
+    })
+    expect(text?.body).toEqual({ productDesc: '純棉透氣', useBrand: true })
+    expect(image?.timeout).toBe(100000)
+    expect(text?.timeout).toBe(100000)
+    const [a, b] = keysOf([image, text].filter((c) => c !== undefined))
+    expect(a).toMatch(/^[0-9a-f-]{36}$/)
+    expect(b).toMatch(/^[0-9a-f-]{36}$/)
+    expect(a).not.toBe(b)
+    expect(post).toEqual({ poster: POSTER, copy: '春天新品', hashtags: ['#新品'] })
+  })
+
+  it('配圖 202 → 輪詢 marketingImage 取 results[0]；文案 202 → 輪詢 marketingText 取 caption／hashtags', async () => {
+    // 形狀照後端依 type 拔鍵後的樣子：配圖沒有 caption 鍵、文案沒有 results 鍵
+    stubRoutes({
+      '/marketing/image': { status: 202, data: { generationId: 'gen_img', status: 'processing', pollAfterMs: 5000 } },
+      '/marketing/text': { status: 202, data: { generationId: 'gen_txt', status: 'processing', pollAfterMs: 5000 } },
+      '/generations/gen_img': {
+        data: {
+          generationId: 'gen_img',
+          type: 'marketingImage',
+          status: 'done',
+          results: [WIRE_RESULT],
+          durationMs: 1,
+          costFeeds: 5,
+          balance: 1,
+        },
+      },
+      '/generations/gen_txt': {
+        data: {
+          generationId: 'gen_txt',
+          type: 'marketingText',
+          status: 'done',
+          caption: '春天新品',
+          hashtags: ['#新品'],
+          durationMs: 1,
+          costFeeds: 0,
+          balance: 1,
+        },
+      },
+    })
+
+    const p = realApi.generatePost(POST_REQ)
+    await vi.advanceTimersByTimeAsync(5000)
+
+    await expect(p).resolves.toEqual({ poster: POSTER, copy: '春天新品', hashtags: ['#新品'] })
+  })
+
+  it('只成功一半：回傳成功那一半＋partialError；兩半都失敗才 throw', async () => {
+    stubRoutes({ '/marketing/image': BLOCKED, '/marketing/text': TEXT_OK })
+    const half = await realApi.generatePost(POST_REQ)
+    expect(half.poster).toBeUndefined()
+    expect(half.copy).toBe('春天新品')
+    expect(half.partialError).toMatchObject({ code: 'CONTENT_BLOCKED' })
+
+    stubRoutes({ '/marketing/image': BLOCKED, '/marketing/text': BLOCKED })
+    await expect(realApi.generatePost(POST_REQ)).rejects.toMatchObject({ code: 'CONTENT_BLOCKED' })
+  })
+})
+
+describe('生成結果：存入圖庫／下載事件／靈感', () => {
+  it('saveGenerated 帶 generationId/resultId 打 /generations/{id}/save，回傳翻成 Asset', async () => {
+    const calls = stubRoutes({
+      '/generations/gen_1/save': { status: 201, data: { ...WIRE_IMAGE, source: 'aiGenerate' } },
+    })
+
+    const asset = await realApi.saveGenerated('圖生圖_x', { generationId: 'gen_1', resultId: 'res_1' })
+
+    expect(calls[0].body).toEqual({ resultId: 'res_1', imageName: '圖生圖_x' })
+    expect(calls[0].headers?.['Idempotency-Key']).toBeUndefined()
+    expect(asset).toMatchObject({ id: 'img_1', name: '春季主視覺_01', source: 'aiGenerate', url: WIRE_IMAGE.url })
+  })
+
+  it('saveGenerated 沒帶 from 時不打網路（試穿仍是假資料）', async () => {
+    const calls = stubRoutes({})
+
+    // 走 mockApi.saveGenerated，裡面有 delay(300)，而這個檔開了 fake timers
+    const p = realApi.saveGenerated('x')
+    await vi.advanceTimersByTimeAsync(300)
+    const asset = await p
+
+    expect(calls).toHaveLength(0)
+    expect(asset.source).toBe('aiGenerate')
+  })
+
+  it('recordAdoption 只送 downloaded 與 resultId', async () => {
+    const calls = stubRoutes({ '/generations/gen_1/events': { data: { recorded: true } } })
+
+    await realApi.recordAdoption({ generationId: 'gen_1', resultId: 'res_1' })
+
+    expect(calls[0].method).toBe('post')
+    expect(calls[0].body).toEqual({ event: 'downloaded', resultId: 'res_1' })
+    expect(calls[0].headers?.['Idempotency-Key']).toBeUndefined()
+  })
+
+  it('listInspirations 翻成 {id,name,url}', async () => {
+    stubRoutes({
+      '/inspirations': {
+        data: {
+          items: [
+            {
+              inspirationId: 'insp_1',
+              inspirationName: '極簡白底',
+              url: 'https://cdn.example.com/insp_1.png',
+              promptTemplate: '白底…',
+            },
+          ],
+        },
+      },
+    })
+
+    const items = await realApi.listInspirations()
+
+    expect(items).toEqual([{ id: 'insp_1', name: '極簡白底', url: 'https://cdn.example.com/insp_1.png' }])
   })
 })

@@ -28,11 +28,14 @@ export const API_ERROR_CODES = {
   DUPLICATE_NAME: 'DUPLICATE_NAME',
   FOLDER_LIMIT_EXCEEDED: 'FOLDER_LIMIT_EXCEEDED',
   ASSET_IN_USE: 'ASSET_IN_USE',
+  // 付費生成：同一把 Idempotency-Key 的前一發還在後端跑（real.ts 的 postPaid 靠它決定重送）
+  IDEMPOTENCY_IN_PROGRESS: 'IDEMPOTENCY_IN_PROGRESS',
 } as const
 
 /**
  * 純前端的錯誤碼——請求根本沒到後端，所以不會有後端的碼。
- * 刻意跟後端碼放在不同物件：這兩個永遠不會出現在 `docs/api.md` 的碼表裡。
+ * 也包含前端依輪詢結果合成的碼（GENERATION_*）。
+ * 刻意跟後端碼放在不同物件：這些碼永遠不會出現在 `docs/api.md` 的碼表裡。
  */
 export const CLIENT_ERROR_CODES = {
   /** 連不到伺服器（後端沒起來、網路斷了、CORS 被擋） */
@@ -41,6 +44,10 @@ export const CLIENT_ERROR_CODES = {
   TIMEOUT: 'TIMEOUT',
   /** 有回應但不是後端的統一格式（例如反向代理吐的 HTML 502） */
   UNEXPECTED_RESPONSE: 'UNEXPECTED_RESPONSE',
+  /** 202 之後輪詢到 status: failed */
+  GENERATION_FAILED: 'GENERATION_FAILED',
+  /** 輪詢超過上限仍是 processing（後端之後完成仍會結清飼料） */
+  GENERATION_STILL_PROCESSING: 'GENERATION_STILL_PROCESSING',
 } as const
 
 export type ApiErrorCode =

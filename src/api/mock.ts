@@ -1,5 +1,6 @@
 import type {
   AiModel,
+  AiModelType,
   AppliedEditTool,
   Asset,
   Bot,
@@ -12,9 +13,11 @@ import type {
   GeneratedPost,
   GenerateImageReq,
   GeneratePostReq,
+  GenerationRef,
   ImageCounts,
   ImageListQuery,
   ImageListResponse,
+  Inspiration,
   Material,
   MaterialListResponse,
   Metrics,
@@ -153,6 +156,8 @@ const db = {
   users: new Map<string, { password: string; displayName: string }>([
     [DEMO_USERNAME, { password: DEMO_PASSWORD, displayName: 'Mavis' }],
   ]),
+  // 已採用（存入圖庫或下載）的結果，key 為 generationId/resultId：模擬後端「同一張只算一次採用」
+  adoptedResults: new Set<string>(),
   jobs: new Map<
     string,
     { req: VideoJobReq; created: number; cost: number; failed?: boolean; failedChecked?: boolean }
@@ -167,11 +172,22 @@ const EDITOR_PRICING: EditorPricing = {
 }
 const COMMAND_RETOUCH_OPTIONS = ['lighting', 'upscale']
 
-// 行銷 PO 文輸出類型的飼料成本，對齊前端 MarketingPostView 的 OUTPUT_TYPE_OPTIONS 顯示顆數
-const POST_OUTPUT_TYPE_COST: Record<GeneratePostReq['outputType'], number> = {
-  both: 5,
-  textOnly: 2,
-  imageOnly: 3,
+// 價格對齊後端 ai_models（migration 20260910b／20260910c）；真後端一律讀 GET /ai-models
+const MOCK_MODELS: AiModel[] = [
+  { modelKey: 'imageStandard', name: '標準', modelType: 'image', costFeeds: 8 },
+  { modelKey: 'imageAdvanced', name: '進階', modelType: 'image', costFeeds: 12 },
+  { modelKey: 'imagePro', name: '專業', modelType: 'image', costFeeds: 24 },
+  { modelKey: 'marketingImage', name: '行銷海報圖', modelType: 'marketing', costFeeds: 5 },
+  { modelKey: 'marketingText', name: '行銷文案', modelType: 'marketing', costFeeds: 0 },
+]
+const priceOf = (modelKey: string) => MOCK_MODELS.find((m) => m.modelKey === modelKey)?.costFeeds
+
+// 後端的採用＝存入圖庫或下載過，同一張只算一次
+function markAdopted(from: GenerationRef) {
+  const key = `${from.generationId}/${from.resultId}`
+  if (db.adoptedResults.has(key)) return
+  db.adoptedResults.add(key)
+  db.adoptedGen += 1
 }
 
 function deduct(cost: number) {
@@ -273,17 +289,10 @@ function folderById(folderId: string): Folder | undefined {
 }
 
 export const mockApi = {
-  // GET /models
-  async listModels(): Promise<AiModel[]> {
+  // GET /ai-models（同類型由便宜到貴）
+  async listModels(modelType?: AiModelType): Promise<AiModel[]> {
     await delay(200)
-    return [
-      { id: 'nano-banana', name: 'Nano Banana', provider: 'Google Gemini 2.5 Flash Image', costPerImage: 4 },
-      { id: 'flux-1', name: 'FLUX.1', provider: 'Black Forest Labs', costPerImage: 8 },
-      { id: 'dalle-3', name: 'DALL·E 3', provider: 'OpenAI', costPerImage: 6 },
-      { id: 'sdxl', name: 'Stable Diffusion XL', provider: 'Stability AI', costPerImage: 3 },
-      { id: 'midjourney', name: 'Midjourney', provider: 'Midjourney v6', costPerImage: 8 },
-      { id: 'ideogram', name: 'Ideogram 2.0', provider: 'Ideogram', costPerImage: 5 },
-    ]
+    return MOCK_MODELS.filter((m) => !modelType || m.modelType === modelType)
   },
 
   // GET /feed
@@ -487,32 +496,47 @@ export const mockApi = {
     return base ? `${base}，${extras.join('、')}` : extras.join('、')
   },
 
-  // POST /generate/image
-  async generateImages(req: GenerateImageReq, costPerImage: number): Promise<GeneratedImage[]> {
-    const cost = costPerImage * req.count
-    deduct(cost)
-    db.totalGen += req.count
-    db.imgGen += req.count // 圖生圖才計入採用率分母
-    db.generatedThisMonth += req.count
-    db.successGen += req.count
+  // POST /generate（依 modelKey 單價扣點；帶 regenOf 時同後端一律只生一張）
+  async generateImages(req: GenerateImageReq): Promise<GeneratedImage[]> {
+    const price = priceOf(req.modelKey)
+    if (price === undefined) throw new Error('MODEL_NOT_ALLOWED')
+    const n = req.regenOf ? 1 : req.count
+    deduct(price * n)
+    db.totalGen += n
+    db.imgGen += n // 圖生圖才計入採用率分母
+    db.generatedThisMonth += n
+    db.successGen += n
     await delay(900)
-    return Array.from({ length: req.count }, () => ({ id: uid('g'), adopted: false }))
+    const generationId = uid('gen')
+    return Array.from({ length: n }, () => ({ id: uid('r'), generationId, url: '', adopted: false }))
   },
 
-  // POST /generate/post（依 outputType 分流回傳內容與扣款：文案＋配圖 5 顆／只要文案 2 顆／只要配圖 3 顆）
+  // POST /marketing/image＋POST /marketing/text（依 outputType 扣 marketingImage／marketingText 的價格）
   async generatePost(req: GeneratePostReq): Promise<GeneratedPost> {
-    const cost = POST_OUTPUT_TYPE_COST[req.outputType]
-    deduct(cost)
+    const wantImage = req.outputType !== 'textOnly'
+    const wantText = req.outputType !== 'imageOnly'
+    deduct((wantImage ? (priceOf('marketingImage') ?? 0) : 0) + (wantText ? (priceOf('marketingText') ?? 0) : 0))
     db.totalGen += 1
     db.generatedThisMonth += 1
     db.successGen += 1
     await delay(1000)
-    const tags = req.applyBrand ? db.brand.hashtags.slice(0, 3) : ['#新品', '#日常']
-    const copy =
-      '🌿 春天就是要換上最舒服的自己\n\n全新純棉系列，透氣不悶熱，五種溫柔色調任你搭配。現在下單享春夏限時 8 折，把好天氣穿在身上 ☀'
-    if (req.outputType === 'textOnly') return { copy, hashtags: tags }
-    if (req.outputType === 'imageOnly') return { posterUrl: 'mock://poster', copy: '', hashtags: [] }
-    return { posterUrl: 'mock://poster', copy, hashtags: tags }
+    const post: GeneratedPost = { hashtags: [] }
+    if (wantImage) post.poster = { id: uid('r'), generationId: uid('gen'), url: '', adopted: false }
+    if (wantText) {
+      post.copy =
+        '🌿 春天就是要換上最舒服的自己\n\n全新純棉系列，透氣不悶熱，五種溫柔色調任你搭配。現在下單享春夏限時 8 折，把好天氣穿在身上 ☀'
+      post.hashtags = req.useBrand ? db.brand.hashtags.slice(0, 3) : ['#新品', '#日常']
+    }
+    return post
+  },
+
+  // GET /inspirations
+  async listInspirations(): Promise<Inspiration[]> {
+    await delay(150)
+    return [
+      { id: 'insp_1', name: '極簡白底', url: '' },
+      { id: 'insp_2', name: '節慶紅金', url: '' },
+    ]
   },
 
   // POST /generate/video → 建立非同步任務；扣款依生成模型倍率（標準×1／進階×2／專業×4）
@@ -567,18 +591,20 @@ export const mockApi = {
     return { ok: true }
   },
 
-  // 存入圖庫（選用）→ 生成結果落地成 AI 生成素材，並記錄採用
-  async saveGenerated(name: string): Promise<Asset> {
+  // POST /generations/{id}/save → 生成結果落地成 AI 生成素材；同後端，存入圖庫本身就算採用。
+  // 沒帶 from（試穿，還沒有後端）只落地素材。
+  async saveGenerated(name: string, from?: GenerationRef): Promise<Asset> {
     await delay(300)
     const a: Asset = { id: uid('a'), name, source: 'aiGenerate', dim: '1024×768', type: 'image' }
     db.assets.unshift(a)
+    if (from) markAdopted(from)
     return a
   },
 
-  // 記錄採用（下載或存入圖庫皆算；同張只算一次由呼叫端去重）
-  async recordAdoption(): Promise<void> {
+  // POST /generations/{id}/events（下載）→ 記錄採用；同一張重送不重複計
+  async recordAdoption(from: GenerationRef): Promise<void> {
     await delay(100)
-    db.adoptedGen += 1
+    markAdopted(from)
   },
 
   // GET /usage
