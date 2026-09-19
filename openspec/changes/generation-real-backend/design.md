@@ -161,6 +161,7 @@
 | `image.seedInvalid`（新增）                          | 種子要填 0 以上的整數，或留空改用隨機。                                                          | The seed must be a whole number of 0 or more…                                                       |
 | `marketing.retryOnly.imageOnly`／`.textOnly`（新增） | 只重做配圖／只重做文案                                                                           | Redo visual only／Redo copy only                                                                    |
 | `marketing.partialFailed.image`／`.text`（新增）     | 配圖（文案）沒有成功（{reason}）。…請按「換一張圖」（「重寫文案」）。                            | The visual (copy) did not succeed ({reason})…                                                       |
+| `marketing.savedName`（新增）                        | 行銷海報\_{id}                                                                                   | Marketing poster\_{id}                                                                              |
 | `taskCenter.imageCompleted`（新增）                  | 已完成・結果不會自動存入圖庫，請在圖生圖頁按「存入圖庫」                                         | Completed · Results are not saved automatically…                                                    |
 | `taskCenter.notePrimary`（改）                       | 完成的影片會自動存入圖庫›影片，離開頁面不影響影片生成；圖生圖請留在頁面上等結果。                | …does not interrupt video generation. For images, stay on the page until the results appear.        |
 
