@@ -182,7 +182,8 @@ const results = ref<GeneratedImage[]>([])
 const saving = reactive(new Set<string>()) // 存入圖庫送出中的結果 id：連點兩下只送一發
 
 // 進階設定
-const DEFAULT_REFERENCE_STRENGTH = 0.5
+// 預設偏向聽描述（送 strength 0.7）：0.5 時參考圖與描述無關，結果幾乎照抄參考圖（2026-09-19 實測）
+const DEFAULT_REFERENCE_STRENGTH = 0.3
 const referenceStrength = ref(DEFAULT_REFERENCE_STRENGTH)
 const negativePrompt = ref('')
 const seedInput = ref('')
