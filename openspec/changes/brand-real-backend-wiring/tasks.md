@@ -47,6 +47,16 @@
 - [x] 4.6 `git diff --cached` 逐檔覆核，確認沒有意外覆蓋掉分支上其他未讀到的既有變更
       （曾經在覆核時發現 `stores.spec.ts` 的編輯是基於過時的暫存內容，已用
       `git show HEAD:...` 還原成當下真正的內容後重做該筆測試異動，過程記錄見本檔第 4.4 項）
+- [x] 4.7 2026-09-19：後端 9/2 起 `avoidWords` 改為自由文字（`app/schemas/brand.py`
+      `BrandUpdate.avoid_words`／`BrandOut.avoid_words`，`str | None`），`real.ts`
+      已於同事 commit `cf433ce` 同步改成原樣傳遞，但 `real.spec.ts` 沒有一併更新，
+      `WIRE_BRAND.avoidWords`、PUT body 斷言仍寫死陣列、兩個測試標題仍稱「併成
+      字串」「拆成陣列」，造成 2 個測試失敗。修正：`avoidWords` 斷言改為字串
+      `'廉價、瑕疵'`，標題改為「avoidWords 原樣帶入字串」「avoidWords 字串原樣
+      帶到 PUT body」，不動 `real.ts`。`npx vitest run src/api/real.spec.ts` 29
+      個測試全過；`npx vitest run` 全套 158 個測試全過（此前 2 個失敗）；
+      `npx vue-tsc --noEmit`、`npm run lint`、`npx prettier --check src/api/real.spec.ts`
+      皆通過
 
 ## 5. Spectra 文件
 
