@@ -26,9 +26,10 @@
                     span.model__label {{ m.materialName }}
               button.link {{ t('tryOn.viewFullLibrary', { count: models.length }) }}
             template(v-else)
-              label.mdrop(:class="{ 'isDisabled': uploading }")
-                input.mdrop__input(type="file" accept="image/*" :disabled="uploading" @change="onModelUpload")
-                IconUpload.mdrop__icon
+              label.mdrop(:class="{ 'isDisabled': uploading }" :aria-busy="uploading")
+                input.mdrop__input(type="file" accept="image/jpeg,image/png,image/webp" :disabled="uploading" @change="onModelUpload")
+                IconLoader.mdrop__icon.spin(v-if="uploading")
+                IconUpload.mdrop__icon(v-else)
                 span.mdrop__title {{ t('tryOn.upload.title') }}
                 span.mdrop__hint {{ t('tryOn.upload.hint') }}
               .mtip {{ t('tryOn.upload.recommendation') }}
@@ -40,7 +41,7 @@
                 .uplist
                   .uprow(v-for="u in uploadedModels" :key="u.id" :class="{ 'isOk': u.status === 'available' }")
                     span.uprow__thumb
-                      img.uprow__thumbImage(v-if="u.url" :src="u.url" :alt="u.name")
+                      img.uprow__thumbImage(v-if="u.url" :src="u.url" :alt="u.name" @error="u.url = undefined")
                       IconImagePlaceholder(v-else)
                     .uprow__col
                       span.uprow__name {{ u.name }}
@@ -139,7 +140,7 @@ import {
 import { useConsentStore } from '@/stores/consent'
 import { useFeedStore } from '@/stores/feed'
 import { useAssets } from '@/composables/useAssets'
-import { api } from '@/api'
+import { api, useRealBackend } from '@/api'
 import { isFileTooLarge, isInsufficientFeed, isUnsupportedFormat } from '@/utils/error'
 import type { Asset, Material } from '@/types/api'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
@@ -148,7 +149,7 @@ const router = useRouter()
 const consentStore = useConsentStore()
 const { consented } = storeToRefs(consentStore)
 const feed = useFeedStore()
-const { saveGenerated, upload } = useAssets()
+const { saveGenerated, upload, deleteAssets } = useAssets()
 const { t, tm } = useI18n()
 
 const modelTabs = computed(() => [
@@ -162,11 +163,16 @@ const model = ref('')
 
 // id＝後端 imageId（之後 POST /tryon 的 modelRefId 就用它）；url＝後端 R2 縮圖，mock 沒有真實檔案時為 undefined
 type UploadedModel = { id: string; name: string; url?: string; status: 'available' | 'reupload'; noteKey: string }
-// 前端示範資料：對應設計稿「已上傳模特」兩種審核狀態；實際上傳會 push 新項目
-const uploadedModels = ref<UploadedModel[]>([
-  { id: 'demo-a', name: t('tryOn.demoModels.a'), status: 'available', noteKey: 'consented' },
-  { id: 'demo-b', name: t('tryOn.demoModels.b'), status: 'reupload', noteKey: 'backgroundPeople' },
-])
+// 前端示範資料：對應設計稿「已上傳模特」兩種審核狀態，只在假資料模式顯示——
+// 真後端沒有審核欄位、也沒有這兩筆，正式環境看到「需重傳・審核未過」會誤以為系統有審核機制
+const uploadedModels = ref<UploadedModel[]>(
+  useRealBackend
+    ? []
+    : [
+        { id: 'demo-a', name: t('tryOn.demoModels.a'), status: 'available', noteKey: 'consented' },
+        { id: 'demo-b', name: t('tryOn.demoModels.b'), status: 'reupload', noteKey: 'backgroundPeople' },
+      ],
+)
 const personConsent = ref(true) // 面板「我已取得此人肖像使用同意」勾選
 const ackChecked = ref(false) // 對話框「我已取得當事人同意…」勾選
 
@@ -204,6 +210,11 @@ async function onModelUpload(e: Event) {
   const f = input.files?.[0]
   input.value = '' // 允許重複選同一檔
   if (!f || uploading.value) return
+  // 上傳真人照片涉及肖像權：未同意就先開同意視窗、檔案不離開瀏覽器（同意後再選一次），比照 onGenerate
+  if (!consented.value) {
+    showConsent.value = true
+    return
+  }
   uploading.value = true
   errorMsg.value = ''
   try {
@@ -211,8 +222,6 @@ async function onModelUpload(e: Event) {
     // 後端沒有「模特照」來源值，素材落未分類、由後端自標 upload
     const a = await upload(f)
     uploadedModels.value.push({ id: a.id, name: a.name, url: a.url, status: 'available', noteKey: 'consented' })
-    // 上傳真人照片涉及肖像權，未同意先擋下要求完成肖像同意
-    if (!consented.value) showConsent.value = true
   } catch (e: unknown) {
     errorMsg.value = isFileTooLarge(e)
       ? t('errors.fileTooLarge')
@@ -223,7 +232,17 @@ async function onModelUpload(e: Event) {
     uploading.value = false
   }
 }
-function removeModel(id: string) {
+async function removeModel(id: string) {
+  // 示範列後端沒有這筆，只移出清單；真上傳的要連圖庫裡的素材一起刪（DELETE /images/{id}），
+  // 否則按了「刪除」肖像照仍留在 R2 與圖庫。刪不掉就留著列、顯示錯誤，不假裝已刪
+  if (!id.startsWith('demo-')) {
+    errorMsg.value = ''
+    const { failedIds } = await deleteAssets([id])
+    if (failedIds.length) {
+      errorMsg.value = t('library.batchFailed', { count: 1 })
+      return
+    }
+  }
   uploadedModels.value = uploadedModels.value.filter((m) => m.id !== id)
 }
 function closeConsent() {
