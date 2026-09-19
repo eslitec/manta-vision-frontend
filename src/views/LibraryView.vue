@@ -227,6 +227,7 @@ import type { Material } from '@/types/asset'
 import { api } from '@/api'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 import { formatDimensions } from '@/utils/dimensions'
+import { downloadFile } from '@/utils/download'
 import { isDuplicateName, isFileTooLarge, isFolderLimitExceeded, isUnsupportedFormat } from '@/utils/error'
 
 const {
@@ -706,22 +707,10 @@ async function confirmDelete() {
 async function downloadSelected() {
   for (const a of selectedAssets.value) {
     if (!a.url) continue // mock 素材沒有真實檔案，跳過
-    // <a download> 對跨網域網址會被瀏覽器忽略、退化成一般導覽——先把內容讀成 Blob
-    // 轉成同源的 blob: 網址才能讓 download 屬性真的生效。素材伺服器沒開放 CORS 讀取
-    // 內容時 fetch 會失敗，退回開新分頁至少讓使用者看得到圖片，不要完全沒反應。
     try {
-      const response = await fetch(a.url)
-      const blob = await response.blob()
-      const blobUrl = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = blobUrl
-      link.download = a.name
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(blobUrl)
+      await downloadFile(a.url, a.name) // fetch 失敗時 util 自己退回開新分頁
     } catch {
-      window.open(a.url, '_blank', 'noopener')
+      batchError.value = t('errors.downloadFailed') // HTTP 非 2xx：不把錯誤頁當成檔案存下來
     }
   }
 }
