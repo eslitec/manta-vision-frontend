@@ -20,13 +20,22 @@
         AppButton(variant="outline" @click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
     .step
       .step__title {{ t('marketing.steps.intro') }}
-      .field
-        label.visuallyHidden(for="marketing-intro") {{ t('marketing.steps.intro') }}
+      .field(v-if="wantText")
+        label.field__label(for="marketing-intro") {{ t('marketing.introLabel') }}
         textarea#marketing-intro.field__input(v-model="intro" maxlength="200" rows="4" :aria-describedby="'marketing-intro-counter'" :placeholder="t('marketing.introPlaceholder')")
         span#marketing-intro-counter.field__counter {{ intro.length }} / 200
-      .insp
-        button.insp__pill(@click="inspOpen = !inspOpen") {{ t('marketing.inspiration') }}
-        span.insp__hint {{ t('marketing.inspirationHint') }}
+      .field(v-if="wantImage")
+        label.field__label(for="marketing-poster-text") {{ t('marketing.posterTextLabel') }}
+        textarea#marketing-poster-text.field__input(v-model="posterText" maxlength="200" rows="3" :aria-describedby="'marketing-poster-text-counter'" :placeholder="t('marketing.posterTextPlaceholder')")
+        span#marketing-poster-text-counter.field__counter {{ posterText.length }} / 200
+      template(v-if="wantImage")
+        .insp
+          button.insp__pill(type="button" :aria-expanded="inspOpen" @click="toggleInspirations") {{ t('marketing.inspiration') }}
+          span.insp__hint {{ t('marketing.inspirationHint') }}
+        .inspList(v-if="inspOpen")
+          button.inspList__item(v-for="i in inspirations" :key="i.id" type="button" :aria-pressed="inspirationId === i.id" :class="{ isActive: inspirationId === i.id }" @click="inspirationId = inspirationId === i.id ? '' : i.id")
+            img.inspList__img(v-if="i.url" :src="i.url" :alt="i.name")
+            span(v-else) {{ i.name }}
     BrandToggle.post__brand(
       v-model="applyBrand"
       :description="t('marketing.brandDescription')"
@@ -46,7 +55,7 @@
           button.cost__feedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true")
             IconFeedBottleSmall.cost__icon
           span {{ t('units.feed', { count: outputTypeCost }) }}
-      AppButton(:disabled="generating" @click="generate")
+      AppButton(:disabled="generating || !canGenerate" @click="generate()")
         component(:is="generating ? IconLoader : IconAddObject" :class="{ spin: generating }")
         span {{ generating ? t('common.generating') : t('marketing.generate') }}
 
@@ -56,21 +65,23 @@
     template(v-else)
       .visuallyHidden(role="status" aria-live="polite") {{ t('common.generationResult') }}
       .postresult
-        .postresult__col(v-if="result.poster")
+        //- 欄位依「這次要求了哪幾半」顯示，不是依「哪一半成功」：只成功一半時，失敗那欄仍要留著自己的重試按鈕
+        .postresult__col(v-if="resultType !== 'textOnly'")
           .poster(:class="{ isPortrait: ratio === '9:16' }" :style="{ aspectRatio: aspect }")
-            IconImagePlaceholder
+            img.poster__img(v-if="result.poster?.url" :src="result.poster.url" :alt="t('common.generationResult')")
+            IconImagePlaceholder(v-else)
           .postresult__act
-            button.linkbtn(@click="generate") {{ t('marketing.changeImage') }}
-            button.linkbtn(@click="downloadPoster") {{ t('common.download') }}
-        .postresult__col(v-if="result.copy")
-          .copy
+            button.linkbtn(:disabled="generating || !canGenerateFor('imageOnly')" @click="generate('imageOnly')") {{ t('marketing.changeImage') }}
+            button.linkbtn(:disabled="!result.poster" @click="downloadPoster") {{ t('common.download') }}
+        .postresult__col(v-if="resultType !== 'imageOnly'")
+          .copy(v-if="result.copy !== undefined")
             p.copy__text(v-for="(line, i) in copyLines" :key="i") {{ line }}
             p.copy__tags {{ result.hashtags.join(' ') }}
           .postresult__act
-            AppButton(variant="outline" @click="copyText")
+            AppButton(variant="outline" :disabled="result.copy === undefined" @click="copyText")
               IconCopy
               span {{ copied ? t('common.copied') : t('marketing.copyText') }}
-            button.linkbtn(@click="generate") {{ t('marketing.rewrite') }}
+            button.linkbtn(:disabled="generating || !canGenerateFor('textOnly')" @click="generate('textOnly')") {{ t('marketing.rewrite') }}
       .postresult__note
         img.postresult__noteIcon(:src="postNextStepIconUrl" alt="")
         span {{ t('marketing.nextStep') }}
@@ -80,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
@@ -91,15 +102,20 @@ import { IconFeedBottleSmall, IconAddObject, IconCopy, IconImagePlaceholder, Ico
 import postNextStepIconUrl from '@/assets/images/marketing-next-step-alert.svg'
 import { useFeedStore } from '@/stores/feed'
 import { api } from '@/api'
-import { isInsufficientFeed } from '@/utils/error'
-import type { Asset, GeneratedPost, PostOutputType } from '@/types/api'
+import { displayMessage, isInsufficientFeed } from '@/utils/error'
+import { downloadFile } from '@/utils/download'
+import type { Asset, GeneratedPost, Inspiration, PostOutputType } from '@/types/api'
 
 const router = useRouter()
 const feed = useFeedStore()
 const { t } = useI18n()
 
 const productImage = ref<Asset | null>(null)
-const intro = ref('')
+const intro = ref('') // 商品介紹：送 productDesc，寫貼文用
+const posterText = ref('') // 海報文字：送 posterText，會印在圖上
+const inspirations = ref<Inspiration[]>([])
+const inspirationId = ref('')
+const prices = ref<Partial<Record<string, number>>>({})
 const applyBrand = ref(true)
 const inspOpen = ref(false)
 const pickerOpen = ref(false)
@@ -107,17 +123,52 @@ const topUpOpen = ref(false)
 const generating = ref(false)
 const errorMsg = ref('')
 const result = ref<GeneratedPost | null>(null)
+const resultType = ref<PostOutputType>('both') // 目前的結果「要求了」哪幾半；只成功一半時，失敗那一欄仍要顯示重試按鈕
 const copied = ref(false)
 
-// 要產出什麼：輸出內容類型，決定生成內容與飼料成本（5／2／3 顆），同一份常數供分段選擇器與底部預估消耗顯示使用
-const OUTPUT_TYPE_OPTIONS: { value: PostOutputType; labelKey: string; cost: number }[] = [
-  { value: 'both', labelKey: 'marketing.outputType.options.both', cost: 5 },
-  { value: 'textOnly', labelKey: 'marketing.outputType.options.textOnly', cost: 2 },
-  { value: 'imageOnly', labelKey: 'marketing.outputType.options.imageOnly', cost: 3 },
+// 要產出什麼。價格讀 GET /ai-models?modelType=marketing：要配圖加 marketingImage、要文案加 marketingText
+const OUTPUT_TYPE_OPTIONS: { value: PostOutputType; labelKey: string }[] = [
+  { value: 'both', labelKey: 'marketing.outputType.options.both' },
+  { value: 'textOnly', labelKey: 'marketing.outputType.options.textOnly' },
+  { value: 'imageOnly', labelKey: 'marketing.outputType.options.imageOnly' },
 ]
 const outputType = ref<PostOutputType>('both')
-const outputTypeOptions = computed(() => OUTPUT_TYPE_OPTIONS.map((o) => ({ ...o, label: t(o.labelKey) })))
-const outputTypeCost = computed(() => OUTPUT_TYPE_OPTIONS.find((o) => o.value === outputType.value)?.cost ?? 5)
+const wantImage = computed(() => outputType.value !== 'textOnly')
+const wantText = computed(() => outputType.value !== 'imageOnly')
+function costOf(type: PostOutputType): number | '…' {
+  const img = prices.value.marketingImage
+  const txt = prices.value.marketingText
+  if (img === undefined || txt === undefined) return '…'
+  return (type !== 'textOnly' ? img : 0) + (type !== 'imageOnly' ? txt : 0)
+}
+const outputTypeOptions = computed(() =>
+  OUTPUT_TYPE_OPTIONS.map((o) => ({ ...o, label: t(o.labelKey), cost: costOf(o.value) })),
+)
+const outputTypeCost = computed(() => costOf(outputType.value))
+// 主按鈕看目前選的類型；「換一張圖」「重寫文案」各看自己那一半（欄位被清空時擋在前端，後端只會回籠統的值域錯）
+const canGenerateFor = (type: PostOutputType) =>
+  (type === 'textOnly' || (!!productImage.value && !!posterText.value.trim())) &&
+  (type === 'imageOnly' || !!intro.value.trim())
+const canGenerate = computed(() => canGenerateFor(outputType.value))
+
+onMounted(async () => {
+  try {
+    const models = await api.listModels('marketing')
+    prices.value = Object.fromEntries(models.map((m) => [m.modelKey, m.costFeeds]))
+  } catch (e: unknown) {
+    errorMsg.value = displayMessage(e, t('errors.loadFailed'))
+  }
+})
+
+async function toggleInspirations() {
+  inspOpen.value = !inspOpen.value
+  if (!inspOpen.value || inspirations.value.length) return // 只在第一次展開時請求
+  try {
+    inspirations.value = await api.listInspirations()
+  } catch (e: unknown) {
+    errorMsg.value = displayMessage(e, t('errors.loadFailed'))
+  }
+}
 
 // 輸出比例（生成前於設定區選定，影響構圖與結果預覽比例）
 const ratios = computed(() => [
@@ -134,28 +185,55 @@ const onPick = (a: Asset) => {
   productImage.value = a
 }
 
-async function generate() {
+const failText = (e: unknown) =>
+  isInsufficientFeed(e) ? t('errors.insufficientFeed') : displayMessage(e, t('errors.generationFailed'))
+
+// only：「換一張圖」只重做配圖、「重寫文案」只重做文案，另一半保留、不重複扣點。
+// 模板點擊一律寫成 generate() 或 generate('imageOnly')，不能只寫函式名（Vue 會把 MouseEvent 當成 only 傳進來）
+async function generate(only?: 'imageOnly' | 'textOnly') {
+  if (generating.value) return
   errorMsg.value = ''
   generating.value = true
   copied.value = false
   try {
-    result.value = await api.generatePost({
-      imageId: productImage.value?.id,
-      productDesc: intro.value,
+    const next = await api.generatePost({
+      outputType: only ?? outputType.value,
       useBrand: applyBrand.value,
+      imageId: productImage.value?.id,
+      posterText: posterText.value,
       ratio: ratio.value, // 版位比例一併送給後端，影響構圖
-      outputType: outputType.value,
+      inspirationId: inspirationId.value || undefined,
+      productDesc: intro.value,
     })
-    await feed.refresh()
+    const prev = result.value
+    if (only === 'imageOnly' && prev) result.value = { ...prev, poster: next.poster }
+    else if (only === 'textOnly' && prev) result.value = { ...prev, copy: next.copy, hashtags: next.hashtags }
+    else {
+      result.value = next
+      resultType.value = only ?? outputType.value
+    }
+    if (next.partialError) errorMsg.value = failText(next.partialError)
   } catch (e: unknown) {
-    errorMsg.value = isInsufficientFeed(e) ? t('errors.insufficientFeed') : t('errors.generationFailed')
+    errorMsg.value = failText(e)
   } finally {
     generating.value = false
+    // 成功或失敗都刷新（CONTENT_BLOCKED 會扣點、失敗的 202 會退點）；刷新失敗不覆蓋生成的錯誤訊息
+    await feed.refresh().catch(() => undefined)
   }
 }
-function downloadPoster() {
-  // TODO: 後端回傳 poster.url 後觸發實際下載
-  if (result.value?.poster?.url) window.open(result.value.poster.url, '_blank')
+async function downloadPoster() {
+  const poster = result.value?.poster
+  if (!poster) return
+  errorMsg.value = ''
+  try {
+    if (poster.url) await downloadFile(poster.url) // mock 的結果沒有檔案，跳過
+    if (!poster.adopted) {
+      await api.recordAdoption({ generationId: poster.generationId, resultId: poster.id })
+      poster.adopted = true
+    }
+  } catch (e: unknown) {
+    errorMsg.value = displayMessage(e, t('errors.downloadFailed'))
+  }
 }
 async function copyText() {
   if (!result.value) return
@@ -223,6 +301,15 @@ async function copyText() {
 }
 .field {
   position: relative;
+  & + & {
+    margin-top: 0.75rem;
+  }
+  &__label {
+    display: block;
+    font-size: 0.75rem;
+    color: $gray-100;
+    margin-bottom: 0.375rem;
+  }
   &__input {
     width: 100%;
     border: none;
@@ -245,6 +332,34 @@ async function copyText() {
     font-size: 0.75rem;
     font-weight: 500;
     color: $orange;
+  }
+}
+.inspList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  &__item {
+    @include flex(center, center);
+    aspect-ratio: 1;
+    overflow: hidden;
+    padding: 0.25rem;
+    border: 1px solid #d2d5dd;
+    border-radius: 8px;
+    background: $white;
+    font-size: 0.75rem;
+    color: #606692;
+    &.isActive {
+      background: $blue-light;
+      border: 1.5px solid $blue-dark-500;
+      color: $blue-dark-500;
+    }
+  }
+  &__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
   }
 }
 .insp {
@@ -473,6 +588,12 @@ async function copyText() {
     height: 1.25rem;
     flex-shrink: 0;
   }
+}
+.poster__img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
 }
 .poster {
   @include flex(center, center);
