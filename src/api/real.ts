@@ -1,4 +1,5 @@
 import { formatDimensions } from '@/utils/dimensions'
+import { ApiError, API_ERROR_CODES, CLIENT_ERROR_CODES, hasErrorCode, isApiError } from './errors'
 import { http } from './http'
 import { mockApi } from './mock'
 import type {
@@ -13,14 +14,26 @@ import type {
   MaterialListResponse,
   MediaType,
 } from '@/types/asset'
-import type { BrandProfile, Session } from '@/types/api'
+import type {
+  AiModel,
+  AiModelType,
+  BrandProfile,
+  GeneratedImage,
+  GeneratedPost,
+  GenerateImageReq,
+  GeneratePostReq,
+  GenerationRef,
+  Inspiration,
+  Session,
+} from '@/types/api'
 
 // 打真後端的 API 實作。
 //
 // 後端 33 支端點裡，目前接得上的是身分驗證三支、`GET /bots`、
 // `feat/gallery-finish` 分支帶來的圖庫／資料夾／內建素材共 10 支，以及
-// 品牌設定 `GET/PUT /brand` 兩支（見 docs/api-status.md 的「✅ 可串」清單）。
-// 其餘（行銷、指標、修圖、影片）都還是空殼，所以這裡把 `mockApi` 展開當底，
+// 品牌設定 `GET/PUT /brand` 兩支（見 docs/api-status.md 的「✅ 可串」清單），
+// 以及圖生圖／行銷 PO 文／飼料餘額（`feat/mv-07-metrics` 分支的契約）。
+// 其餘（指標、修圖、影片、試穿）都還是空殼，所以這裡把 `mockApi` 展開當底，
 // 只覆寫已經接得上的方法。
 //
 // 後端每補完一支，就把對應的方法從這裡加上去——展開的假資料會自動被蓋掉，
@@ -358,6 +371,194 @@ async function saveBrand(profile: BrandProfile): Promise<BrandProfile> {
   }
 }
 
+// ── 飼料、模型價格、輔助描述、靈感 ──
+
+async function getFeed(): Promise<{ balance: number }> {
+  // 後端還回 monthlyLimit／estImages…，畫面目前只用得到餘額
+  const { data } = await http.get<{ balance: number }>('/feeds')
+  return { balance: data.balance }
+}
+
+async function listModels(modelType?: AiModelType): Promise<AiModel[]> {
+  const { data } = await http.get<{ items: AiModel[] }>('/ai-models', {
+    params: modelType ? { modelType } : undefined,
+  })
+  return data.items
+}
+
+async function enhancePrompt(text: string): Promise<string> {
+  // 不扣點、不帶 Idempotency-Key。上游本身 30 秒，全域 30 秒會搶先切斷，所以放寬到 40 秒
+  const { data } = await http.post<{ enhancedPrompt: string }>(
+    '/prompt/enhance',
+    { target: 'image', prompt: text },
+    { timeout: 40_000 },
+  )
+  return data.enhancedPrompt
+}
+
+interface WireInspiration {
+  inspirationId: string
+  inspirationName: string
+  url: string
+}
+async function listInspirations(): Promise<Inspiration[]> {
+  // promptTemplate 不收：後端送出生成時不讀它，這次只帶 inspirationId
+  const { data } = await http.get<{ items: WireInspiration[] }>('/inspirations')
+  return data.items.map((i) => ({ id: i.inspirationId, name: i.inspirationName, url: i.url }))
+}
+
+// ── 付費生成（POST /generate、/marketing/image、/marketing/text）與輪詢（GET /generations/{id}）──
+// 契約以後端程式碼為準：app/schemas/generation.py、app/schemas/marketing.py、app/idempotency.py
+
+interface WireResult {
+  resultId: string
+  tempUrl: string
+  expiresAt: string
+  seed: number | null
+}
+/** 200 回應與輪詢到 done 的共同部分：圖看 results，文案看 caption／hashtags */
+interface WireOutput {
+  generationId: string
+  results?: WireResult[]
+  caption?: string | null
+  hashtags?: string[] | null
+}
+interface WirePending {
+  generationId: string
+  status: 'processing'
+  pollAfterMs?: number
+}
+interface WireStatus extends WireOutput {
+  type: string
+  status: 'processing' | 'done' | 'failed'
+}
+
+// 後端同步最多等上游 80 秒才回 202，Cloudflare 的硬上限是 100 秒；
+// 用全域 30 秒的話，會在後端已經開始扣點時先把連線切斷。
+const PAID_TIMEOUT_MS = 100_000
+/** 逾時／斷線最多送幾次（含第一次）。409 不算在這裡面，改用 PAID_IN_PROGRESS_MS 擋 */
+const PAID_MAX_ATTEMPTS = 3
+const PAID_RETRY_DELAY_MS = 5000
+// 409＝同一把 key 的前一發還在後端跑（回應在路上丟了）。後端要等 200 或 202 定案才停止回 409，
+// 而同步最多 80 秒，所以 409 一直重送到「第一次送出後 100＋20 秒」，期限內一定拿得到回放。
+const PAID_IN_PROGRESS_MS = PAID_TIMEOUT_MS + 20_000
+// ponytail: 後端背景續問上限 600 秒（從 202 起算），到期後還要取結果、存 R2，所以多等 1 分鐘。
+// 前端沒有「之後回來看」的頁面，停太早使用者拿不到已扣點的結果；有生成紀錄頁之後再縮短。
+const POLL_MAX_MS = 11 * 60_000
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+const isTransient = (e: unknown) =>
+  hasErrorCode(e, CLIENT_ERROR_CODES.TIMEOUT) || hasErrorCode(e, CLIENT_ERROR_CODES.NETWORK_ERROR)
+// 輪詢打的是 GET，本身冪等：網路抖動與 5xx（反向代理吐的 HTML 502／504）都等下一輪再問
+const isPollTransient = (e: unknown) => isTransient(e) || (isApiError(e) && e.status >= 500)
+
+/**
+ * 付費端點：一次呼叫＝一次點擊，只產一把 Idempotency-Key。
+ * 重送沿用同一把 key 與**同一個 body 物件**——後端比對 body 的 bytes，物件換了就會被當成新請求再扣一次點。
+ * 只重送「不確定有沒有送到」的逾時／斷線（最多 PAID_MAX_ATTEMPTS 次），以及同 key 還在跑的 409
+ * （重送到 PAID_IN_PROGRESS_MS 期限）；其他錯誤（402、400、CONTENT_BLOCKED、502…）直接往上丟。
+ */
+async function postPaid<T>(url: string, body: object) {
+  const key = crypto.randomUUID()
+  const deadline = Date.now() + PAID_IN_PROGRESS_MS
+  for (let failures = 0; ;) {
+    try {
+      return await http.post<T>(url, body, { headers: { 'Idempotency-Key': key }, timeout: PAID_TIMEOUT_MS })
+    } catch (e) {
+      const giveUp = hasErrorCode(e, API_ERROR_CODES.IDEMPOTENCY_IN_PROGRESS)
+        ? Date.now() >= deadline
+        : !isTransient(e) || ++failures >= PAID_MAX_ATTEMPTS
+      if (giveUp) throw e
+      await sleep(PAID_RETRY_DELAY_MS)
+    }
+  }
+}
+
+/** 202 之後每 pollAfterMs 打一次 GET /generations/{id}，直到 done 或 failed。不重送 POST。 */
+async function pollGeneration(generationId: string, pollAfterMs = 5000): Promise<WireOutput> {
+  const deadline = Date.now() + POLL_MAX_MS
+  for (;;) {
+    await sleep(Math.max(1000, pollAfterMs))
+    try {
+      const { data } = await http.get<WireStatus>(`/generations/${generationId}`)
+      if (data.status === 'done') return data
+      if (data.status === 'failed')
+        throw new ApiError({ code: CLIENT_ERROR_CODES.GENERATION_FAILED, message: '這次生成沒有成功，請再試一次。' })
+    } catch (e) {
+      if (!isPollTransient(e)) throw e // failed、404、401 直接丟
+    }
+    if (Date.now() >= deadline)
+      throw new ApiError({
+        code: CLIENT_ERROR_CODES.GENERATION_STILL_PROCESSING,
+        message: `生成時間異常地長，已停止等待（編號 ${generationId}）。完成時仍會結清飼料，請稍後重新整理確認餘額。`,
+      })
+  }
+}
+
+/** 送出付費生成：200 直接回，202 改走輪詢。輪詢放在 postPaid 的重送迴圈外面，輪詢失敗不會重送 POST。 */
+async function runGeneration(url: string, body: object): Promise<WireOutput> {
+  const res = await postPaid<WireOutput | WirePending>(url, body)
+  if (res.status !== 202) return res.data as WireOutput
+  const pending = res.data as WirePending
+  return pollGeneration(pending.generationId, pending.pollAfterMs)
+}
+
+function toGeneratedImage(generationId: string, r: WireResult): GeneratedImage {
+  return { id: r.resultId, generationId, url: r.tempUrl, adopted: false }
+}
+
+async function generateImages(req: GenerateImageReq): Promise<GeneratedImage[]> {
+  // req 的欄位名等於後端 GenerateRequest，整包當 body；undefined 的鍵會被 JSON.stringify 丟掉
+  const out = await runGeneration('/generate', req)
+  return (out.results ?? []).map((r) => toGeneratedImage(out.generationId, r))
+}
+
+async function generatePost(req: GeneratePostReq): Promise<GeneratedPost> {
+  const wantImage = req.outputType !== 'textOnly'
+  const wantText = req.outputType !== 'imageOnly'
+  // 兩支端點互不依賴：平行送出、各自一把 key、成敗分開算。body 分開組，不能混用
+  const [image, text] = await Promise.allSettled([
+    wantImage
+      ? runGeneration('/marketing/image', {
+          imageId: req.imageId,
+          posterText: req.posterText,
+          ratio: req.ratio,
+          inspirationId: req.inspirationId,
+          useBrand: req.useBrand,
+        })
+      : null,
+    wantText ? runGeneration('/marketing/text', { productDesc: req.productDesc, useBrand: req.useBrand }) : null,
+  ])
+  const post: GeneratedPost = { hashtags: [] }
+  if (image.status === 'fulfilled' && image.value?.results?.[0])
+    post.poster = toGeneratedImage(image.value.generationId, image.value.results[0])
+  if (text.status === 'fulfilled' && text.value) {
+    post.copy = text.value.caption ?? ''
+    post.hashtags = text.value.hashtags ?? []
+  }
+  const errors = [image, text].flatMap((r) => (r.status === 'rejected' ? [r.reason] : []))
+  if (errors.length && !post.poster && post.copy === undefined) throw errors[0] // 全部失敗：照常丟錯
+  if (errors.length) post.partialError = errors[0] // 成功一半：交給畫面顯示另一半的錯
+  return post
+}
+
+// ── 生成結果：存入圖庫、採用事件（不扣點，不帶 Idempotency-Key）──
+
+async function saveGenerated(name: string, from?: GenerationRef): Promise<Asset> {
+  // ponytail: 試穿還沒有後端，TryOnView 不帶 from，繼續用假資料；接試穿時拿掉這條
+  if (!from) return mockApi.saveGenerated(name)
+  const { data } = await http.post<WireImage>(`/generations/${from.generationId}/save`, {
+    resultId: from.resultId,
+    imageName: name,
+  })
+  return toAsset(data)
+}
+
+async function recordAdoption(from: GenerationRef): Promise<void> {
+  // 後端只收 downloaded（存入圖庫由 /save 自己記）；冪等，重送沒關係
+  await http.post(`/generations/${from.generationId}/events`, { event: 'downloaded', resultId: from.resultId })
+}
+
 export const realApi = {
   ...mockApi,
   login,
@@ -375,4 +576,16 @@ export const realApi = {
   listMaterials,
   getBrand,
   saveBrand,
+  getFeed,
+  listModels,
+  enhancePrompt,
+  generateImages,
+  generatePost,
+  saveGenerated,
+  recordAdoption,
+  listInspirations,
+  // 儲值明確停用：`...mockApi` 會把假儲值帶進來，按下去會把 mock 的假餘額寫進 feed store，
+  // 而右上角已改讀真的 GET /feeds，畫面會出現「儲值成功、生成卻 402」。TopUpDialog 已有「不支援」分支。
+  // 後端的 POST /feeds/topup 是不收錢的模擬儲值，要不要接等產品確認。
+  topUpFeed: undefined,
 }

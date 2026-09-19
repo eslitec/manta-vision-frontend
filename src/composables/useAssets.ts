@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import type { Asset, BatchResult, Folder, ImageCounts, ImageListQuery } from '@/types/asset'
+import type { GenerationRef } from '@/types/api'
 import { api } from '@/api'
 
 // 圖庫素材的存取層，圖庫頁與「從圖庫選擇」彈窗共用。
@@ -103,8 +104,8 @@ export function useAssets() {
   }
 
   // 生成結果「存入圖庫」（選用）→ 落地成 AI 生成素材
-  async function saveGenerated(name: string) {
-    return api.saveGenerated(name)
+  async function saveGenerated(name: string, from?: GenerationRef) {
+    return api.saveGenerated(name, from)
   }
 
   // 編輯器採非破壞式儲存：後端建立新的「編輯產物」，原素材不會被覆寫。

@@ -84,7 +84,11 @@ describe('brand store', () => {
     getBrand.mockResolvedValue({ name: '日安選物', portraitConsent: '本人同意…', imageLicense: '僅供本品牌使用。' })
     // 真後端會回存檔後的最新內容（例如 Logo 換成真正的網址）；save() 要把它寫回
     // profile，不能沿用呼叫前的本地值，否則下一次存檔會重複上傳同一張 Logo。
-    saveBrand.mockResolvedValue({ name: '日安選物（已更新）', portraitConsent: '本人同意…', imageLicense: '僅供本品牌使用。' })
+    saveBrand.mockResolvedValue({
+      name: '日安選物（已更新）',
+      portraitConsent: '本人同意…',
+      imageLicense: '僅供本品牌使用。',
+    })
     const brand = useBrandStore()
     await brand.load()
     await brand.save()
@@ -121,7 +125,7 @@ describe('consent store', () => {
 
 describe('models store', () => {
   it('load 載入模型清單', async () => {
-    listModels.mockResolvedValue([{ id: 'nano-banana', name: 'Nano Banana', provider: 'g', costPerImage: 4 }])
+    listModels.mockResolvedValue([{ modelKey: 'imageStandard', name: '標準', modelType: 'image', costFeeds: 8 }])
     const models = useModelsStore()
     await models.load()
     expect(models.models).toHaveLength(1)

@@ -11,44 +11,66 @@ import type {
   MaterialListResponse,
 } from './asset'
 
-// ── 圖生圖模型 ──
+// ── AI 模型與價格（GET /ai-models；欄位同後端 AIModelResponse）──
+export type AiModelType = 'image' | 'edit' | 'video' | 'tryon' | 'marketing'
 export interface AiModel {
-  id: string
+  modelKey: string // 例：imageStandard／imageAdvanced／imagePro／marketingImage／marketingText
   name: string
-  provider: string
-  costPerImage: number // 單張飼料成本
+  modelType: AiModelType
+  costFeeds: number // 每次（圖生圖為每張）飼料成本，一律以後端為準
 }
 
 // ── 生成請求／結果 ──
+// 欄位名等於後端 GenerateRequest，real 版整包當 body 送出
 export interface GenerateImageReq {
-  modelId: string
-  referenceId?: string
+  modelKey: string
+  imageId: string // 必填：後端 v10 起沒有純文字生圖
   prompt: string
-  count: number
-  referenceStrength?: number // 參考強度 0..1（img2img：越低越貼近參考圖）
+  count: number // 只能 2 或 4；帶 regenOf 時後端視為 1
+  strength?: number // 後端語意 0..1：越低越貼近參考圖（畫面上的「參考強度」要翻轉後再送）
   negativePrompt?: string // 負面提示：不希望出現的元素
   seed?: number // 種子；未指定＝隨機（固定可重現同一張）
+  useBrand: boolean
+  regenOf?: string // 重新生成：原張的 resultId
 }
 export interface GeneratedImage {
-  id: string
-  url?: string // 之後由後端回傳
+  id: string // = 後端 resultId
+  generationId: string
+  url: string // 後端 tempUrl，只暫存 24 小時，不可持久化；mock 為 ''
   adopted: boolean // 是否已採用（下載或存入圖庫）
   savedAssetId?: string // 存入圖庫後的素材 id
 }
+/** 指到某次生成的某一張結果：存入圖庫與採用事件都用它 */
+export interface GenerationRef {
+  generationId: string
+  resultId: string
+}
 
-// 輸出內容類型：文案＋配圖／只要文案／只要配圖，三者飼料成本不同（見 MarketingPostView OUTPUT_TYPE_OPTIONS）
+// 輸出內容類型：文案＋配圖／只要文案／只要配圖；價格讀 GET /ai-models?modelType=marketing
 export type PostOutputType = 'both' | 'textOnly' | 'imageOnly'
 export interface GeneratePostReq {
-  productImageId?: string // 商品圖＝產圖時的「錨」（去背後合成，商品本身不被改）
-  intro: string // 商品描述＝主題來源
-  applyBrand: boolean // 套用品牌設定（色票／Logo／語氣，由後端依 bot_id 讀取）
-  ratio?: string // 版位比例（'1:1'｜'4:5'｜'9:16'｜'16:9'），影響構圖與輸出
-  outputType: PostOutputType // 輸出內容類型；決定回傳內容與扣款數（5／2／3 顆）
+  outputType: PostOutputType
+  useBrand: boolean // 套用品牌設定（由後端依 bot_id 讀取）
+  // 以下四欄「要配圖時」必填（POST /marketing/image）
+  imageId?: string // 商品圖
+  posterText?: string // 印在海報上的字（1～200）
+  ratio?: string // '1:1'｜'16:9'｜'9:16'
+  inspirationId?: string // 選填：版型與色調參考
+  // 「要文案時」必填（POST /marketing/text）
+  productDesc?: string // 寫貼文用的商品介紹（1～200）
 }
 export interface GeneratedPost {
-  posterUrl?: string
-  copy: string
+  poster?: GeneratedImage
+  copy?: string
   hashtags: string[]
+  partialError?: unknown // 「文案＋配圖」只有一半失敗時，放失敗那一半的錯誤
+}
+
+// ── 靈感素材（GET /inspirations）──
+export interface Inspiration {
+  id: string
+  name: string
+  url: string
 }
 
 // ── 非同步任務（圖生影）──
@@ -204,9 +226,10 @@ export interface Session {
 export type FeedPackageId = 'pkg-500' | 'pkg-1500' | 'pkg-3000'
 /**
  * 模擬儲值：輸入套餐 id，回傳更新後的飼料餘額。
- * 只在 `src/api/mock.ts` 實作，`src/api/real.ts` 不新增對應實作（真後端目前沒有付款端點，
- * 見 openspec/changes/add-feed-topup-dialog design.md 決策 5）——呼叫端一律用
- * `api.topUpFeed?.(...)` 選擇性呼叫，避免真後端環境下呼叫到不存在的方法。
+ * 只在 `src/api/mock.ts` 實作；`realApi` 明確設成 `undefined`，真後端模式一律走 TopUpDialog 的
+ * 「不支援」分支。後端雖有 `POST /feeds/topup`，但那是不收錢的模擬儲值，要不要接等產品確認
+ * （openspec/changes/generation-real-backend design.md「真後端模式停用模擬儲值」）。
+ * 呼叫端一律用 `api.topUpFeed?.(...)` 選擇性呼叫。
  */
 export type TopUpFeedFn = (packageId: string) => Promise<{ balance: number }>
 

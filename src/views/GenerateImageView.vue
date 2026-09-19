@@ -146,9 +146,9 @@ const { t } = useI18n()
 // 生成模型分級（對齊設計稿：標準×1／進階×1.5／專業×3；以標準 8 顆／張為基準）
 const IMAGE_BASE_COST = 8
 const imageTiers = [
-  { key: 'standard', multiplier: 1 },
-  { key: 'advanced', multiplier: 1.5 },
-  { key: 'pro', multiplier: 3 },
+  { key: 'standard', modelKey: 'imageStandard', multiplier: 1 },
+  { key: 'advanced', modelKey: 'imageAdvanced', multiplier: 1.5 },
+  { key: 'pro', modelKey: 'imagePro', multiplier: 3 },
 ]
 const imageTier = ref('standard')
 const prompt = ref('')
@@ -224,13 +224,14 @@ async function assist() {
 // 組請求（含進階設定；參考強度僅在有參考圖時帶）
 function buildReq(n: number): GenerateImageReq {
   return {
-    modelId: imageTier.value,
-    referenceId: refImage.value?.id,
+    modelKey: imageTiers.find((x) => x.key === imageTier.value)?.modelKey ?? 'imageStandard',
+    imageId: refImage.value?.id ?? '',
     prompt: prompt.value,
     count: n,
-    referenceStrength: refImage.value ? referenceStrength.value : undefined,
+    strength: refImage.value ? referenceStrength.value : undefined,
     negativePrompt: negativePrompt.value.trim() || undefined,
     seed: seedInput.value ? Number(seedInput.value) : undefined,
+    useBrand: applyBrand.value,
   }
 }
 
@@ -238,9 +239,8 @@ async function generate() {
   errorMsg.value = ''
   generating.value = true
   try {
-    const perImage = IMAGE_BASE_COST * tierMultiplier.value
     results.value = await tasksStore.createImageTask(
-      () => api.generateImages(buildReq(count.value), perImage),
+      () => api.generateImages(buildReq(count.value)),
       t('image.taskName', { name: prompt.value.slice(0, 12) || Date.now() }),
       estCost.value,
     )
@@ -254,7 +254,7 @@ async function generate() {
 
 async function adopt(r: GeneratedImage) {
   if (r.adopted) return
-  await api.recordAdoption()
+  await api.recordAdoption({ generationId: r.generationId, resultId: r.id })
   r.adopted = true
 }
 async function download(r: GeneratedImage) {
@@ -270,7 +270,7 @@ async function regen(r: GeneratedImage) {
   const perImage = IMAGE_BASE_COST * tierMultiplier.value
   try {
     const [next] = await tasksStore.createImageTask(
-      () => api.generateImages(buildReq(1), perImage),
+      () => api.generateImages(buildReq(1)),
       t('image.regenerationTaskName'),
       perImage,
     )

@@ -15,8 +15,14 @@ beforeEach(async () => {
 describe('計費與扣點', () => {
   it('generateImages 依 模型單價×張數 扣飼料', async () => {
     const before = (await api.getFeed()).balance
-    const req: GenerateImageReq = { modelId: 'flux-1', prompt: 'x', count: 3 }
-    const res = await api.generateImages(req, 8)
+    const req: GenerateImageReq = {
+      modelKey: 'imageStandard',
+      imageId: 'img_1',
+      prompt: 'x',
+      count: 3,
+      useBrand: false,
+    }
+    const res = await api.generateImages(req)
     expect(res).toHaveLength(3)
     expect(res.every((r) => r.adopted === false)).toBe(true)
     expect((await api.getFeed()).balance).toBe(before - 8 * 3)
@@ -24,34 +30,62 @@ describe('計費與扣點', () => {
 
   it('餘額不足時擲出 INSUFFICIENT_FEEDS，且不扣款', async () => {
     const before = (await api.getFeed()).balance
-    const req: GenerateImageReq = { modelId: 'flux-1', prompt: 'x', count: 9999 }
-    await expect(api.generateImages(req, 8)).rejects.toThrow('INSUFFICIENT_FEEDS')
+    const req: GenerateImageReq = {
+      modelKey: 'imageStandard',
+      imageId: 'img_1',
+      prompt: 'x',
+      count: 9999,
+      useBrand: false,
+    }
+    await expect(api.generateImages(req)).rejects.toThrow('INSUFFICIENT_FEEDS')
+    expect((await api.getFeed()).balance).toBe(before)
+  })
+
+  it('generateImages 帶 regenOf 只扣一張', async () => {
+    const before = (await api.getFeed()).balance
+    const res = await api.generateImages({
+      modelKey: 'imageStandard',
+      imageId: 'img_1',
+      prompt: 'x',
+      count: 2,
+      useBrand: false,
+      regenOf: 'r_1',
+    })
+    expect(res).toHaveLength(1)
+    expect((await api.getFeed()).balance).toBe(before - 8)
+  })
+
+  it('generateImages 找不到模型時擲出 MODEL_NOT_ALLOWED，且不扣款', async () => {
+    const before = (await api.getFeed()).balance
+    await expect(
+      api.generateImages({ modelKey: 'nope', imageId: 'img_1', prompt: 'x', count: 2, useBrand: false }),
+    ).rejects.toThrow('MODEL_NOT_ALLOWED')
     expect((await api.getFeed()).balance).toBe(before)
   })
 
   it('generatePost 預設輸出類型「文案＋配圖」扣 5 顆飼料', async () => {
     const before = (await api.getFeed()).balance
-    await api.generatePost({ intro: 'x', applyBrand: true, outputType: 'both' })
+    await api.generatePost({ outputType: 'both', productDesc: 'x', useBrand: true })
     expect((await api.getFeed()).balance).toBe(before - 5)
   })
 
   it.each([
     { outputType: 'both', cost: 5 },
-    { outputType: 'textOnly', cost: 2 },
-    { outputType: 'imageOnly', cost: 3 },
+    { outputType: 'textOnly', cost: 0 },
+    { outputType: 'imageOnly', cost: 5 },
   ] as const)('generatePost outputType=$outputType 回傳對應內容並扣 $cost 顆飼料', async ({ outputType, cost }) => {
     const before = (await api.getFeed()).balance
-    const post = await api.generatePost({ intro: 'x', applyBrand: true, outputType })
+    const post = await api.generatePost({ outputType, productDesc: 'x', posterText: 'y', useBrand: true })
     expect((await api.getFeed()).balance).toBe(before - cost)
     if (outputType === 'both') {
-      expect(post.posterUrl).toBeTruthy()
-      expect(post.copy).not.toBe('')
+      expect(post.poster).toBeTruthy()
+      expect(post.copy).toBeTruthy()
     } else if (outputType === 'textOnly') {
-      expect(post.posterUrl).toBeUndefined()
-      expect(post.copy).not.toBe('')
+      expect(post.poster).toBeUndefined()
+      expect(post.copy).toBeTruthy()
     } else {
-      expect(post.posterUrl).toBeTruthy()
-      expect(post.copy).toBe('')
+      expect(post.poster).toBeTruthy()
+      expect(post.copy).toBeUndefined()
       expect(post.hashtags).toEqual([])
     }
   })
@@ -141,8 +175,14 @@ describe('圖片編輯與 AI 修圖的扣款（MV-09 / MV-09b）', () => {
   it('餘額不足時擲出 INSUFFICIENT_FEEDS，且不扣款', async () => {
     // 先把餘額燒到接近見底，再送一筆會超支的修圖
     const { balance } = await api.getFeed()
-    const req: GenerateImageReq = { modelId: 'flux-1', prompt: 'x', count: Math.floor(balance / 8) }
-    await api.generateImages(req, 8)
+    const req: GenerateImageReq = {
+      modelKey: 'imageStandard',
+      imageId: 'img_1',
+      prompt: 'x',
+      count: Math.floor(balance / 8),
+      useBrand: false,
+    }
+    await api.generateImages(req)
     const left = (await api.getFeed()).balance
     await expect(api.retouchImage({ method: 'command', options: ['upscale'] })).rejects.toThrow('INSUFFICIENT_FEEDS')
     expect((await api.getFeed()).balance).toBe(left)
@@ -163,13 +203,13 @@ describe('AI 輔助描述', () => {
 })
 
 describe('品牌套用（行銷 PO 文）', () => {
-  it('applyBrand=true 帶入品牌 hashtag', async () => {
-    const post = await api.generatePost({ intro: 'x', applyBrand: true, outputType: 'both' })
+  it('useBrand=true 帶入品牌 hashtag', async () => {
+    const post = await api.generatePost({ outputType: 'both', productDesc: 'x', useBrand: true })
     expect(post.hashtags).toEqual(['#日安選物', '#選物日常', '#質感生活'])
   })
 
-  it('applyBrand=false 使用預設 hashtag', async () => {
-    const post = await api.generatePost({ intro: 'x', applyBrand: false, outputType: 'both' })
+  it('useBrand=false 使用預設 hashtag', async () => {
+    const post = await api.generatePost({ outputType: 'both', productDesc: 'x', useBrand: false })
     expect(post.hashtags).toEqual(['#新品', '#日常'])
   })
 })
@@ -356,14 +396,26 @@ describe('用量與指標', () => {
 
   it('generateImages 會累加本月已生成張數', async () => {
     const before = (await api.getUsage()).generatedThisMonth
-    await api.generateImages({ modelId: 'sdxl', prompt: 'x', count: 2 }, 3)
+    await api.generateImages({ modelKey: 'imageStandard', imageId: 'img_1', prompt: 'x', count: 2, useBrand: false })
     expect((await api.getUsage()).generatedThisMonth).toBe(before + 2)
   })
 
-  it('recordAdoption 會拉高採用率', async () => {
+  it('recordAdoption 會拉高採用率，同一張重複採用率不變', async () => {
     const before = (await api.getMetrics()).adoptionRate
-    await api.recordAdoption()
-    expect((await api.getMetrics()).adoptionRate).toBeGreaterThan(before)
+    await api.recordAdoption({ generationId: 'gen_1', resultId: 'r_1' })
+    const after = (await api.getMetrics()).adoptionRate
+    expect(after).toBeGreaterThan(before)
+    await api.recordAdoption({ generationId: 'gen_1', resultId: 'r_1' })
+    expect((await api.getMetrics()).adoptionRate).toBe(after)
+  })
+
+  it('saveGenerated 帶 from 也算一次採用，之後同一張下載不重複計', async () => {
+    const before = (await api.getMetrics()).adoptionRate
+    await api.saveGenerated('生成結果', { generationId: 'gen_2', resultId: 'r_2' })
+    const after = (await api.getMetrics()).adoptionRate
+    expect(after).toBeGreaterThan(before)
+    await api.recordAdoption({ generationId: 'gen_2', resultId: 'r_2' })
+    expect((await api.getMetrics()).adoptionRate).toBe(after)
   })
 
   it('getMetrics 的成功率不超過 100%', async () => {
@@ -431,10 +483,26 @@ describe('登入／登出', () => {
 })
 
 describe('模型清單', () => {
-  it('listModels 回傳 6 個模型且都帶單價', async () => {
-    const models = await api.listModels()
-    expect(models).toHaveLength(6)
-    expect(models.every((m) => m.costPerImage > 0)).toBe(true)
-    expect(models.map((m) => m.id)).toContain('nano-banana')
+  it("listModels('image') 回 3 個檔位，價格 8／12／24", async () => {
+    const models = await api.listModels('image')
+    expect(models.map((m) => [m.modelKey, m.costFeeds])).toEqual([
+      ['imageStandard', 8],
+      ['imageAdvanced', 12],
+      ['imagePro', 24],
+    ])
+  })
+
+  it("listModels('marketing') 回 marketingImage 5／marketingText 0", async () => {
+    const models = await api.listModels('marketing')
+    expect(models.map((m) => [m.modelKey, m.costFeeds])).toEqual([
+      ['marketingImage', 5],
+      ['marketingText', 0],
+    ])
+  })
+
+  it('listInspirations 回傳 {id,name,url}', async () => {
+    const items = await api.listInspirations()
+    expect(items.length).toBeGreaterThan(0)
+    expect(Object.keys(items[0]).sort()).toEqual(['id', 'name', 'url'])
   })
 })
