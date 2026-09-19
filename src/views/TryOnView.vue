@@ -26,8 +26,8 @@
                     span.model__label {{ m.materialName }}
               button.link {{ t('tryOn.viewFullLibrary', { count: models.length }) }}
             template(v-else)
-              label.mdrop
-                input.mdrop__input(type="file" accept="image/*" @change="onModelUpload")
+              label.mdrop(:class="{ 'isDisabled': uploading }")
+                input.mdrop__input(type="file" accept="image/*" :disabled="uploading" @change="onModelUpload")
                 IconUpload.mdrop__icon
                 span.mdrop__title {{ t('tryOn.upload.title') }}
                 span.mdrop__hint {{ t('tryOn.upload.hint') }}
@@ -40,7 +40,8 @@
                 .uplist
                   .uprow(v-for="u in uploadedModels" :key="u.id" :class="{ 'isOk': u.status === 'available' }")
                     span.uprow__thumb
-                      IconImagePlaceholder
+                      img.uprow__thumbImage(v-if="u.url" :src="u.url" :alt="u.name")
+                      IconImagePlaceholder(v-else)
                     .uprow__col
                       span.uprow__name {{ u.name }}
                       span.uprow__note(:class="{ 'isWarn': u.status !== 'available' }") {{ t(`tryOn.upload.notes.${u.noteKey}`) }}
@@ -139,7 +140,7 @@ import { useConsentStore } from '@/stores/consent'
 import { useFeedStore } from '@/stores/feed'
 import { useAssets } from '@/composables/useAssets'
 import { api } from '@/api'
-import { isInsufficientFeed } from '@/utils/error'
+import { isFileTooLarge, isInsufficientFeed, isUnsupportedFormat } from '@/utils/error'
 import type { Asset, Material } from '@/types/api'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 
@@ -147,7 +148,7 @@ const router = useRouter()
 const consentStore = useConsentStore()
 const { consented } = storeToRefs(consentStore)
 const feed = useFeedStore()
-const { saveGenerated } = useAssets()
+const { saveGenerated, upload } = useAssets()
 const { t, tm } = useI18n()
 
 const modelTabs = computed(() => [
@@ -159,7 +160,8 @@ const modelTab = ref('builtIn')
 const models = ref<Material[]>([])
 const model = ref('')
 
-type UploadedModel = { id: string; name: string; status: 'available' | 'reupload'; noteKey: string }
+// id＝後端 imageId（之後 POST /tryon 的 modelRefId 就用它）；url＝後端 R2 縮圖，mock 沒有真實檔案時為 undefined
+type UploadedModel = { id: string; name: string; url?: string; status: 'available' | 'reupload'; noteKey: string }
 // 前端示範資料：對應設計稿「已上傳模特」兩種審核狀態；實際上傳會 push 新項目
 const uploadedModels = ref<UploadedModel[]>([
   { id: 'demo-a', name: t('tryOn.demoModels.a'), status: 'available', noteKey: 'consented' },
@@ -174,6 +176,7 @@ const topUpOpen = ref(false)
 const showConsent = ref(false)
 const consentDialogRef = ref<HTMLElement | null>(null)
 const generating = ref(false)
+const uploading = ref(false)
 const done = ref(false)
 const errorMsg = ref('')
 const applyBrand = ref(false)
@@ -196,14 +199,29 @@ onMounted(() => {
 const onPick = (a: Asset) => {
   apparel.value = a
 }
-function onModelUpload(e: Event) {
+async function onModelUpload(e: Event) {
   const input = e.target as HTMLInputElement
   const f = input.files?.[0]
-  if (!f) return
-  uploadedModels.value.push({ id: crypto.randomUUID(), name: f.name, status: 'available', noteKey: 'consented' })
   input.value = '' // 允許重複選同一檔
-  // 上傳真人照片涉及肖像權，未同意先擋下要求完成肖像同意
-  if (!consented.value) showConsent.value = true
+  if (!f || uploading.value) return
+  uploading.value = true
+  errorMsg.value = ''
+  try {
+    // 走既有的素材上傳路徑（真後端 POST /upload、mock 走假資料），不帶 source／folderId：
+    // 後端沒有「模特照」來源值，素材落未分類、由後端自標 upload
+    const a = await upload(f)
+    uploadedModels.value.push({ id: a.id, name: a.name, url: a.url, status: 'available', noteKey: 'consented' })
+    // 上傳真人照片涉及肖像權，未同意先擋下要求完成肖像同意
+    if (!consented.value) showConsent.value = true
+  } catch (e: unknown) {
+    errorMsg.value = isFileTooLarge(e)
+      ? t('errors.fileTooLarge')
+      : isUnsupportedFormat(e)
+        ? t('errors.unsupportedFormat')
+        : t('errors.submitFailed')
+  } finally {
+    uploading.value = false
+  }
 }
 function removeModel(id: string) {
   uploadedModels.value = uploadedModels.value.filter((m) => m.id !== id)
@@ -441,6 +459,10 @@ async function onGenerate() {
   &:hover {
     border-color: $blue-dark-500;
   }
+  &.isDisabled {
+    cursor: default;
+    opacity: 0.6;
+  }
   &__input {
     display: none;
   }
@@ -508,9 +530,15 @@ async function onGenerate() {
     height: 2.25rem;
     flex-shrink: 0;
     border-radius: 8px;
+    overflow: hidden;
     background: #eef1f7;
     color: $babyBlue;
     font-size: 1.125rem;
+  }
+  &__thumbImage {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
   &__col {
     flex: 1;
