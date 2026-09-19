@@ -380,7 +380,7 @@ const WIRE_BRAND = {
 }
 
 describe('品牌設定（brand）', () => {
-  it('getBrand 把後端形狀翻成 BrandProfile：avoidWords 原樣帶過來、colorPalette 拆成三個色票', async () => {
+  it('getBrand 把後端形狀翻成 BrandProfile：avoidWords 原樣帶入字串、colorPalette 拆成三個色票', async () => {
     stubRoutes({ '/brand': { data: WIRE_BRAND } })
 
     const profile = await realApi.getBrand()
@@ -462,7 +462,7 @@ describe('品牌設定（brand）', () => {
     imageLicense: '',
   }
 
-  it('saveBrand 把 avoidWords 原樣送出（不再切成陣列）、colors 依索引對到 primary／secondary／accent', async () => {
+  it('saveBrand 把 avoidWords 字串原樣帶到 PUT body、colors 依索引對到 primary／secondary／accent', async () => {
     const calls = stubRoutes({ '/brand': { data: WIRE_BRAND } })
 
     await realApi.saveBrand(BASE_PROFILE)
