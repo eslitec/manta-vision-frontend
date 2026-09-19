@@ -37,7 +37,7 @@
 
 ### Requirement: 付費請求只在無法確定是否送達時重送
 
-付費生成請求的逾時上限 SHALL 是 100 秒（覆寫全域 30 秒）。API 層 SHALL 只在兩種情況自動重送：(1) 逾時或斷線（`TIMEOUT`、`NETWORK_ERROR`），每 5 秒重送一次，含第一次最多送 3 次；(2) 後端回 409 `IDEMPOTENCY_IN_PROGRESS`，每 5 秒重送一次，直到第一次送出後 120 秒（100 秒逾時加 20 秒）為止，409 SHALL NOT 計入 3 次上限。其他錯誤（402、400、`CONTENT_BLOCKED`、502 等）SHALL NOT 重送，直接交給呼叫端。
+付費生成請求的逾時上限 SHALL 是 100 秒（覆寫全域 30 秒）。API 層 SHALL 只在兩種情況自動重送：(1) 無法確定是否送達——逾時、斷線（`TIMEOUT`、`NETWORK_ERROR`），或閘道吐的非後端格式 5xx（`status >= 500` 且沒有 `requestId`，例如 nginx 504、Cloudflare 524）——每 5 秒重送一次，含第一次最多送 3 次；(2) 後端回 409 `IDEMPOTENCY_IN_PROGRESS`，每 5 秒重送一次，直到第一次送出後 120 秒（100 秒逾時加 20 秒）為止；中途若有 (1) 的失敗，期限 SHALL 從最後一次 (1) 的失敗重新計算 120 秒（那一發可能才剛在後端開跑）。409 SHALL NOT 計入 3 次上限。其他錯誤（402、400、`CONTENT_BLOCKED`、後端自己回的 5xx——一定帶 `requestId`——等）SHALL NOT 重送，直接交給呼叫端。
 
 #### Scenario: 409 持續到後端定案仍能拿到回放
 
@@ -60,6 +60,21 @@
 - **GIVEN** `/generate` 每次都回 409 `IDEMPOTENCY_IN_PROGRESS`
 - **WHEN** 推進 125000 毫秒，記下呼叫次數後再推進 60000 毫秒
 - **THEN** promise reject，錯誤碼是 `IDEMPOTENCY_IN_PROGRESS`，第二次推進後呼叫次數不變
+
+#### Scenario: 閘道 5xx 用同一把 key 重送
+
+- **WHEN** `/generate` 先回 HTML 524（沒有 `requestId`），再回 200
+- **THEN** `generateImages` resolve，共送 2 次，兩次的 key 與原始 body 相同
+
+#### Scenario: 後端自己回的 5xx 不重送
+
+- **WHEN** `/generate` 回 502 `{ code: 'UPSTREAM_ERROR', requestId: 'req_1' }`
+- **THEN** 只送 1 次，reject 的錯誤碼是 `UPSTREAM_ERROR`
+
+#### Scenario: 逾時後 409 期限重算
+
+- **WHEN** 第一次送出在 100 秒時逾時，之後 6 次重送都拿到 409，第 8 次拿到 200（約第 135 秒）
+- **THEN** `generateImages` resolve，8 次請求用同一把 key
 
 #### Scenario: 連續逾時三次就放棄
 
@@ -98,7 +113,7 @@
 #### Scenario: 輪詢到失敗
 
 - **WHEN** 輪詢回應 `status: 'failed'`
-- **THEN** reject，錯誤碼是 `GENERATION_FAILED`
+- **THEN** reject，錯誤碼是 `GENERATION_FAILED`；訊息 SHALL 說明「若是內容被審核擋下，飼料不會退回，請修改描述後再試」，SHALL NOT 叫使用者原樣再試（202 之後被審核擋下，後端的 `failed` 是結清扣點）
 
 #### Scenario: 輪詢超過上限
 
@@ -147,7 +162,7 @@
 
 ### Requirement: 生成錯誤顯示後端提供的訊息
 
-生成、存入圖庫、下載、輔助描述、載入價格與靈感失敗時，頁面 SHALL 用既有的 `displayMessage(e, fallback)` 顯示後端回傳的 `message`；402 `INSUFFICIENT_FEEDS` SHALL 沿用既有的飼料不足文案。前端合成的錯誤碼 `GENERATION_FAILED`、`GENERATION_STILL_PROCESSING` SHALL 帶有給人看的中文 `message`。新的後端錯誤碼（`CONTENT_BLOCKED`、`UPSTREAM_ERROR`、`MONTHLY_LIMIT_EXCEEDED` 等）SHALL NOT 新增 i18n 文案。
+生成、存入圖庫、下載、輔助描述、載入價格與靈感失敗時，頁面 SHALL 用既有的 `displayMessage(e, fallback)` 顯示後端回傳的 `message`；402 `INSUFFICIENT_FEEDS` SHALL 沿用既有的飼料不足文案。前端合成的錯誤碼 `GENERATION_FAILED`、`GENERATION_STILL_PROCESSING` SHALL 帶有依目前語系產生的 `message`（i18n `errors.backgroundGenerationFailed`、`errors.generationStillProcessing`）。新的後端錯誤碼（`CONTENT_BLOCKED`、`UPSTREAM_ERROR`、`MONTHLY_LIMIT_EXCEEDED` 等）SHALL NOT 新增 i18n 文案。
 
 #### Scenario: 內容被審核擋下
 
@@ -180,7 +195,7 @@
 
 ### Requirement: mock 模式與真後端介面同形
 
-`mockApi` 與 `realApi` 的 `listModels`、`generateImages`、`generatePost`、`saveGenerated`、`recordAdoption`、`listInspirations`、`getFeed`、`enhancePrompt` SHALL 有相同簽名；`VITE_USE_MOCK` 沒設或不是 `false` 時，兩頁 SHALL 用 mock 跑完整流程。mock 的價格 SHALL 對齊後端：`imageStandard` 8、`imageAdvanced` 12、`imagePro` 24、`marketingImage` 5、`marketingText` 0；帶 `regenOf` 時 SHALL 只扣一張；同一張結果重複 `recordAdoption` SHALL 只計一次採用。
+`mockApi` 與 `realApi` 的 `listModels`、`generateImages`、`generatePost`、`saveGenerated`、`recordAdoption`、`listInspirations`、`getFeed`、`enhancePrompt` SHALL 有相同簽名；`VITE_USE_MOCK` 沒設或不是 `false` 時，兩頁 SHALL 用 mock 跑完整流程。mock 的價格 SHALL 對齊後端：`imageStandard` 8、`imageAdvanced` 12、`imagePro` 24、`marketingImage` 5、`marketingText` 0；帶 `regenOf` 時 SHALL 只扣一張；同一張結果重複 `recordAdoption` SHALL 只計一次採用；行銷海報的採用 SHALL NOT 計入採用率（同後端只算圖生圖）。
 
 #### Scenario: mock 生成扣點
 
@@ -201,3 +216,30 @@
 
 - **WHEN** 檢查 `realApi.getFeed`、`listModels`、`enhancePrompt`、`generateImages`、`generatePost`、`saveGenerated`、`recordAdoption`、`listInspirations`
 - **THEN** 每一支都不等於 `mockApi` 的同名方法
+
+### Requirement: 生成中離開頁面先確認
+
+生成結果只存在頁面元件裡（後端不會自動存進圖庫，前端也沒有生成紀錄頁），而後端照樣結清飼料。圖生圖頁與行銷頁在生成中（含同步等待與 202 輪詢）SHALL 攔下站內導頁並以確認框詢問「生成還在進行中，離開這一頁就拿不到這次的結果，飼料仍會照扣。確定要離開嗎？」，取消時 SHALL 留在原頁；關閉或重新整理分頁時 SHALL 觸發瀏覽器的離開提醒。沒有生成中時 SHALL NOT 攔下。任務中心對圖生圖任務 SHALL NOT 顯示「已存入圖庫」，完成文案 SHALL 是「已完成・結果不會自動存入圖庫，請在圖生圖頁按「存入圖庫」」，SHALL NOT 顯示「查看」按鈕與推算的剩餘秒數；面板底部說明 SHALL 只對影片說「離開頁面不影響生成」。
+
+#### Scenario: 生成中點側欄
+
+- **WHEN** 圖生圖生成中，使用者點側欄「圖庫」並在確認框按取消
+- **THEN** 仍停在圖生圖頁，生成完成後結果照常顯示
+
+##### Example: mock 模式標準檔 2 張
+
+- **GIVEN** mock 模式、已選參考圖、描述「白T放木桌上」，按下「生成圖片」
+- **WHEN** 生成完成前點 `a.sidebar__item[href="/library"]`，確認框按取消
+- **THEN** `location.pathname` 仍是 `/generate/image`，之後出現 2 張結果；生成完成後再點同一個連結則直接進 `/library`，不出現確認框
+
+#### Scenario: 任務中心的圖生圖任務
+
+- **WHEN** 圖生圖任務完成後打開任務中心
+- **THEN** 該任務顯示「已完成・結果不會自動存入圖庫，請在圖生圖頁按「存入圖庫」」，沒有「查看」按鈕
+
+##### Example: 兩種任務並列
+
+| 任務 kind | 完成文案                                                 | 「查看」按鈕 | 生成中剩餘秒數 |
+| --------- | -------------------------------------------------------- | ------------ | -------------- |
+| `image`   | 已完成・結果不會自動存入圖庫，請在圖生圖頁按「存入圖庫」 | 無           | 不顯示         |
+| `video`   | 已完成・已存入圖庫›影片                                  | 有           | 顯示           |

@@ -92,8 +92,9 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useEventListener } from '@vueuse/core'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import TopUpDialog from '@/components/TopUpDialog.vue'
 import AppButton from '@/components/AppButton.vue'
@@ -104,6 +105,7 @@ import { useFeedStore } from '@/stores/feed'
 import { api } from '@/api'
 import { displayMessage, isInsufficientFeed } from '@/utils/error'
 import { downloadFile } from '@/utils/download'
+import { mergePost } from '@/utils/generation'
 import type { Asset, GeneratedPost, Inspiration, PostOutputType } from '@/types/api'
 
 const router = useRouter()
@@ -127,11 +129,6 @@ const resultType = ref<PostOutputType>('both') // 目前的結果「要求了」
 const copied = ref(false)
 
 // 要產出什麼。價格讀 GET /ai-models?modelType=marketing：要配圖加 marketingImage、要文案加 marketingText
-const OUTPUT_TYPE_OPTIONS: { value: PostOutputType; labelKey: string }[] = [
-  { value: 'both', labelKey: 'marketing.outputType.options.both' },
-  { value: 'textOnly', labelKey: 'marketing.outputType.options.textOnly' },
-  { value: 'imageOnly', labelKey: 'marketing.outputType.options.imageOnly' },
-]
 const outputType = ref<PostOutputType>('both')
 const wantImage = computed(() => outputType.value !== 'textOnly')
 const wantText = computed(() => outputType.value !== 'imageOnly')
@@ -142,14 +139,26 @@ function costOf(type: PostOutputType): number | '…' {
   return (type !== 'textOnly' ? img : 0) + (type !== 'imageOnly' ? txt : 0)
 }
 const outputTypeOptions = computed(() =>
-  OUTPUT_TYPE_OPTIONS.map((o) => ({ ...o, label: t(o.labelKey), cost: costOf(o.value) })),
+  (['both', 'textOnly', 'imageOnly'] as const).map((value) => ({
+    value,
+    label: t(`marketing.outputType.options.${value}`),
+    cost: costOf(value),
+  })),
 )
 const outputTypeCost = computed(() => costOf(outputType.value))
-// 主按鈕看目前選的類型；「換一張圖」「重寫文案」各看自己那一半（欄位被清空時擋在前端，後端只會回籠統的值域錯）
+// 主按鈕看目前選的類型；「換一張圖」「重寫文案」各看自己那一半（欄位被清空時擋在前端，後端只會回籠統的值域錯）。
+// 價格沒載入（顯示「…」）也不給送：畫面沒有標價，後端照樣扣點
 const canGenerateFor = (type: PostOutputType) =>
+  typeof costOf(type) === 'number' &&
   (type === 'textOnly' || (!!productImage.value && !!posterText.value.trim())) &&
   (type === 'imageOnly' || !!intro.value.trim())
 const canGenerate = computed(() => canGenerateFor(outputType.value))
+
+// 生成中離開頁面，結果只活在這個元件裡、卸載就沒了，後端卻照樣結清飼料
+onBeforeRouteLeave(() => !generating.value || window.confirm(t('common.leaveWhileGenerating')))
+useEventListener(window, 'beforeunload', (e) => {
+  if (generating.value) e.preventDefault()
+})
 
 onMounted(async () => {
   try {
@@ -205,14 +214,13 @@ async function generate(only?: 'imageOnly' | 'textOnly') {
       inspirationId: inspirationId.value || undefined,
       productDesc: intro.value,
     })
-    const prev = result.value
-    if (only === 'imageOnly' && prev) result.value = { ...prev, poster: next.poster }
-    else if (only === 'textOnly' && prev) result.value = { ...prev, copy: next.copy, hashtags: next.hashtags }
-    else {
-      result.value = next
-      resultType.value = only ?? outputType.value
-    }
-    if (next.partialError) errorMsg.value = failText(next.partialError)
+    if (!result.value || !only) resultType.value = only ?? outputType.value
+    result.value = mergePost(result.value, next, only)
+    // 只成功一半：點名失敗的是哪一半，引導去按那一欄自己的重試鈕（主按鈕會兩半重做、已成功的那半再扣一次）
+    if (next.partialError)
+      errorMsg.value = t(next.poster ? 'marketing.partialFailed.text' : 'marketing.partialFailed.image', {
+        reason: failText(next.partialError),
+      })
   } catch (e: unknown) {
     errorMsg.value = failText(e)
   } finally {
@@ -228,7 +236,7 @@ async function downloadPoster() {
   try {
     if (poster.url) await downloadFile(poster.url) // mock 的結果沒有檔案，跳過
     if (!poster.adopted) {
-      await api.recordAdoption({ generationId: poster.generationId, resultId: poster.id })
+      await api.recordAdoption(poster)
       poster.adopted = true
     }
   } catch (e: unknown) {

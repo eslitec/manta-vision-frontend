@@ -17,7 +17,8 @@ Teleport(to="body")
             .task__topline
               span.task__dot.task__dot--running
               span.task__name {{ task.name }}
-              span.task__eta {{ remainingTime(task.progress) }}
+              //- 圖生圖沒有真的進度（固定 60%），推算出來的秒數會一直停在「剩 58 秒」
+              span.task__eta(v-if="task.kind === 'video'") {{ remainingTime(task.progress) }}
             .task__progressRow
               .task__bar(role="progressbar" :aria-label="task.name" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="task.progress")
                 .task__barFill(:style="{ width: task.progress + '%' }")
@@ -26,14 +27,16 @@ Teleport(to="body")
             .task__topline
               span.task__dot.task__dot--done
               span.task__name {{ task.name }}
-            p.task__meta {{ $t('taskCenter.completed', { type: $t(`assetTypes.${task.kind}`) }) }}
+            //- 圖生圖的結果不會自動入庫（後端 save_result 要按了才存），不能說「已存入圖庫」
+            p.task__meta(v-if="task.kind === 'image'") {{ $t('taskCenter.imageCompleted') }}
+            p.task__meta(v-else) {{ $t('taskCenter.completed', { type: $t(`assetTypes.${task.kind}`) }) }}
           template(v-else)
             .task__topline
               span.task__dot.task__dot--failed
               span.task__name {{ task.name }}
             p.task__meta.task__meta--failed {{ task.error || $t('taskCenter.failedDetail') }}
         .task__action
-          button(v-if="task.status === 'done'" @click="view") {{ $t('common.view') }}
+          button(v-if="task.status === 'done' && task.kind === 'video'" @click="view") {{ $t('common.view') }}
           button(v-else-if="task.status === 'failed'" @click="tasksStore.retryTask(task.id)") {{ $t('common.retry') }}
     .taskpanel__foot
       p {{ t('taskCenter.notePrimary') }}
