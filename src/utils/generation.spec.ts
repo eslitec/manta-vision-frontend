@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GeneratedPost } from '@/types/api'
-import { mergePost, parseSeed, toBackendStrength } from './generation'
+import { mergePost, parseSeed, retryTarget, toBackendStrength } from './generation'
 
 describe('toBackendStrength', () => {
   it('畫面越貼近參考圖（高），送出的 strength 越低', () => {
@@ -53,5 +53,24 @@ describe('mergePost', () => {
   it('第一次產生或沒指定 only：整包換掉', () => {
     expect(mergePost(null, next, 'imageOnly')).toBe(next)
     expect(mergePost(prev, next)).toBe(next)
+  })
+})
+
+describe('retryTarget（主按鈕只重做失敗的那一半）', () => {
+  const poster = { id: 'r_1', generationId: 'gen_1', url: 'a.png', adopted: false }
+  const err = new Error('限流')
+
+  it('文案＋配圖只成功一半：主按鈕的目標只有失敗的那一半', () => {
+    expect(retryTarget(undefined, { poster, hashtags: [], partialError: err })).toBe('textOnly')
+    expect(retryTarget(undefined, { copy: '文案', hashtags: [], partialError: err })).toBe('imageOnly')
+  })
+
+  it('兩半都成功：照所選輸出類型', () => {
+    expect(retryTarget('imageOnly', { poster, copy: '文案', hashtags: [] })).toBeUndefined()
+  })
+
+  it('失敗那一半單獨重做成功才解除；重做另一半不影響', () => {
+    expect(retryTarget('imageOnly', { poster, hashtags: [] }, 'imageOnly')).toBeUndefined()
+    expect(retryTarget('imageOnly', { copy: '新文案', hashtags: [] }, 'textOnly')).toBe('imageOnly')
   })
 })

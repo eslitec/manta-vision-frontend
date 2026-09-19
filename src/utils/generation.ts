@@ -24,3 +24,16 @@ export function mergePost(
   if (!prev || !only) return next
   return only === 'imageOnly' ? { ...prev, poster: next.poster } : { ...prev, copy: next.copy, hashtags: next.hashtags }
 }
+
+/**
+ * 主按鈕下一次只重做哪一半：「文案＋配圖」只成功一半時是失敗的那一半（已成功的那半不再扣點），
+ * 那一半單獨重做成功後回 undefined（照所選輸出類型）。prev：目前的目標；only：這次只做了哪一半。
+ */
+export function retryTarget(
+  prev: 'imageOnly' | 'textOnly' | undefined,
+  next: GeneratedPost,
+  only?: 'imageOnly' | 'textOnly',
+): 'imageOnly' | 'textOnly' | undefined {
+  if (only) return only === prev ? undefined : prev
+  return next.partialError ? (next.poster ? 'textOnly' : 'imageOnly') : undefined
+}

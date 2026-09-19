@@ -30,6 +30,8 @@ export const API_ERROR_CODES = {
   ASSET_IN_USE: 'ASSET_IN_USE',
   // 付費生成：同一把 Idempotency-Key 的前一發還在後端跑（real.ts 的 postPaid 靠它決定重送）
   IDEMPOTENCY_IN_PROGRESS: 'IDEMPOTENCY_IN_PROGRESS',
+  // 付費生成：上游失敗（502／504），後端已釋放預留；postPaid 據此放掉這把 key
+  UPSTREAM_ERROR: 'UPSTREAM_ERROR',
   // 存入圖庫：這張已經存過了（連點、或前一發的回應遺失）；圖生圖頁當成已存入
   ALREADY_SAVED: 'ALREADY_SAVED',
 } as const

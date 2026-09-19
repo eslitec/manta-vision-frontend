@@ -6,7 +6,7 @@
 
 ### Requirement: 付費生成請求每次點擊使用一把冪等鍵
 
-真後端模式下，每呼叫一次付費生成方法（`generateImages`，以及 `generatePost` 裡的每一支端點）SHALL 產生一把新的 `Idempotency-Key`（`crypto.randomUUID()` 產生的 uuid），並以 `Idempotency-Key` 標頭送出；同一次呼叫裡的自動重送 SHALL 沿用同一把 key 與同一個 body 物件。非付費端點（`POST /prompt/enhance`、`POST /generations/{id}/save`、`POST /generations/{id}/events`）SHALL NOT 帶 `Idempotency-Key`。view SHALL NOT 產生或持有 key。
+真後端模式下，每呼叫一次付費生成方法（`generateImages`，以及 `generatePost` 裡的每一支端點）SHALL 產生一把新的 `Idempotency-Key`（`crypto.randomUUID()` 產生的 uuid），並以 `Idempotency-Key` 標頭送出；同一次呼叫裡的自動重送 SHALL 沿用同一把 key 與同一個 body 物件。例外：同一端點、同一份 body（`JSON.stringify` 相同）的前一次呼叫結果不確定——逾時、斷線、閘道 5xx 用完重送次數，409 `IDEMPOTENCY_IN_PROGRESS` 等到期限，或 `UPSTREAM_ERROR` 以外的後端 5xx——時，下一次呼叫 SHALL 沿用那一把 key；前一次回 2xx（含 202）、4xx（409 `IDEMPOTENCY_IN_PROGRESS` 除外）或 `UPSTREAM_ERROR`（後端已釋放預留）時 SHALL 產生新的 key。沿用紀錄只存在記憶體，重新整理頁面後 SHALL 產生新的 key。非付費端點（`POST /prompt/enhance`、`POST /generations/{id}/save`、`POST /generations/{id}/events`）SHALL NOT 帶 `Idempotency-Key`。view SHALL NOT 產生或持有 key。
 
 #### Scenario: 同一次呼叫的重送沿用同一把 key 與同一份 body
 
@@ -21,7 +21,7 @@
 
 #### Scenario: 兩次點擊使用不同的 key
 
-- **WHEN** 使用者連續按兩次「生成圖片」，`generateImages` 被呼叫兩次
+- **WHEN** 使用者連續按兩次「生成圖片」，`generateImages` 被呼叫兩次，第一次已成功
 - **THEN** 兩次 `POST /generate` 的 `Idempotency-Key` 不同
 
 ##### Example: key 形狀
@@ -29,6 +29,21 @@
 - **GIVEN** `/generate` 每次都回 200
 - **WHEN** 連續 await 兩次 `generateImages`
 - **THEN** 兩把 key 都符合 `/^[0-9a-f-]{36}$/`，而且彼此不相等
+
+#### Scenario: 結果不確定後同一份輸入再按一次沿用 key
+
+- **WHEN** `generateImages` 丟出結果不確定的錯誤後，使用者沒改輸入又按一次
+- **THEN** 第二次的 `Idempotency-Key` 與前一次相同；改了輸入（body 不同）就是新的 key
+
+##### Example: 各種前一次結果
+
+| 前一次結果               | 再按一次（同一份輸入） |
+| ------------------------ | ---------------------- |
+| 逾時 3 次後丟 `TIMEOUT`  | 沿用 key               |
+| 500 `INTERNAL_ERROR`     | 沿用 key               |
+| 402 `INSUFFICIENT_FEEDS` | 新的 key               |
+| 502 `UPSTREAM_ERROR`     | 新的 key               |
+| 200                      | 新的 key               |
 
 #### Scenario: 非付費端點不帶 key
 

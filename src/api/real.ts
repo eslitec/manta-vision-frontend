@@ -453,23 +453,38 @@ const isTransient = (e: unknown) =>
   (isApiError(e) && e.status >= 500 && !e.requestId)
 // 輪詢打的是 GET，本身冪等：網路抖動與 5xx（反向代理吐的 HTML 502／504）都等下一輪再問
 const isPollTransient = (e: unknown) => isTransient(e) || (isApiError(e) && e.status >= 500)
+// 結果已確定、沒有懸著的扣款：4xx（後端放掉 key），以及 UPSTREAM_ERROR——後端 generation.py `_execute`
+// 的兜底 except 先 billing.release 才往上拋（502／504 都是這個碼）。其餘 5xx 可能發生在扣款之後，不算
+const isSettledFailure = (e: unknown) =>
+  isApiError(e) && ((e.status >= 400 && e.status < 500) || e.code === API_ERROR_CODES.UPSTREAM_ERROR)
+
+// 「端點＋body」→ 還沒有確定結果的那把 Idempotency-Key。
+// ponytail: 只存在記憶體，重新整理就消失；輸入差一個字就視為新的操作。要跨重新整理再搬到 sessionStorage
+const openKeys = new Map<string, string>()
 
 /**
- * 付費端點：一次呼叫＝一次點擊，只產一把 Idempotency-Key。
+ * 付費端點：同一份輸入沿用還沒有確定結果的那把 Idempotency-Key，否則產新的一把。
+ * 逾時、斷線、閘道 5xx、409 等到期限、未知的 5xx 丟錯後 key 留著：使用者再按一次，前一發若已扣點，
+ * 後端會回放或回 409，不會再扣。2xx（含 202）、4xx、UPSTREAM_ERROR 結果已確定，下次按是真的想再生成一次。
  * 重送沿用同一把 key 與**同一個 body 物件**——後端比對 body 的 bytes，物件換了就會被當成新請求再扣一次點。
  * 只重送「不確定有沒有送到」的錯誤（isTransient，最多 PAID_MAX_ATTEMPTS 次），以及同 key 還在跑的 409
  * （重送到 PAID_IN_PROGRESS_MS 期限）；其他錯誤（402、400、CONTENT_BLOCKED、後端的 5xx…）直接往上丟。
  */
 async function postPaid<T>(url: string, body: object) {
-  const key = crypto.randomUUID()
+  const op = url + JSON.stringify(body)
+  const key = openKeys.get(op) ?? crypto.randomUUID()
+  openKeys.set(op, key)
   let deadline = Date.now() + PAID_IN_PROGRESS_MS
   for (let failures = 0; ;) {
     try {
-      return await http.post<T>(url, body, { headers: { 'Idempotency-Key': key }, timeout: PAID_TIMEOUT_MS })
+      const res = await http.post<T>(url, body, { headers: { 'Idempotency-Key': key }, timeout: PAID_TIMEOUT_MS })
+      openKeys.delete(op)
+      return res
     } catch (e) {
       if (hasErrorCode(e, API_ERROR_CODES.IDEMPOTENCY_IN_PROGRESS)) {
         if (Date.now() >= deadline) throw e
       } else {
+        if (isSettledFailure(e)) openKeys.delete(op)
         if (!isTransient(e) || ++failures >= PAID_MAX_ATTEMPTS) throw e
         // 那一發可能才剛在後端開跑（例如逾時 100 秒後），409 期限從這裡重新算
         deadline = Date.now() + PAID_IN_PROGRESS_MS
