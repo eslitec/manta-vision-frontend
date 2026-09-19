@@ -302,7 +302,7 @@ export default {
     noBuiltInModels: 'No built-in models available right now',
     upload: {
       title: 'Drag a model photo here or click to upload',
-      hint: 'JPG/PNG · Up to 10 MB · 1024px or larger recommended',
+      hint: 'JPG/PNG/WebP · Up to 10 MB · 1024px or larger recommended',
       recommendation:
         'Use a front-facing full-body photo with one person and a simple background. Other people or large logos reduce quality.',
       available: 'Available',

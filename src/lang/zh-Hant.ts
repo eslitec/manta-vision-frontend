@@ -278,7 +278,7 @@ export default {
     noBuiltInModels: '目前沒有內建模特',
     upload: {
       title: '拖曳模特照到這裡，或點擊上傳',
-      hint: 'JPG／PNG・單張 ≤ 10MB・建議 1024px 以上',
+      hint: 'JPG／PNG／WebP・單張 ≤ 10MB・建議 1024px 以上',
       recommendation: '建議全身正面、單一人物、背景單純；避免他人入鏡或大面積 logo，會影響合成品質。',
       available: '可用',
       reupload: '需重傳',
