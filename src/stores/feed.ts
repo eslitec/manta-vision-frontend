@@ -19,5 +19,12 @@ export const useFeedStore = defineStore('feed', () => {
     loaded.value = true
   }
 
-  return { balance, loaded, refresh, applyTopUp }
+  // 登出時要清：飼料錢包是綁 Account 的餘額，不清的話換帳號登入後畫面會
+  // 沿用上一個帳號的舊餘額，直到某個地方剛好又打一次 refresh() 才會更新。
+  function $reset() {
+    balance.value = 0
+    loaded.value = false
+  }
+
+  return { balance, loaded, refresh, applyTopUp, $reset }
 })

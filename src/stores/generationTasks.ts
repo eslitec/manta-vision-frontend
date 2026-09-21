@@ -18,7 +18,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     () => tasks.value.filter((t) => t.status === 'pending' || t.status === 'processing').length,
   )
   const unreadCount = computed(
-    () => tasks.value.filter((t) => (t.status === 'succeeded' || t.status === 'failed') && !t.read).length,
+    () => tasks.value.filter((t) => (t.status === 'done' || t.status === 'failed') && !t.read).length,
   )
 
   function showToast(task: GenerationTask, kind: 'done' | 'failed') {
@@ -53,7 +53,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
       t.status = j.status
       // mock：processing 期間讓進度平滑往上爬（真實後端應回傳實際百分比）
       t.progress = Math.max(0, Math.min(100, j.progress))
-      if (j.status === 'succeeded') {
+      if (j.status === 'done') {
         clearTimer(taskId)
         t.progress = 100
         t.doneAt = Date.now()
@@ -108,7 +108,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     tasks.value.unshift(task)
     try {
       const result = await run()
-      task.status = 'succeeded'
+      task.status = 'done'
       task.progress = 100
       task.doneAt = Date.now()
       task.read = false
@@ -135,6 +135,17 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     })
   }
 
+  // 登出時要清：任務是綁 Account 的（poll() 打的 API 也帶著登入時的 auth），
+  // 不清的話登出後背景輪詢還在跑——這時 token 已經被 clearAuth() 拔掉，
+  // 輪詢會開始打出沒帶 auth 的請求；換帳號登入後任務清單／徽章也會殘留
+  // 上一個帳號的任務。先停掉所有計時器，再清空狀態。
+  function $reset() {
+    timers.forEach((timer) => clearInterval(timer))
+    timers.clear()
+    tasks.value = []
+    toast.value = null
+  }
+
   return {
     tasks,
     toast,
@@ -145,5 +156,6 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     retryTask,
     markAllRead,
     dismissToast,
+    $reset,
   }
 })

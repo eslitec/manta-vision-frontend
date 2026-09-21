@@ -59,7 +59,7 @@ Teleport(to="body")
             v-model="folder"
             :disabled="loading"
           )
-            option(v-for="option in folderOptions" :key="option" :value="option") {{ option }}
+            option(v-for="option in folderOptions" :key="option.folderId" :value="option.folderId") {{ option.folderName }}
           IconChevronDown.saveAssetDialog__chevron
         small.saveAssetDialog__hint {{ t('editor.saveDialog.folderHint') }}
 
@@ -68,6 +68,8 @@ Teleport(to="body")
           span.saveAssetDialog__optionText {{ t('editor.saveDialog.keepLayers') }}
         AppCheckbox(v-model="alsoDownload")
           span.saveAssetDialog__optionText {{ t('editor.saveDialog.alsoDownload') }}
+
+      p.saveAssetDialog__banner(v-if="error" role="alert") {{ error }}
 
       .saveAssetDialog__actions
         span.saveAssetDialog__nocost {{ t('editor.saveDialog.noCost') }}
@@ -83,17 +85,25 @@ import AppButton from '@/components/AppButton.vue'
 import AppCheckbox from '@/components/AppCheckbox.vue'
 import { IconImagePlaceholder, IconChevronDown } from '@/components/icons'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
-import { UNFILED_FOLDER } from '@/types/asset'
+import { UNFILED_FOLDER, type Folder } from '@/types/asset'
+
+// 「未分類」在下拉選單裡是個虛擬選項（folderId 為空字串的哨兵值），不是後端資料夾清單的一筆；
+// 選它就等於送出時不帶 folderId，新素材落地時自然是未分類（跟 api/mock.ts、api/real.ts 的
+// uploadImage／editImage「folderId 未指定＝未分類」語意一致）。
+const UNFILED_OPTION: Folder = { folderId: '', folderName: UNFILED_FOLDER, imageCount: 0 }
 
 const props = defineProps<{
   defaultName: string
   loading?: boolean
-  folders?: string[] // 「存放位置」可選的使用者資料夾清單
-  defaultFolder?: string // 開啟時預設選取的資料夾
+  folders?: Folder[] // 「存放位置」可選的使用者資料夾清單
+  defaultFolder?: string // 開啟時預設選取的資料夾 id
   originalName?: string // 「原圖保留」文案要顯示的原始素材名稱
   appliedSummary?: string // 「已套用：…」的編輯摘要
   metaLine?: string // 尺寸／格式／檔案大小，例如 1024 × 768 px ・ PNG ・ 約 1.4 MB
   previewSrc?: string // 縮圖來源；沒有時顯示佔位圖示
+  // 使用者反饋：另存失敗時畫面完全沒有反應——之前沒有任何看得到的錯誤訊息（只有螢幕報讀器
+  // 聽得到的 aria-live alert），這裡補一個看得到的錯誤橫幅；有值才顯示，對話框繼續開著讓使用者重試。
+  error?: string
 }>()
 const emit = defineEmits<{
   (event: 'save', payload: { name: string; folder: string; keepLayers: boolean; alsoDownload: boolean }): void
@@ -115,15 +125,15 @@ const errorId = `save-asset-error-${uid}`
 const folderId = `save-asset-folder-${uid}`
 
 const nameLength = computed(() => name.value.length)
-const folderOptions = computed(() => (props.folders?.length ? props.folders : [UNFILED_FOLDER]))
+// 「未分類」一律排第一個，使用者的資料夾接在後面
+const folderOptions = computed(() => [UNFILED_OPTION, ...(props.folders ?? [])])
 const appliedSummaryText = computed(() => props.appliedSummary ?? t('editor.saveDialog.appliedDefault'))
 const originalNameText = computed(() => props.originalName ?? props.defaultName)
 
 const resolveDefaultFolder = () => {
   const options = folderOptions.value
-  if (props.defaultFolder && options.includes(props.defaultFolder)) return props.defaultFolder
-  if (options.includes(UNFILED_FOLDER)) return UNFILED_FOLDER
-  return options[0]
+  if (props.defaultFolder && options.some((o) => o.folderId === props.defaultFolder)) return props.defaultFolder
+  return UNFILED_OPTION.folderId
 }
 
 watch(open, (isOpen) => {
@@ -417,6 +427,15 @@ useAccessibleDialog(open, dialogRef, cancel)
   &__optionText {
     color: $blue-dark-500;
     font-size: 0.75rem;
+  }
+
+  &__banner {
+    border-radius: 8px;
+    background: rgba(214, 68, 68, 0.1);
+    padding: 0.5rem 0.75rem;
+    color: $red;
+    font-size: 0.75rem;
+    line-height: 1.4;
   }
 
   &__actions {
