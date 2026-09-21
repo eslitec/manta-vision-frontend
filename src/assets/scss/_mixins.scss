@@ -14,7 +14,7 @@
   border-radius: 12px;
 }
 // 登入頁／註冊頁共用外殼：全螢幕背景圖 + 懸浮不透明白色卡片。
-// 套用方（LoginView.vue／RegisterView.vue）自訂各自的根 class，@include 這個 mixin 後
+// 套用方（AuthForm.vue）自訂根 class，@include 這個 mixin 後
 // 再視需要覆寫 &__title 等文字內容，BEM 子元素命名維持不變。
 @mixin authCard {
   @include flex(center, center);
