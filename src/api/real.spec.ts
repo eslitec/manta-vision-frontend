@@ -205,6 +205,8 @@ describe('尚未接上的方法', () => {
   it('已接上的方法不是 mock 的那一份', () => {
     // 有人把方法從 realApi 拿掉時，`...mockApi` 會默默補上假資料——這裡會變紅
     expect(realApi.getFeed).not.toBe(mockApi.getFeed)
+    expect(realApi.getUsage).not.toBe(mockApi.getUsage)
+    expect(realApi.getMetrics).not.toBe(mockApi.getMetrics)
     expect(realApi.listModels).not.toBe(mockApi.listModels)
     expect(realApi.enhancePrompt).not.toBe(mockApi.enhancePrompt)
     expect(realApi.generateImages).not.toBe(mockApi.generateImages)
@@ -597,15 +599,80 @@ describe('內建素材（materials）', () => {
 // ── 飼料、模型價格、輔助描述 ──
 
 describe('GET /feeds', () => {
-  it('只取 balance', async () => {
-    const calls = stubRoutes({
-      '/feeds': { data: { balance: 1224, monthlyLimit: null, monthUsed: 0, estImages: 153, estVideos: 27 } },
-    })
+  it('回整包錢包摘要，monthlyLimit 的 null（無上限）原樣保留', async () => {
+    const wire = { balance: 1224, monthlyLimit: null, monthUsed: 0, estImages: 153, estVideos: 27 }
+    const calls = stubRoutes({ '/feeds': { data: wire } })
 
     const feed = await realApi.getFeed()
 
     expect(calls[0].url).toBe('/feeds')
-    expect(feed).toEqual({ balance: 1224 })
+    expect(feed).toEqual(wire)
+  })
+})
+
+describe('GET /feeds/usage 與 GET /metrics', () => {
+  const USAGE_DAY = {
+    period: { from: '2026-09-01', to: '2026-09-22' },
+    totalUsed: 16,
+    dailyAvg: 1,
+    vsLastMonthPct: null,
+    byModule: null,
+    daily: [
+      { date: '2026-09-01', used: 0 },
+      { date: '2026-09-02', used: 16 },
+    ],
+  }
+
+  it('getUsage：custom 帶起訖日、groupBy 與瀏覽器時區，回應原樣回傳（null 不被改成 0）', async () => {
+    const calls = stubRoutes({ '/feeds/usage': { data: USAGE_DAY } })
+
+    const usage = await realApi.getUsage({
+      period: 'custom',
+      startDate: '2026-09-01',
+      endDate: '2026-09-22',
+      groupBy: 'day',
+    })
+
+    expect(calls[0].url).toBe('/feeds/usage')
+    expect(calls[0].params).toEqual({
+      period: 'custom',
+      startDate: '2026-09-01',
+      endDate: '2026-09-22',
+      groupBy: 'day',
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    })
+    expect(usage).toEqual(USAGE_DAY)
+    expect(usage.vsLastMonthPct).toBeNull()
+    expect(usage.byModule).toBeNull()
+  })
+
+  it('getUsage：預設區間只帶 period／groupBy／timezone，不帶起訖日', async () => {
+    const calls = stubRoutes({ '/feeds/usage': { data: { ...USAGE_DAY, daily: null, byModule: [] } } })
+
+    await realApi.getUsage({ period: 'month', groupBy: 'module' })
+
+    expect(Object.keys(calls[0].params as object).sort()).toEqual(['groupBy', 'period', 'timezone'])
+    expect(calls[0].params).toMatchObject({ period: 'month', groupBy: 'module' })
+  })
+
+  it('getMetrics：打 /metrics 帶期間與時區，四指標的 null 原樣保留', async () => {
+    const wire = {
+      period: { from: '2026-08-24', to: '2026-09-22' },
+      successRate: 100,
+      adoptionRate: null,
+      avgRegenerate: null,
+      costPerAdopted: null,
+      vsLastPeriod: { successRate: null, adoptionRate: null, avgRegenerate: null, costPerAdopted: null },
+      monthGenerated: 2,
+    }
+    const calls = stubRoutes({ '/metrics': { data: wire } })
+
+    const metrics = await realApi.getMetrics({ period: '30d' })
+
+    expect(calls[0].url).toBe('/metrics')
+    expect(calls[0].params).toEqual({ period: '30d', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone })
+    expect(metrics).toEqual(wire)
+    expect(metrics.adoptionRate).toBeNull()
   })
 })
 

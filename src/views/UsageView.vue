@@ -16,11 +16,13 @@
         v-if="customPanelOpen"
         :start="customStart"
         :end="customEnd"
+        :max-range-days="MAX_RANGE_DAYS"
         @apply="onApplyCustomRange"
         @cancel="customPanelOpen = false"
       )
-    span.range__date {{ periodData.dateLabel }}
-    AppButton.range__export(variant="outline" @click="exportUsage") {{ t('usage.export') }}
+    span.range__date {{ dateLabel }}
+    AppButton.range__export(v-if="tab === 'usage'" variant="outline" :disabled="!usage" @click="exportUsage") {{ t('usage.export') }}
+  p.usage__error(v-if="error" role="alert") {{ error }}
 
   template(v-if="tab === 'usage'")
     section.quota(:aria-busy="updating || undefined")
@@ -30,18 +32,19 @@
           .quota__value
             button.usageFeedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true")
               IconFeedBottleSmall
-            strong {{ formatNumber(periodData.used) }}
-            span / {{ formatNumber(periodData.limit) }} {{ t('units.feedShort') }}
-            em · {{ periodData.percent }}%
-          .gauge
-            .gauge__used(:style="{ width: `${Math.min(periodData.percent, 100)}%` }")
-            .gauge__forecast(:style="{ left: `${Math.min(periodData.percent, 100)}%`, width: `${forecastWidth}%` }")
-            .gauge__threshold(:style="{ left: `${periodData.warningPercent}%` }")
-          .gaugeLabels
-            span.gaugeLabels__current ● {{ t('usage.quota.currentPercent', { percent: periodData.percent }) }}
-            span.gaugeLabels__forecast ● {{ t('usage.quota.forecastPercent', { percent: periodData.forecastPercent }) }}
-            span.gaugeLabels__threshold | {{ t('usage.quota.thresholdPercent', { percent: periodData.warningPercent }) }}
-            span.gaugeLabels__remaining #[button.usageFeedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true") #[IconFeedBottleSmall]] {{ t('usage.quota.remainingValue', { count: formatNumber(periodData.remaining) }) }}
+            strong {{ formatNumber(monthUsed) }}
+            span(v-if="monthlyLimit !== null") / {{ t('usage.quota.limitOf', { limit: formatNumber(monthlyLimit) }) }}
+            span(v-else) {{ t('units.feedShort') }} · {{ t('usage.quota.noLimit') }}
+            em(v-if="monthlyLimit !== null") · {{ monthPercent }}%
+          template(v-if="monthlyLimit !== null")
+            .gauge
+              .gauge__used(:style="{ width: `${Math.min(monthPercent, 100)}%` }")
+              .gauge__threshold(:style="{ left: `${WARNING_PERCENT}%` }")
+            .gaugeLabels
+              span.gaugeLabels__current ● {{ t('usage.quota.currentPercent', { percent: monthPercent }) }}
+              span.gaugeLabels__threshold | {{ t('usage.quota.thresholdPercent', { percent: WARNING_PERCENT }) }}
+              span.gaugeLabels__remaining #[button.usageFeedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true") #[IconFeedBottleSmall]] {{ t('usage.quota.remainingValue', { count: formatNumber(Math.max(0, monthlyLimit - monthUsed)) }) }}
+          span.quota__balance {{ t('usage.quota.balance', { count: formatNumber(balance) }) }}
         .quota__stats
           .quota__kpi(v-for="k in quotaKpis" :key="k.label")
             span {{ k.label }}
@@ -54,46 +57,44 @@
       section.card.trend
         h2 {{ t('usage.trend.title') }}
         .trendConclusion
-          strong {{ t('usage.trend.forecastLeadDynamic', { count: formatNumber(periodData.forecastUsed), percent: periodData.forecastPercent }) }}
-          span {{ t('usage.trend.forecastDetailDynamic', { threshold: periodData.warningPercent }) }}
-          small {{ t('usage.trend.basis') }}
+          strong {{ t('usage.trend.totalLead', { count: formatNumber(usage?.totalUsed ?? 0) }) }}
+          span {{ t('usage.trend.avgDetail', { count: formatNumber(usage?.dailyAvg ?? 0) }) }}
+          small {{ t('usage.comparedPrevious', { delta: pctDelta(usage?.vsLastMonthPct) }) }}
         .trendChart
-          svg.trendChart__plot(viewBox="0 0 678 372" preserveAspectRatio="none" role="img" :aria-label="t('usage.trend.chartLabel', { range: periodData.dateLabel })")
+          svg.trendChart__plot(viewBox="0 0 678 372" preserveAspectRatio="none" role="img" :aria-label="t('usage.trend.chartLabel', { range: dateLabel })")
             g.trendChart__grid
               line(v-for="y in [0, 58, 116, 174, 232]" :key="y" x1="46" :y1="y" x2="666" :y2="y")
-            line.trendChart__limitLine(x1="46" y1="0" x2="666" y2="0")
-            line.trendChart__warningLine(x1="46" :y1="warningY" x2="666" :y2="warningY")
-            line.trendChart__todayLine(:x1="todayX" y1="0" :x2="todayX" y2="354")
+            template(v-if="limitY !== null")
+              line.trendChart__limitLine(x1="46" :y1="limitY" x2="666" :y2="limitY")
+              line.trendChart__warningLine(x1="46" :y1="warningY" x2="666" :y2="warningY")
             path.trendChart__actual(:d="actualPath")
-            path.trendChart__forecast(:d="forecastPath")
-            circle.trendChart__todayDot(:cx="todayX" :cy="todayY" r="4.5")
-            circle.trendChart__forecastDot(cx="666" :cy="forecastY" r="4.5")
+            circle.trendChart__todayDot(v-if="lastPoint" :cx="lastPoint.x" :cy="lastPoint.y" r="4.5")
             g.trendChart__bars
               rect(v-for="bar in chartBars" :key="bar.x" :x="bar.x" :y="bar.y" :width="bar.width" :height="bar.height" rx="2")
           span.trendChart__label.trendChart__label--y(v-for="tick in yTicks" :key="tick.value" :style="{ top: tick.top }") {{ tick.value }}
           span.trendChart__label.trendChart__label--x(v-for="tick in xTicks" :key="tick.value" :style="{ left: tick.left }") {{ tick.value }}
-          span.trendChart__label.trendChart__label--today {{ periodData.todayLabel }}
-          span.trendChart__label.trendChart__label--limit {{ t('usage.trend.limitShort') }}
-          span.trendChart__label.trendChart__label--threshold {{ t('usage.trend.thresholdShort') }}
+          span.trendChart__label.trendChart__label--today(v-if="periodTo") {{ t('usage.trend.latestDate', { date: formatDate(periodTo) }) }}
+          template(v-if="limitY !== null")
+            span.trendChart__label.trendChart__label--limit(:style="{ top: `${(limitY / 372) * 100}%` }") {{ t('usage.trend.limitShort', { limit: formatNumber(monthlyLimit ?? 0) }) }}
+            span.trendChart__label.trendChart__label--threshold(:style="{ top: `${(warningY / 372) * 100}%` }") {{ t('usage.trend.thresholdShort') }}
         .trendLegend
           span.trendLegend__item(v-for="item in legendItems" :key="item.key")
             img(:src="item.icon" alt="")
             | {{ t(`usage.legend.${item.key}`) }}
       section.card.modules
         h2 {{ t('usage.modules.title') }}
-        .module(v-for="m in periodData.modules" :key="m.name")
+        .module(v-for="m in moduleCards" :key="m.type")
           .module__summary
             strong {{ m.name }}
-            b.module__feed(:class="`module__feed--${m.tone}`")
+            b.module__feed(:style="{ color: m.color }")
               button.usageFeedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true")
                 IconFeedBottleSmall.module__feedIcon
-              | {{ t('units.feed', { count: m.value }) }}
-          .module__meta #[span {{ t('usage.modules.share', { share: m.share }) }}] #[span(:class="m.delta.startsWith('-') ? 'down' : 'up'") {{ t('usage.comparedLastMonth', { delta: m.delta }) }}] #[span {{ t('usage.modules.average', { average: m.avg }) }}]
-          .module__track: span(:style="{ width: m.share + '%' }")
-        p.modules__note {{ t('usage.modules.note') }}
+              | {{ t('units.feed', { count: m.used }) }}
+          .module__meta #[span {{ t('usage.modules.share', { share: m.sharePct }) }}] #[span(:class="deltaTone(m.vsLastMonthPct)") {{ t('usage.comparedPrevious', { delta: pctDelta(m.vsLastMonthPct) }) }}] #[span {{ t('usage.modules.average', { average: m.avgPerGen }) }}]
+          .module__track: span(:style="{ width: m.sharePct + '%' }")
 
   template(v-else)
-    .metrics
+    .metrics(:aria-busy="updating || undefined")
       article.metric(v-for="m in metricCards" :key="m.label")
         h2 {{ m.label }}
         .metric__row
@@ -101,31 +102,48 @@
             IconFeedBottleSmall.metric__feedIcon
           strong(:class="m.tone")
             | {{ m.value }}
-          span {{ t('usage.metrics.comparedLastMonth', { delta: m.delta }) }}
+          span {{ m.delta }}
         p {{ m.hint }}
-    .trackingNote
-      IconAlertTriangleFilled
-      div
-        strong {{ t('usage.tracking.title') }}
-        p {{ t('usage.tracking.description') }}
   TopUpDialog(v-model:open="topUpOpen")
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
+import { api } from '@/api'
 import AppButton from '@/components/AppButton.vue'
 import DateRangeCalendarPanel from '@/components/DateRangeCalendarPanel.vue'
 import TopUpDialog from '@/components/TopUpDialog.vue'
 import { IconAlertTriangleFilled, IconChevronDown, IconFeedBottleSmall } from '@/components/icons'
 import { useDismissableMenu } from '@/composables/useDismissableMenu'
+import { useFeedStore } from '@/stores/feed'
+import type { Metrics, PeriodParams, UsageModule, UsageSummary } from '@/types/api'
+import { displayMessage } from '@/utils/error'
 import { getUsageAlertLevel } from '@/utils/usage'
 import legendActualUrl from '@/assets/images/usage-legend-actual.svg'
-import legendForecastUrl from '@/assets/images/usage-legend-forecast.svg'
 import legendDailyUrl from '@/assets/images/usage-legend-daily.svg'
 import legendWarningUrl from '@/assets/images/usage-legend-warning.svg'
 import legendLimitUrl from '@/assets/images/usage-legend-limit.svg'
-const { t } = useI18n()
+
+// 口徑（design.md 決策 4～6）：
+// - 「本月已用／上限」與告警線讀 GET /feeds（台北日曆月），與所選期間無關
+// - 趨勢、日均、較前期、模組卡讀 GET /feeds/usage；指標讀 GET /metrics；兩者共用同一組期間 chip
+// - 任何 null（分母 0、前期 0）一律顯示「—」，不當成 0
+const WARNING_PERCENT = 80
+const MAX_RANGE_DAYS = 366 // 同後端 period.py 的跨度上限（含頭含尾）
+const MODULE_COLORS = ['#2e3567', '#606692', '#ea903a', '#54c14f', '#7f77dd']
+const PERIOD_OF: Record<string, PeriodParams['period']> = {
+  month: 'month',
+  days30: '30d',
+  days90: '90d',
+  custom: 'custom',
+}
+const NONE = '—'
+
+const { t, te } = useI18n()
+const feed = useFeedStore()
+const { balance, monthlyLimit, monthUsed } = storeToRefs(feed)
 const tabs = computed(() => ['usage', 'metrics'].map((value) => ({ value, label: t(`usage.tabs.${value}`) })))
 const tab = ref('usage')
 const topUpOpen = ref(false)
@@ -133,11 +151,17 @@ const ranges = computed(() =>
   ['month', 'days30', 'days90', 'custom'].map((value) => ({ value, label: t(`usage.ranges.${value}`) })),
 )
 const range = ref('month')
-const customStart = ref('2026-07-10')
-const customEnd = ref('2026-07-28')
+
+function isoDate(date: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+// 自訂區間預設「今天往前 30 天」到今天（本地日期）
+const today = new Date()
+const customStart = ref(isoDate(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 30)))
+const customEnd = ref(isoDate(today))
 const appliedCustomStart = ref(customStart.value)
 const appliedCustomEnd = ref(customEnd.value)
-const updating = ref(false)
 const customPanelOpen = ref(false)
 const customRangeRef = ref<HTMLElement | null>(null)
 const customRangeTriggerLabel = computed(
@@ -145,35 +169,68 @@ const customRangeTriggerLabel = computed(
 )
 useDismissableMenu(customPanelOpen, customRangeRef)
 
-type RangeKey = 'month' | 'days30' | 'days90' | 'custom'
-interface ModuleUsage {
-  name: string
-  value: string
-  share: number
-  delta: string
-  avg: number
-  tone: 'primary' | 'muted' | 'orange' | 'green'
+const usage = ref<UsageSummary | null>(null) // groupBy=day 那一份（頂層四欄也取它）
+const modules = ref<UsageModule[]>([])
+const metrics = ref<Metrics | null>(null)
+const updating = ref(false)
+const error = ref('')
+let loadSeq = 0
+
+const periodParams = computed<PeriodParams>(() =>
+  range.value === 'custom'
+    ? { period: 'custom', startDate: appliedCustomStart.value, endDate: appliedCustomEnd.value }
+    : { period: PERIOD_OF[range.value] },
+)
+
+// 趨勢與模組卡各打一次 GET /feeds/usage（平行）；用遞增序號擋掉切換太快時的過期回應
+async function load() {
+  const seq = ++loadSeq
+  updating.value = true
+  error.value = ''
+  try {
+    const params = periodParams.value
+    if (tab.value === 'usage') {
+      const [day, byModule] = await Promise.all([
+        api.getUsage({ ...params, groupBy: 'day' }),
+        api.getUsage({ ...params, groupBy: 'module' }),
+      ])
+      if (seq !== loadSeq) return
+      usage.value = day
+      modules.value = byModule.byModule ?? []
+    } else {
+      const result = await api.getMetrics(params)
+      if (seq !== loadSeq) return
+      metrics.value = result
+    }
+  } catch (e) {
+    if (seq === loadSeq) error.value = displayMessage(e, t('errors.loadFailed'))
+  } finally {
+    if (seq === loadSeq) updating.value = false
+  }
+}
+watch(tab, (value) => {
+  range.value = value === 'metrics' ? 'days30' : 'month'
+})
+watch([tab, periodParams], load, { immediate: true })
+onMounted(() => {
+  // 同首頁：頂欄已載過就沿用 store（生成流程結束時各頁會自己 refresh）
+  if (!feed.loaded) feed.refresh().catch((e) => (error.value = displayMessage(e, t('errors.loadFailed'))))
+})
+
+function selectRange(value: string) {
+  range.value = value
+  // 自訂區間：切到這個 chip（或再次點擊）就打開 panel_calendar 下拉面板，
+  // 面板自己的「套用」才會真的套用新區間並重新請求
+  customPanelOpen.value = value === 'custom'
+}
+function onApplyCustomRange(start: string, end: string) {
+  customStart.value = start
+  customEnd.value = end
+  appliedCustomStart.value = start
+  appliedCustomEnd.value = end
+  customPanelOpen.value = false
 }
 
-const presetConfig: Record<Exclude<RangeKey, 'custom'>, { start: string; end: string; used: number; limit: number }> = {
-  month: { start: '2026-07-01', end: '2026-07-31', used: 3760, limit: 5000 },
-  days30: { start: '2026-06-29', end: '2026-07-28', used: 3520, limit: 5000 },
-  days90: { start: '2026-05-01', end: '2026-07-29', used: 10840, limit: 15000 },
-}
-
-function dayCount(start: string, end: string) {
-  return Math.max(1, Math.round((Date.parse(end) - Date.parse(start)) / 86400000) + 1)
-}
-function makeDaily(days: number, total: number) {
-  const weights = Array.from(
-    { length: days },
-    (_, index) => 0.72 + (index / Math.max(days - 1, 1)) * 0.5 + Math.sin(index * 1.7) * 0.12,
-  )
-  const sum = weights.reduce((acc, value) => acc + value, 0)
-  const values = weights.map((weight) => Math.max(1, Math.round((weight / sum) * total)))
-  values[values.length - 1] += total - values.reduce((acc, value) => acc + value, 0)
-  return values
-}
 function formatDate(date: string) {
   const [, month, day] = date.split('-')
   return `${Number(month)}/${Number(day)}`
@@ -181,216 +238,183 @@ function formatDate(date: string) {
 function formatNumber(value: number) {
   return new Intl.NumberFormat().format(value)
 }
+function pctDelta(value: number | null | undefined) {
+  return value == null ? NONE : `${value > 0 ? '+' : ''}${value}%`
+}
+function deltaTone(value: number | null) {
+  return value == null ? '' : value < 0 ? 'down' : 'up'
+}
+// 絕對差帶正負號、一位小數；負號用 U+2212
+function signed(value: number) {
+  return `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value).toFixed(1)}`
+}
 
-const customRangeValid = computed(() =>
-  Boolean(customStart.value && customEnd.value && customStart.value <= customEnd.value),
-)
-const periodData = computed(() => {
-  const key = range.value as RangeKey
-  const config =
-    key === 'custom'
-      ? { start: appliedCustomStart.value, end: appliedCustomEnd.value, used: 0, limit: 0 }
-      : presetConfig[key]
-  const days = dayCount(config.start, config.end)
-  const used = key === 'custom' ? Math.round((3760 / 31) * days) : config.used
-  const limit = key === 'custom' ? Math.max(5000, Math.ceil(used / 5000) * 5000) : config.limit
-  const percent = Math.round((used / limit) * 100)
-  const forecastUsed = Math.min(limit, Math.round(used * 1.13))
-  const forecastPercent = Math.round((forecastUsed / limit) * 100)
-  const daily = makeDaily(days, used)
-  const moduleRatios = [1580 / 3760, 920 / 3760, 840 / 3760]
-  const moduleValues = moduleRatios.map((share) => Math.round(used * share))
-  moduleValues.push(used - moduleValues.reduce((sum, value) => sum + value, 0))
-  const moduleNames = ['image', 'post', 'video', 'tryOn']
-  const tones = ['primary', 'muted', 'orange', 'green'] as const
-  const deltas = ['+18%', '+4%', '+62%', '-9%']
-  const averages = [12, 8, 45, 15]
-  const modules: ModuleUsage[] = moduleNames.map((name, index) => ({
-    name: t(`usage.modules.items.${name}`),
-    value: String(moduleValues[index]),
-    share: [42, 24.5, 22.3, 11.2][index],
-    delta: deltas[index],
-    avg: averages[index],
-    tone: tones[index],
-  }))
-  return {
-    start: config.start,
-    end: config.end,
-    dateLabel: `${config.start.replaceAll('-', '/')} – ${config.end.replaceAll('-', '/')}`,
-    todayLabel: t('usage.trend.latestDate', { date: formatDate(config.end) }),
-    used,
-    limit,
-    percent,
-    forecastUsed,
-    forecastPercent,
-    warningPercent: 80,
-    remaining: Math.max(0, limit - used),
-    daily,
-    modules,
-  }
+const activePeriod = computed(() => (tab.value === 'usage' ? usage.value?.period : metrics.value?.period))
+const periodTo = computed(() => activePeriod.value?.to ?? '')
+const dateLabel = computed(() => {
+  const period = activePeriod.value
+  return period ? `${period.from.replaceAll('-', '/')} – ${period.to.replaceAll('-', '/')}` : ''
 })
 
-async function selectRange(value: string) {
-  range.value = value
-  if (value === 'custom') {
-    // 自訂區間：切到這個 chip（或再次點擊）就打開 panel_calendar 下拉面板，
-    // 面板自己的「套用」才會真的觸發資料更新，這裡不用假的 loading 動畫
-    customPanelOpen.value = true
-    return
-  }
-  customPanelOpen.value = false
-  updating.value = true
-  await new Promise((resolve) => setTimeout(resolve, 120))
-  updating.value = false
-}
-async function applyCustomRange() {
-  if (!customRangeValid.value) return
-  appliedCustomStart.value = customStart.value
-  appliedCustomEnd.value = customEnd.value
-  updating.value = true
-  await new Promise((resolve) => setTimeout(resolve, 120))
-  updating.value = false
-}
-function onApplyCustomRange(start: string, end: string) {
-  customStart.value = start
-  customEnd.value = end
-  customPanelOpen.value = false
-  void applyCustomRange()
-}
+const monthPercent = computed(() => (monthlyLimit.value ? Math.round((monthUsed.value / monthlyLimit.value) * 100) : 0))
+const usageAlert = computed(() => {
+  if (monthlyLimit.value === null) return ''
+  const level = getUsageAlertLevel(monthPercent.value, WARNING_PERCENT)
+  if (level === 'none') return ''
+  return t(`usage.quota.${level === 'exceeded' ? 'alertExceeded' : 'alertApproaching'}`, {
+    percent: monthPercent.value,
+    threshold: WARNING_PERCENT,
+  })
+})
+const quotaKpis = computed(() => {
+  const avg = usage.value?.dailyAvg ?? 0
+  const limit = monthlyLimit.value
+  // 預計用罄＝(上限 − 本月已用) ÷ 選取期間日均；無上限或日均 0 顯示「—」
+  const daysLeft = limit !== null && avg > 0 ? Math.ceil((limit - monthUsed.value) / avg) : null
+  const vsPrev = usage.value?.vsLastMonthPct
+  return [
+    {
+      label: t('usage.kpis.daily.label'),
+      value: formatNumber(avg),
+      hint: t('usage.kpis.daily.dynamicHint', { count: formatNumber(avg) }),
+      tone: '',
+    },
+    {
+      label: t('usage.kpis.depletion.label'),
+      value:
+        daysLeft === null
+          ? NONE
+          : daysLeft > 0
+            ? t('usage.kpis.depletion.days', { days: daysLeft })
+            : t('usage.kpis.depletion.exhausted'),
+      hint: t('usage.kpis.depletion.hint'),
+      tone: daysLeft === null ? '' : daysLeft > 0 ? 'ok' : 'warn',
+    },
+    {
+      label: t('usage.kpis.previous.label'),
+      value: pctDelta(vsPrev),
+      hint: t('usage.kpis.previous.hint'),
+      tone: (vsPrev ?? 0) > 0 ? 'warn' : '',
+    },
+  ]
+})
 
+// ── 趨勢圖：實際累積折線＋每日長條；上限線與告警線只在有月上限時畫 ──
+const daily = computed(() => usage.value?.daily?.map((d) => d.used) ?? [])
 const cumulative = computed(() => {
   let sum = 0
-  return periodData.value.daily.map((value) => (sum += value))
+  return daily.value.map((value) => (sum += value))
 })
-const actualPointCount = computed(() => Math.max(2, Math.ceil(cumulative.value.length * 0.9)))
+const yMax = computed(() => Math.max(monthlyLimit.value ?? 0, cumulative.value.at(-1) ?? 0, 1))
 function pointAt(index: number, value: number) {
   const x = 46 + (620 * index) / Math.max(cumulative.value.length - 1, 1)
-  const y = 232 - (Math.min(value, periodData.value.limit) / periodData.value.limit) * 232
+  const y = 232 - (value / yMax.value) * 232
   return { x, y }
 }
-const actualPoints = computed(() =>
-  cumulative.value.slice(0, actualPointCount.value).map((value, index) => pointAt(index, value)),
-)
+const actualPoints = computed(() => cumulative.value.map((value, index) => pointAt(index, value)))
 const actualPath = computed(() =>
   actualPoints.value.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' '),
 )
-const todayX = computed(() => actualPoints.value.at(-1)?.x ?? 46)
-const todayY = computed(() => actualPoints.value.at(-1)?.y ?? 232)
-const forecastY = computed(() => 232 - (periodData.value.forecastUsed / periodData.value.limit) * 232)
-const forecastPath = computed(
-  () => `M${todayX.value.toFixed(1)} ${todayY.value.toFixed(1)} L666 ${forecastY.value.toFixed(1)}`,
-)
-const warningY = computed(() => 232 - (periodData.value.warningPercent / 100) * 232)
-const usageAlert = computed(() => {
-  const { percent, warningPercent } = periodData.value
-  const level = getUsageAlertLevel(percent, warningPercent)
-  if (level === 'none') return ''
-  return t(`usage.quota.${level === 'exceeded' ? 'alertExceeded' : 'alertApproaching'}`, {
-    percent,
-    threshold: warningPercent,
-  })
-})
-const forecastWidth = computed(() =>
-  Math.max(0, Math.min(100 - periodData.value.percent, periodData.value.forecastPercent - periodData.value.percent)),
+const lastPoint = computed(() => actualPoints.value.at(-1) ?? null)
+const limitY = computed(() => (monthlyLimit.value === null ? null : 232 - (monthlyLimit.value / yMax.value) * 232))
+const warningY = computed(() =>
+  monthlyLimit.value === null ? 0 : 232 - ((monthlyLimit.value * WARNING_PERCENT) / 100 / yMax.value) * 232,
 )
 const chartBars = computed(() => {
-  const values = periodData.value.daily
-  const max = Math.max(...values)
+  const values = daily.value
+  if (!values.length) return []
+  const max = Math.max(...values, 1)
   const width = Math.max(2, Math.min(12, 570 / values.length))
   return values.map((value, index) => {
     const height = 80 * (value / max)
     return { x: 46 + (620 * index) / Math.max(values.length - 1, 1) - width / 2, y: 354 - height, width, height }
   })
 })
-watch(tab, (value) => {
-  range.value = value === 'metrics' ? 'days30' : 'month'
-})
-const quotaKpis = computed(() =>
-  ['daily', 'depletion', 'monthly'].map((key, index) => ({
-    label: t(`usage.kpis.${key}.label`),
-    value:
-      index === 0
-        ? formatNumber(Math.round(periodData.value.used / periodData.value.daily.length))
-        : index === 1
-          ? t('usage.kpis.depletion.value')
-          : `${periodData.value.daily.length > 31 ? '+' : ''}${Math.round((periodData.value.used / 3760 - 1) * 100)}%`,
-    hint:
-      index === 0
-        ? t('usage.kpis.daily.dynamicHint', {
-            count: formatNumber(Math.round(periodData.value.used / periodData.value.daily.length)),
-          })
-        : index === 1
-          ? t('usage.kpis.depletion.dynamicHint', { count: formatNumber(periodData.value.forecastUsed) })
-          : t('usage.kpis.monthly.hint'),
-    tone: index === 1 ? 'ok' : index === 2 ? 'warn' : '',
-  })),
-)
 const yTicks = computed(() =>
   [1, 0.75, 0.5, 0.25, 0].map((ratio, index) => ({
-    value: formatNumber(Math.round(periodData.value.limit * ratio)),
+    value: formatNumber(Math.round(yMax.value * ratio)),
     top: index === 0 ? '-0.4375rem' : `${((index * 58) / 372) * 100}%`,
   })),
 )
 const xTicks = computed(() => {
-  const start = Date.parse(periodData.value.start)
-  const end = Date.parse(periodData.value.end)
+  const period = usage.value?.period
+  if (!period) return []
+  const start = Date.parse(period.from)
+  const end = Date.parse(period.to)
   return Array.from({ length: 7 }, (_, index) => {
     const date = new Date(start + ((end - start) * index) / 6)
-    return { value: `${date.getMonth() + 1}/${date.getDate()}`, left: `${5.53 + index * 15.17}%` }
+    return { value: `${date.getUTCMonth() + 1}/${date.getUTCDate()}`, left: `${5.53 + index * 15.17}%` }
   })
 })
-const legendItems = [
-  { key: 'actual', icon: legendActualUrl },
-  { key: 'forecast', icon: legendForecastUrl },
-  { key: 'daily', icon: legendDailyUrl },
-  { key: 'warning', icon: legendWarningUrl },
-  { key: 'limit', icon: legendLimitUrl },
-]
+const legendItems = computed(() =>
+  [
+    { key: 'actual', icon: legendActualUrl },
+    { key: 'daily', icon: legendDailyUrl },
+    { key: 'warning', icon: legendWarningUrl },
+    { key: 'limit', icon: legendLimitUrl },
+  ].filter((item) => limitY.value !== null || (item.key !== 'warning' && item.key !== 'limit')),
+)
+
+// ── 模組卡：照後端清單渲染，名稱走 i18n 對照、對不到顯示 type，顏色依固定色盤循環 ──
+const moduleCards = computed(() =>
+  modules.value.map((m, index) => ({
+    ...m,
+    name: te(`usage.modules.items.${m.type}`) ? t(`usage.modules.items.${m.type}`) : m.type,
+    color: MODULE_COLORS[index % MODULE_COLORS.length],
+  })),
+)
+
 function exportUsage() {
-  const rows = [
-    [t('usage.exportFields.period'), periodData.value.dateLabel],
-    [t('usage.exportFields.used'), periodData.value.used],
-    [t('usage.exportFields.limit'), periodData.value.limit],
-    [t('usage.exportFields.remaining'), periodData.value.remaining],
+  const data = usage.value
+  if (!data) return
+  const rows: (string | number)[][] = [
+    [t('usage.exportFields.period'), dateLabel.value],
+    [t('usage.exportFields.used'), data.totalUsed],
+    [t('usage.exportFields.dailyAvg'), data.dailyAvg],
+    [],
+    [t('usage.exportFields.date'), t('usage.exportFields.feed')],
+    ...(data.daily ?? []).map((d) => [d.date, d.used]),
     [],
     [t('usage.exportFields.module'), t('usage.exportFields.feed'), t('usage.exportFields.share')],
-    ...periodData.value.modules.map((module) => [module.name, module.value, `${module.share}%`]),
+    ...moduleCards.value.map((m) => [m.name, m.used, `${m.sharePct}%`]),
   ]
-  const csv = `\uFEFF${rows.map((row) => row.map((cell) => `"${String(cell ?? '').replaceAll('"', '""')}"`).join(',')).join('\r\n')}`
+  const csv = `﻿${rows.map((row) => row.map((cell) => `"${String(cell ?? '').replaceAll('"', '""')}"`).join(',')).join('\r\n')}`
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = `manta-vision-usage-${periodData.value.start}-${periodData.value.end}.csv`
+  anchor.download = `manta-vision-usage-${data.period.from}-${data.period.to}.csv`
   anchor.click()
   URL.revokeObjectURL(url)
 }
-const metricCards = computed(() =>
-  [
+
+// ── 指標卡：值與較前期各自判 null；較前期是絕對差，文案依欄位單位 ──
+const metricCards = computed(() => {
+  const m = metrics.value
+  const d = m?.vsLastPeriod
+  const pct = (value: number | null | undefined) => (value == null ? NONE : `${value.toFixed(1)}%`)
+  const delta = (value: number | null | undefined, unit: 'pct' | 'times' | 'feeds') =>
+    value == null ? NONE : t(`usage.metrics.vsLastPeriod.${unit}`, { delta: signed(value) })
+  return [
+    { value: pct(m?.successRate), delta: delta(d?.successRate, 'pct'), tone: 'green', feed: false },
+    { value: pct(m?.adoptionRate), delta: delta(d?.adoptionRate, 'pct'), tone: '', feed: false },
     {
-      value: `${(95.4 + Math.min(periodData.value.daily.length, 90) / 110).toFixed(1)}%`,
-      delta: '+1.8%',
-      tone: 'green',
-      feed: false,
-    },
-    {
-      value: `${(67.2 + Math.min(periodData.value.daily.length, 90) / 75).toFixed(1)}%`,
-      delta: '+4.2%',
-      tone: '',
-      feed: false,
-    },
-    {
-      value: t('usage.metrics.regenerationValue'),
-      delta: t('usage.metrics.regenerationDelta'),
+      value: m?.avgRegenerate == null ? NONE : t('usage.metrics.times', { value: m.avgRegenerate.toFixed(1) }),
+      delta: delta(d?.avgRegenerate, 'times'),
       tone: 'orange',
       feed: false,
     },
-    { value: '6.1', delta: t('usage.metrics.costDelta'), tone: 'muted', feed: true },
-  ].map((m, index) => ({
-    ...m,
+    {
+      value: m?.costPerAdopted == null ? NONE : m.costPerAdopted.toFixed(1),
+      delta: delta(d?.costPerAdopted, 'feeds'),
+      tone: 'muted',
+      feed: true,
+    },
+  ].map((card, index) => ({
+    ...card,
     label: t(`usage.metrics.items.${index}.label`),
     hint: t(`usage.metrics.items.${index}.hint`),
-  })),
-)
+  }))
+})
 </script>
 
 <style scoped lang="scss">
@@ -479,6 +503,11 @@ const metricCards = computed(() =>
 .range__date {
   margin-left: auto;
   color: #606692;
+}
+.usage__error {
+  margin-bottom: 1rem;
+  color: #ff6148;
+  font-size: 0.875rem;
 }
 .customRange {
   position: relative;
@@ -625,14 +654,6 @@ const metricCards = computed(() =>
   background: #2e3567;
   border-radius: 8px;
 }
-.gauge__forecast {
-  position: absolute;
-  left: 75%;
-  top: 0;
-  width: 10%;
-  height: 100%;
-  background: #ea903a88;
-}
 .gauge__threshold {
   position: absolute;
   left: 80%;
@@ -652,9 +673,6 @@ const metricCards = computed(() =>
   &__current {
     color: #2e3567;
   }
-  &__forecast {
-    color: #ea903a;
-  }
   &__threshold {
     color: #f2bb00;
   }
@@ -670,6 +688,11 @@ const metricCards = computed(() =>
       height: 0.8125rem;
     }
   }
+}
+.quota__balance {
+  color: #606692;
+  font-size: 0.8125rem;
+  line-height: normal;
 }
 .quota__stats {
   display: flex;
@@ -794,34 +817,15 @@ const metricCards = computed(() =>
     stroke-dasharray: 6 4;
   }
 
-  &__todayLine {
-    stroke: #d2d5dd;
-  }
-
-  &__actual,
-  &__forecast {
+  &__actual {
     fill: none;
+    stroke: #2e3567;
     stroke-linejoin: round;
     stroke-width: 2.5;
   }
 
-  &__actual {
-    stroke: #2e3567;
-  }
-
-  &__forecast {
-    stroke: #ea903a;
-    stroke-dasharray: 7 5;
-  }
-
   &__todayDot {
     fill: #2e3567;
-  }
-
-  &__forecastDot {
-    fill: white;
-    stroke: #ea903a;
-    stroke-width: 2.5;
   }
 
   &__bars rect {
@@ -852,15 +856,18 @@ const metricCards = computed(() =>
       transform: translateX(-50%);
     }
 
-    &--limit {
-      top: 0.25rem;
+    // 上限／告警標籤跟著線的 y 位置（inline top），貼在線的上方
+    &--limit,
+    &--threshold {
       right: 0;
+      transform: translateY(-100%);
+    }
+
+    &--limit {
       color: #ff6148;
     }
 
     &--threshold {
-      top: 13.55%;
-      right: 0;
       color: #c69a00;
     }
   }
@@ -934,22 +941,6 @@ const metricCards = computed(() =>
     height: 0.875rem;
     flex-shrink: 0;
   }
-
-  &--primary {
-    color: #2e3567;
-  }
-
-  &--muted {
-    color: #606692;
-  }
-
-  &--orange {
-    color: #ea903a;
-  }
-
-  &--green {
-    color: #54c14f;
-  }
 }
 .module__track {
   width: 100%;
@@ -985,12 +976,6 @@ const metricCards = computed(() =>
 }
 .module__meta .down {
   color: #45b85b;
-}
-.modules__note {
-  margin-top: auto;
-  color: #b4b9c4;
-  font-size: 0.75rem;
-  line-height: 1rem;
 }
 .metrics {
   display: grid;
@@ -1070,33 +1055,6 @@ const metricCards = computed(() =>
     height: 1.125rem;
     flex-shrink: 0;
   }
-}
-.trackingNote {
-  display: flex;
-  min-height: 4.375rem;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 1rem;
-  padding: 1rem;
-  border-radius: 10px;
-  background: #eff2fa;
-  color: #606692;
-  font-size: 0.875rem;
-}
-.trackingNote svg {
-  color: #f2bb00;
-  width: 1.25rem;
-  height: 1.25rem;
-  flex-shrink: 0;
-}
-.trackingNote strong {
-  color: #606692;
-  line-height: 1.25rem;
-}
-.trackingNote p {
-  margin-top: 0.125rem;
-  font-size: 0.75rem;
-  line-height: 1rem;
 }
 @include below($bp-lg) {
   .quota__row {

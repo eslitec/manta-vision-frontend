@@ -19,13 +19,18 @@ import type {
   AiModel,
   AiModelType,
   BrandProfile,
+  FeedSummary,
   GeneratedImage,
   GeneratedPost,
   GenerateImageReq,
   GeneratePostReq,
   GenerationRef,
   Inspiration,
+  Metrics,
+  PeriodParams,
   Session,
+  UsageQuery,
+  UsageSummary,
 } from '@/types/api'
 
 // 打真後端的 API 實作。
@@ -360,10 +365,27 @@ async function saveBrand(profile: BrandProfile): Promise<BrandProfile> {
 
 // ── 飼料、模型價格、輔助描述、靈感 ──
 
-async function getFeed(): Promise<{ balance: number }> {
-  // 後端還回 monthlyLimit／estImages…，畫面目前只用得到餘額
-  const { data } = await http.get<{ balance: number }>('/feeds')
-  return { balance: data.balance }
+async function getFeed(): Promise<FeedSummary> {
+  const { data } = await http.get<FeedSummary>('/feeds')
+  return data
+}
+
+// ── 用量與指標（GET /feeds/usage、GET /metrics）──
+// 契約以後端程式碼為準：app/schemas/feed.py、app/schemas/period.py、app/schemas/metrics.py。
+// 回應欄位與前端型別同名，原樣回傳。時區一律附上：後端對 month 忽略它，對 30d／90d／custom
+// 用它決定「今天」與每日分組，送瀏覽器的時區才跟使用者看到的日曆一致。
+function withTimezone<T extends PeriodParams>(params: T): T {
+  return { ...params, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }
+}
+
+async function getUsage(params: UsageQuery): Promise<UsageSummary> {
+  const { data } = await http.get<UsageSummary>('/feeds/usage', { params: withTimezone(params) })
+  return data
+}
+
+async function getMetrics(params: PeriodParams): Promise<Metrics> {
+  const { data } = await http.get<Metrics>('/metrics', { params: withTimezone(params) })
+  return data
 }
 
 async function listModels(modelType?: AiModelType): Promise<AiModel[]> {
@@ -587,6 +609,8 @@ export const realApi = {
   getBrand,
   saveBrand,
   getFeed,
+  getUsage,
+  getMetrics,
   listModels,
   enhancePrompt,
   generateImages,

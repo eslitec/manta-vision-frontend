@@ -121,21 +121,50 @@ export interface TryOnReq {
   apparelId?: string
 }
 
-// ── 用量與指標 ──
-export interface UsageSummary {
-  used: number
-  remaining: number
-  monthlyLimit: number
-  percent: number
-  generatedThisMonth: number // 本月已生成張數（首頁統計用）
-  daily: number[]
-  byModule: { label: string; value: number; color: string }[]
+// ── 錢包、用量與指標（GET /feeds、GET /feeds/usage、GET /metrics）──
+// 欄位名等於後端 schemas/feed.py、schemas/period.py、schemas/metrics.py，real 版原樣回傳
+export interface FeedSummary {
+  balance: number
+  monthlyLimit: number | null // null＝無上限
+  monthUsed: number // 台北日曆月內已結清的支出（顆）
+  estImages: number // 依餘額與最便宜檔位估的可生成張數／支數
+  estVideos: number
 }
-export interface Metrics {
-  successRate: number
-  adoptionRate: number
-  avgRegen: number
-  costPerAdopted: number
+export type UsagePeriod = 'month' | '30d' | '90d' | 'custom'
+export interface PeriodParams {
+  period: UsagePeriod
+  startDate?: string // custom 必填，YYYY-MM-DD
+  endDate?: string // custom 必填；含頭含尾，跨度 ≤ 366 天
+  timezone?: string // IANA；後端對 month 一律用 Asia/Taipei
+}
+export interface UsageQuery extends PeriodParams {
+  groupBy: 'day' | 'module'
+}
+export interface UsageModule {
+  type: string // generate／marketingImage／marketingText／video／tryon
+  used: number
+  sharePct: number
+  vsLastMonthPct: number | null // 與前一個等長區間比；前期 0 → null
+  avgPerGen: number
+}
+export interface UsageSummary {
+  period: { from: string; to: string }
+  totalUsed: number
+  dailyAvg: number
+  vsLastMonthPct: number | null
+  byModule: UsageModule[] | null // groupBy=module 才有
+  daily: { date: string; used: number }[] | null // groupBy=day 才有；缺日由後端補 0
+}
+export interface MetricValues {
+  successRate: number | null // 分母 0 → null
+  adoptionRate: number | null
+  avgRegenerate: number | null
+  costPerAdopted: number | null
+}
+export interface Metrics extends MetricValues {
+  period: { from: string; to: string }
+  vsLastPeriod: MetricValues // 絕對差：百分點／次／顆
+  monthGenerated: number
 }
 
 // ── 品牌設定 ──

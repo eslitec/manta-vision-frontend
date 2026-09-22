@@ -12,6 +12,7 @@ import type {
   GeneratedImage,
   GeneratedPost,
   GenerateImageReq,
+  FeedSummary,
   GeneratePostReq,
   GenerationRef,
   ImageCounts,
@@ -21,9 +22,11 @@ import type {
   Material,
   MaterialListResponse,
   Metrics,
+  PeriodParams,
   RetouchReq,
   RetouchResult,
   Session,
+  UsageQuery,
   UsageSummary,
   VideoJob,
   VideoJobReq,
@@ -34,6 +37,25 @@ import { VIDEO_MODEL_TIERS } from '@/types/api'
 // 之後把每個函式改成呼叫 http（api/http.ts）即可，介面不變。
 
 const delay = (ms = 500) => new Promise((r) => setTimeout(r, ms))
+
+// 期間參數 → 含頭含尾的本地日期區間（同後端 period.py 的語意：month 是日曆月、30d／90d 是滾動區間）
+function isoDate(date: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+function addDays(iso: string, days: number) {
+  const [y, m, d] = iso.split('-').map(Number)
+  return isoDate(new Date(y, m - 1, d + days))
+}
+function daysBetween(from: string, to: string) {
+  return Math.max(1, Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1)
+}
+function periodWindow(params: PeriodParams): { from: string; to: string } {
+  const today = isoDate(new Date())
+  if (params.period === 'custom') return { from: params.startDate ?? today, to: params.endDate ?? today }
+  if (params.period === 'month') return { from: today.slice(0, 8) + '01', to: today }
+  return { from: addDays(today, 1 - (params.period === '30d' ? 30 : 90)), to: today }
+}
 let seq = 100
 const uid = (p: string) => `${p}_${++seq}`
 
@@ -297,10 +319,16 @@ export const mockApi = {
     return MOCK_MODELS.filter((m) => !modelType || m.modelType === modelType)
   },
 
-  // GET /feed
-  async getFeed() {
+  // GET /feeds（估算用固定單價 8／45；真後端依 ai_models 最便宜檔位算）
+  async getFeed(): Promise<FeedSummary> {
     await delay(150)
-    return { balance: db.feedBalance }
+    return {
+      balance: db.feedBalance,
+      monthlyLimit: db.monthlyLimit,
+      monthUsed: db.monthlyUsed,
+      estImages: Math.floor(db.feedBalance / 8),
+      estVideos: Math.floor(db.feedBalance / 45),
+    }
   },
 
   // POST /feed/topup（mock-only：模擬儲值，見 add-feed-topup-dialog design.md 決策 5）
@@ -610,35 +638,50 @@ export const mockApi = {
     markAdopted(from)
   },
 
-  // GET /usage
-  async getUsage(): Promise<UsageSummary> {
+  // GET /feeds/usage（同後端：byModule 與 daily 由 groupBy 二選一，另一個回 null；缺日補 0 由這裡做）
+  // 每日用量是固定波形的示意值，只保證形狀與真後端一致
+  async getUsage(params: UsageQuery): Promise<UsageSummary> {
     await delay(300)
-    const percent = Math.round((db.monthlyUsed / db.monthlyLimit) * 100)
+    const period = periodWindow(params)
+    const days = daysBetween(period.from, period.to)
+    const daily = Array.from({ length: days }, (_, i) => ({ date: addDays(period.from, i), used: 20 + ((i * 7) % 41) }))
+    const totalUsed = daily.reduce((sum, d) => sum + d.used, 0)
+    const shares: [string, number, number | null, number][] = [
+      ['generate', 0.42, 18, 12],
+      ['marketingImage', 0.15, 4, 10],
+      ['marketingText', 0.095, null, 3],
+      ['video', 0.223, 62, 45],
+      ['tryon', 0.112, -9, 15],
+    ]
+    const byModule = shares.map(([type, share, vsLastMonthPct, avgPerGen]) => ({
+      type,
+      used: Math.round(totalUsed * share),
+      sharePct: Math.round(share * 1000) / 10,
+      vsLastMonthPct,
+      avgPerGen,
+    }))
     return {
-      used: db.monthlyUsed,
-      remaining: db.feedBalance,
-      monthlyLimit: db.monthlyLimit,
-      percent,
-      generatedThisMonth: db.generatedThisMonth,
-      daily: [22, 30, 26, 40, 52, 44, 58, 66, 60, 74, 82, 70, 92, 78],
-      byModule: [
-        { label: '圖生圖', value: 1580, color: '#467AE8' },
-        { label: '行銷 PO 文', value: 920, color: '#7F77DD' },
-        { label: '圖生影', value: 840, color: '#EA903A' },
-        { label: 'AI 試穿', value: 420, color: '#54C14F' },
-      ],
+      period,
+      totalUsed,
+      dailyAvg: Math.round(totalUsed / days),
+      vsLastMonthPct: 12,
+      byModule: params.groupBy === 'module' ? byModule : null,
+      daily: params.groupBy === 'day' ? daily : null,
     }
   },
 
-  // GET /metrics（採用率等只算圖生圖）
-  async getMetrics(): Promise<Metrics> {
+  // GET /metrics（採用率等只算圖生圖；分母為 0 時同後端回 null）
+  async getMetrics(params: PeriodParams): Promise<Metrics> {
     await delay(300)
     return {
+      period: periodWindow(params),
       // 成功率＝全模組；採用率／平均重生成／每採用成本＝只算圖生圖
-      successRate: Math.round((db.successGen / Math.max(1, db.totalGen)) * 1000) / 10,
-      adoptionRate: Math.round((db.adoptedGen / Math.max(1, db.imgGen)) * 1000) / 10,
-      avgRegen: db.regenBeforeAdopt,
+      successRate: db.totalGen ? Math.round((db.successGen / db.totalGen) * 1000) / 10 : null,
+      adoptionRate: db.imgGen ? Math.round((db.adoptedGen / db.imgGen) * 1000) / 10 : null,
+      avgRegenerate: db.regenBeforeAdopt,
       costPerAdopted: 6.1,
+      vsLastPeriod: { successRate: 1.8, adoptionRate: 4.2, avgRegenerate: -0.3, costPerAdopted: null },
+      monthGenerated: db.generatedThisMonth,
     }
   },
 
