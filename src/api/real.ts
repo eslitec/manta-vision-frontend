@@ -164,11 +164,13 @@ async function listImages(query: ImageListQuery = {}): Promise<ImageListResponse
 
 // sourceImageId：編輯器「另存為新素材」帶原圖 id 時才有值，後端依此標 source=edit、
 // derivedFrom 指回原圖（非破壞性）；見 manta-vision-backend docs/api/v7.md §4。
-async function uploadImage(file: File, folderId?: string, sourceImageId?: string): Promise<Asset> {
+// imageName：另存為新素材時使用者在對話框輸入的名稱；不帶時後端用檔名。
+async function uploadImage(file: File, folderId?: string, sourceImageId?: string, imageName?: string): Promise<Asset> {
   const form = new FormData()
   form.append('file', file)
   if (folderId) form.append('folderId', folderId)
   if (sourceImageId) form.append('sourceImageId', sourceImageId)
+  if (imageName) form.append('imageName', imageName)
   const { data } = await http.post<WireImage>('/upload', form)
   return toAsset(data)
 }

@@ -561,6 +561,7 @@ export default {
     consumed: '消耗 {count} 顆飼料',
     saveHint: '滿意的話另存為新素材，原圖會保留。',
     saveAsNew: '另存為新素材',
+    replaceBaseImage: '更換底圖',
     saveFailed: '儲存失敗，請稍後再試。',
     sourcePickerTitle: '從圖庫選擇要編輯的素材',
     sourcePickerSubtitle: '選擇後會載入畫布，原本的編輯內容會先提示是否儲存',

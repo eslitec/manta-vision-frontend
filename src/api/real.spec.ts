@@ -331,6 +331,17 @@ describe('圖庫（images）', () => {
     expect(form.get('folderId')).toBeNull()
   })
 
+  it('uploadImage 帶了 imageName 才會出現在表單裡（另存為新素材用對話框輸入的名稱）', async () => {
+    const calls = stubRoutes({ '/upload': { status: 201, data: WIRE_IMAGE } })
+
+    await realApi.uploadImage(new File(['x'], 'crop.png'), undefined, 'img_0', '裁切版')
+
+    const form = calls[0].body as FormData
+    expect(form.get('sourceImageId')).toBe('img_0')
+    expect(form.get('imageName')).toBe('裁切版')
+    expect(calls[0].url).toBe('/upload')
+  })
+
   it('updateImage 只帶 name 時，body 不會有 folderId 這個 key（三態語意：不動）', async () => {
     const calls = stubRoutes({ '/images/img_1': { data: WIRE_IMAGE } })
 
