@@ -39,6 +39,7 @@ import AppSearchbar from '@/components/AppSearchbar.vue'
 import { IconCheck, IconClose, IconImagePlaceholder, IconMovie } from '@/components/icons'
 import type { Asset } from '@/types/asset'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
+import { useSessionStore } from '@/stores/session'
 
 const props = withDefaults(defineProps<{ title?: string; subtitle?: string; multiple?: boolean }>(), {
   title: undefined,
@@ -56,10 +57,11 @@ const descriptionId = `image-picker-description-${crypto.randomUUID()}`
 
 const { assets, load } = useAssets()
 const { t } = useI18n()
+const session = useSessionStore()
 
 const keyword = ref('')
 const resolvedTitle = computed(() => props.title ?? t('imagePicker.defaultTitle'))
-const resolvedSubtitle = computed(() => props.subtitle ?? t('imagePicker.subtitle'))
+const resolvedSubtitle = computed(() => props.subtitle ?? t('imagePicker.subtitle', { name: session.botName }))
 // 設計稿 dlg_filter（node 125:579）只有三個篩選 pill；編輯產物沒有獨立篩選，
 // 但仍會出現在「全部」的清單裡（設計稿的 dlg_grid 就有一張標「編輯產物」）。
 const sources = computed(() => [

@@ -79,7 +79,7 @@ export default {
   },
   units: { feed: '{count} feed', feedShort: 'feed', feedPerVideo: '{count} feed/video' },
   brand: {
-    name: 'Good Day Select',
+    name: 'My brand',
   },
   nav: {
     workbench: 'AI Studio',
@@ -120,7 +120,7 @@ export default {
   },
   imagePicker: {
     defaultTitle: 'Select from library',
-    subtitle: 'Assets and generated results belonging to the Good Day Select bot',
+    subtitle: 'Assets and generated results belonging to the {name} bot',
     searchPlaceholder: 'Search asset names or tags',
     selectedCount: '{count} selected',
     addSelected: 'Add selected ({count})',
@@ -603,7 +603,7 @@ export default {
     deletePermanently: 'Permanently delete {count}',
     folderNote:
       'Folder “{folder}” · {count} assets. Removing an asset keeps it in the library but removes this folder membership.',
-    note: 'This library belongs to the Good Day Select bot. Switching bots shows each bot’s own assets and generated results.',
+    note: 'This library belongs to the {name} bot. Switching bots shows each bot’s own assets and generated results.',
     batchFailed: '{count} operations failed. Please try again later.',
     uploadFailed: '{count} uploads failed. Please try again later.',
   },

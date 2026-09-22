@@ -5,7 +5,7 @@
     .sidebar__brand
       span.sidebar__avatar
       .sidebar__brandText
-        strong {{ t('brand.name') }}
+        strong {{ session.botName }}
         small Manta Vision
     .sidebar__divider(aria-hidden="true")
     nav.sidebar__nav
@@ -28,7 +28,7 @@
       button.topbar__menu(@click="sidebarOpen = true" :aria-label="t('layout.openMenu')")
         IconMenu
       .topbar__crumb
-        span.topbar__cur {{ t('brand.name') }}
+        span.topbar__cur {{ session.botName }}
         span.topbar__sep ›
         span.topbar__cur Manta Vision
       .topbar__actions

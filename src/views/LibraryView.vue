@@ -197,6 +197,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useAssets } from '@/composables/useAssets'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
+import { useSessionStore } from '@/stores/session'
 import AppButton from '@/components/AppButton.vue'
 import AppCheckbox from '@/components/AppCheckbox.vue'
 import AppSearchbar from '@/components/AppSearchbar.vue'
@@ -247,6 +248,7 @@ const {
   upload,
 } = useAssets()
 const { t } = useI18n()
+const session = useSessionStore()
 const moveDialogRef = ref<HTMLElement | null>(null)
 const deleteDialogRef = ref<HTMLElement | null>(null)
 const uploadInput = ref<HTMLInputElement | null>(null)
@@ -547,7 +549,7 @@ const noteText = computed(() => {
   if (view.kind === 'folder') {
     return t('library.folderNote', { folder: view.name, count: folderImageCount(view.folderId) })
   }
-  return t('library.note')
+  return t('library.note', { name: session.botName })
 })
 
 const activeViewLabel = computed(() => {
