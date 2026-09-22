@@ -103,7 +103,7 @@
         strong(v-if="hasSelectedAsset") #[IconImagePlaceholder] {{ selectedAssetName }}
         strong(v-else) {{ t('editor.emptyState.title') }}
         span(v-if="hasSelectedAsset") {{ t('editor.status', { status: tool === 'crop' ? t('editor.cropping') : t('editor.edited') }) }}
-        AppButton.canvasHead__libraryButton(variant="outline" @click="openEditorPicker") {{ t('common.selectFromLibrary') }}
+        AppButton.canvasHead__libraryButton(variant="outline" @click="openEditorPicker") {{ tool === 'object' ? t('editor.replaceBaseImage') : t('common.selectFromLibrary') }}
         .canvasActions(v-if="hasSelectedAsset")
           button.canvasActions__zoom(type="button" :disabled="!canZoomOut" :aria-label="t('editor.zoomOut')" @click="zoomOut")
             IconBack
@@ -522,16 +522,29 @@ function downloadEditedCopy(name: string) {
 async function buildCroppedFile(name: string): Promise<File> {
   const sourceUrl = selectedAssetUrl.value
   if (!sourceUrl) throw new Error('CROP_NO_SOURCE_IMAGE')
+  // 不能用 new Image() + crossOrigin 直接載原圖：畫布／選圖彈窗的 <img> 沒帶 crossorigin，已經用
+  // 不帶 Origin 的請求把原圖放進快取，而 R2 對這種請求不回 CORS 標頭也不回 Vary: Origin，
+  // 之後的 CORS 請求會重用那份快取而失敗（實測）。比照 utils/download.ts：跳過快取重抓成 Blob，
+  // 再用同源的 blob: 網址餵給 Image，canvas 就不會被污染。
+  let sourceBlob: Blob
+  try {
+    const response = await fetch(sourceUrl, { mode: 'cors', cache: 'reload' })
+    if (!response.ok) throw new Error('CROP_IMAGE_LOAD_FAILED')
+    sourceBlob = await response.blob()
+  } catch {
+    throw new Error('CROP_IMAGE_LOAD_FAILED')
+  }
   const img = new Image()
-  img.crossOrigin = 'anonymous'
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve()
-    // 常見原因：原圖伺服器（R2／CDN）沒有針對匿名跨網域讀取開放 CORS——單純 <img> 顯示不需要
-    // CORS，但畫進 canvas 再匯出就會被瀏覽器擋下，img 會直接觸發 onerror（不會是 onload 後
-    // canvas 才失敗）。
-    img.onerror = () => reject(new Error('CROP_IMAGE_LOAD_FAILED'))
-    img.src = sourceUrl
-  })
+  const blobUrl = URL.createObjectURL(sourceBlob)
+  try {
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve()
+      img.onerror = () => reject(new Error('CROP_IMAGE_LOAD_FAILED'))
+      img.src = blobUrl
+    })
+  } finally {
+    URL.revokeObjectURL(blobUrl)
+  }
   const ARTBOARD_ASPECT = 4 / 3
   const naturalWidth = img.naturalWidth
   const naturalHeight = img.naturalHeight
@@ -566,7 +579,8 @@ async function buildCroppedFile(name: string): Promise<File> {
 function classifySaveError(err: unknown): string {
   const code = err instanceof Error ? err.message : ''
   if (code === 'CROP_NO_SOURCE_IMAGE') return t('editor.saveDialog.errorNoSourceImage')
-  if (code === 'CROP_IMAGE_LOAD_FAILED' || code === 'CROP_EXPORT_BLOCKED') return t('editor.saveDialog.errorImageAccess')
+  if (code === 'CROP_IMAGE_LOAD_FAILED' || code === 'CROP_EXPORT_BLOCKED')
+    return t('editor.saveDialog.errorImageAccess')
   return t('editor.saveDialog.errorGeneric')
 }
 function downloadRealFile(file: File) {
@@ -589,7 +603,7 @@ const saveAsNewAsset = async (payload: SaveAssetPayload) => {
     // 上傳到真後端；demo 素材沒有真實圖檔來源，或其他三個工具，維持原本 mock 的另存行為。
     if (tool.value === 'crop' && selectedAssetUrl.value) {
       const file = await buildCroppedFile(payload.name)
-      const saved = await upload(file, payload.folder || undefined, selectedAssetId.value || undefined)
+      const saved = await upload(file, payload.folder || undefined, selectedAssetId.value || undefined, payload.name)
       savedAssetId.value = saved.id
       if (payload.alsoDownload) downloadRealFile(file)
     } else {
@@ -719,7 +733,9 @@ const retouchTotalSeconds = ref(1)
 const retouchSecondsRemaining = ref(0)
 const retouchStepNames = computed(() =>
   retouchMethod.value === 'quick'
-    ? retouchOptionsForMethod.value.filter((option) => option.on).map((option) => t(`editor.retouch.options.${option.key}.name`))
+    ? retouchOptionsForMethod.value
+        .filter((option) => option.on)
+        .map((option) => t(`editor.retouch.options.${option.key}.name`))
     : [t('editor.retouch.command')],
 )
 const retouchStepLabel = computed(() => {
@@ -746,9 +762,12 @@ async function startRetouch() {
   const totalSteps = retouchStepNames.value.length || 1
   retouchTotalSeconds.value = totalSteps * RETOUCH_SECONDS_PER_STEP
   retouchSecondsRemaining.value = retouchTotalSeconds.value
-  const stepTimer = setInterval(() => {
-    if (retouchStepIndex.value < totalSteps - 1) retouchStepIndex.value += 1
-  }, Math.max(200, 900 / totalSteps))
+  const stepTimer = setInterval(
+    () => {
+      if (retouchStepIndex.value < totalSteps - 1) retouchStepIndex.value += 1
+    },
+    Math.max(200, 900 / totalSteps),
+  )
   const secondsTimer = setInterval(() => {
     if (retouchSecondsRemaining.value > 1) retouchSecondsRemaining.value -= 1
   }, 1000)
@@ -931,7 +950,9 @@ const objectSelection = reactive({ x: 43, y: 17, width: 37, height: 36 })
 const objectDescription = ref('')
 const generatingObject = ref(false)
 const OBJECT_PRESET_KEYS = ['bouquet', 'plant', 'tableware', 'shadow', 'card'] as const
-const objectPresets = computed(() => OBJECT_PRESET_KEYS.map((key) => ({ key, label: t(`editor.addObject.presets.${key}`) })))
+const objectPresets = computed(() =>
+  OBJECT_PRESET_KEYS.map((key) => ({ key, label: t(`editor.addObject.presets.${key}`) })),
+)
 const applyObjectPreset = (label: string) => {
   objectDescription.value = objectDescription.value.trim() ? `${objectDescription.value}、${label}` : label
 }
@@ -1305,17 +1326,24 @@ const startCropResize = (event: PointerEvent, corner: CropCorner) => {
   event.preventDefault()
   const bounds = artboardRef.value.getBoundingClientRect()
   const start = { pointerX: event.clientX, pointerY: event.clientY, ...cropRect }
-  const lockedAspect = ratio.value === 'custom' ? null : ratioOptions.value.find((item) => item.id === ratio.value)?.aspect ?? null
+  const lockedAspect =
+    ratio.value === 'custom' ? null : (ratioOptions.value.find((item) => item.id === ratio.value)?.aspect ?? null)
   const minSize = 10
   cropResizeDrag.start((moveEvent) => {
     if (lockedAspect) {
       const horizontalDirection = corner.includes('w') ? -1 : 1
       const verticalDirection = corner.includes('n') ? -1 : 1
       const growthPx =
-        ((moveEvent.clientX - start.pointerX) * horizontalDirection + (moveEvent.clientY - start.pointerY) * verticalDirection) / 2
+        ((moveEvent.clientX - start.pointerX) * horizontalDirection +
+          (moveEvent.clientY - start.pointerY) * verticalDirection) /
+        2
       const startWidthPx = (start.width / 100) * bounds.width
-      const anchorXPx = corner.includes('w') ? ((start.x + start.width) / 100) * bounds.width : (start.x / 100) * bounds.width
-      const anchorYPx = corner.includes('n') ? ((start.y + start.height) / 100) * bounds.height : (start.y / 100) * bounds.height
+      const anchorXPx = corner.includes('w')
+        ? ((start.x + start.width) / 100) * bounds.width
+        : (start.x / 100) * bounds.width
+      const anchorYPx = corner.includes('n')
+        ? ((start.y + start.height) / 100) * bounds.height
+        : (start.y / 100) * bounds.height
       const maxWidthPx = corner.includes('w') ? anchorXPx : bounds.width - anchorXPx
       const maxHeightPx = corner.includes('n') ? anchorYPx : bounds.height - anchorYPx
       const minWidthPx = Math.min(maxWidthPx, Math.max(40, bounds.width * (minSize / 100)))
@@ -1324,8 +1352,12 @@ const startCropResize = (event: PointerEvent, corner: CropCorner) => {
       const newHeightPx = newWidthPx / lockedAspect
       cropRect.width = (newWidthPx / bounds.width) * 100
       cropRect.height = (newHeightPx / bounds.height) * 100
-      cropRect.x = corner.includes('w') ? ((anchorXPx - newWidthPx) / bounds.width) * 100 : (anchorXPx / bounds.width) * 100
-      cropRect.y = corner.includes('n') ? ((anchorYPx - newHeightPx) / bounds.height) * 100 : (anchorYPx / bounds.height) * 100
+      cropRect.x = corner.includes('w')
+        ? ((anchorXPx - newWidthPx) / bounds.width) * 100
+        : (anchorXPx / bounds.width) * 100
+      cropRect.y = corner.includes('n')
+        ? ((anchorYPx - newHeightPx) / bounds.height) * 100
+        : (anchorYPx / bounds.height) * 100
       return
     }
     const dx = ((moveEvent.clientX - start.pointerX) / bounds.width) * 100

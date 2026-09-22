@@ -622,6 +622,7 @@ export default {
     consumed: 'Used {count} feed',
     saveHint: 'Save a new asset when satisfied; the original is retained.',
     saveAsNew: 'Save as new asset',
+    replaceBaseImage: 'Replace base image',
     saveFailed: 'Unable to save. Please try again.',
     sourcePickerTitle: 'Select an asset to edit from the library',
     sourcePickerSubtitle: "Selecting one loads it onto the canvas; you'll be asked to save any unsaved edits first.",

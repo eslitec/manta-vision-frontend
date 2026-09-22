@@ -408,7 +408,7 @@ export const mockApi = {
   // sourceImageId：編輯器「另存為新素材」帶原圖 id 時才有值——跟真後端一樣，來源改標
   // source=edit，且用 object URL 讓假資料模式下縮圖也看得到真的裁切結果，不是永遠佔位圖示；
   // 一般上傳（不帶 sourceImageId）維持原本行為不變。
-  async uploadImage(file: File, folderId?: string, sourceImageId?: string): Promise<Asset> {
+  async uploadImage(file: File, folderId?: string, sourceImageId?: string, imageName?: string): Promise<Asset> {
     await delay(400)
     if (file.size > MAX_UPLOAD_MB * 1024 * 1024) throw new Error('FILE_TOO_LARGE')
     const extension = file.name.split('.').pop()?.toLowerCase() ?? ''
@@ -416,7 +416,7 @@ export const mockApi = {
     // TODO: 後端就緒後把 file blob 上傳到 R2、回傳真實 URL 與尺寸；目前僅用檔名建立素材
     const a: Asset = {
       id: uid('a'),
-      name: file.name,
+      name: imageName || file.name,
       source: sourceImageId ? 'edit' : 'upload',
       dim: '1024×768',
       type: 'image',
