@@ -55,11 +55,16 @@ beforeEach(() => {
 
 describe('feed store', () => {
   it('refresh 從 API 拉餘額並標記 loaded', async () => {
-    getFeed.mockResolvedValue({ balance: 999 })
+    getFeed.mockResolvedValue({ balance: 999, monthlyLimit: 5000, monthUsed: 3760, estImages: 124, estVideos: 22 })
     const feed = useFeedStore()
     expect(feed.balance).toBe(0)
+    expect(feed.monthlyLimit).toBeNull()
     await feed.refresh()
     expect(feed.balance).toBe(999)
+    expect(feed.monthlyLimit).toBe(5000)
+    expect(feed.monthUsed).toBe(3760)
+    expect(feed.estImages).toBe(124)
+    expect(feed.estVideos).toBe(22)
     expect(feed.loaded).toBe(true)
   })
 })

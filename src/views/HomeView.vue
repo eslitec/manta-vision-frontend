@@ -11,10 +11,10 @@
           IconFeedBottleSmall.stats__numIcon
         | {{ balance.toLocaleString() }} #[small {{ t('units.feedShort') }}]
       .stats__label {{ t('home.feedBalance') }}
-      .stats__hint {{ t('home.feedEstimate', { images: imgEst, videos: vidEst }) }}
+      .stats__hint {{ t('home.feedEstimate', { images: estImages, videos: estVideos }) }}
     .stats__item
-      .stats__num {{ generatedThisMonth.toLocaleString() }} #[small {{ t('units.images') }}]
-      .stats__label {{ t('home.generatedThisMonth') }}
+      .stats__num {{ monthUsed.toLocaleString() }} #[small {{ t('units.feedShort') }}]
+      .stats__label {{ t('home.usedThisMonth') }}
     .stats__item
       .stats__num.isOk(v-if="brandReady")
         IconCheckCircle.iconCheck
@@ -52,8 +52,6 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useFeedStore } from '@/stores/feed'
 import { useBrandStore } from '@/stores/brand'
-import { api } from '@/api'
-import type { UsageSummary } from '@/types/api'
 import {
   IconGenImage,
   IconMarketingPost,
@@ -68,25 +66,18 @@ import AppButton from '@/components/AppButton.vue'
 import TopUpDialog from '@/components/TopUpDialog.vue'
 
 const feed = useFeedStore()
-const { balance } = storeToRefs(feed)
+// 本月已用與可生成估算都來自 GET /feeds（估算單價由後端依最便宜檔位算，前端不寫死）
+const { balance, monthUsed, estImages, estVideos } = storeToRefs(feed)
 const brandStore = useBrandStore()
 const { profile } = storeToRefs(brandStore)
 const { t } = useI18n()
 const topUpOpen = ref(false)
 
-const usage = ref<UsageSummary | null>(null)
-
-onMounted(async () => {
+onMounted(() => {
   if (!feed.loaded) feed.refresh()
   brandStore.load()
-  usage.value = await api.getUsage()
 })
 
-// 本月已生成張數（後端 getUsage 提供）
-const generatedThisMonth = computed(() => usage.value?.generatedThisMonth ?? 0)
-// 依餘額粗估可再生成多少（單張約 8 顆、單片約 45 顆）
-const imgEst = computed(() => Math.floor(balance.value / 8))
-const vidEst = computed(() => Math.floor(balance.value / 45))
 // 品牌設定是否已完成（有名稱、定位與色票即視為完成）
 const brandReady = computed(() => {
   const p = profile.value
