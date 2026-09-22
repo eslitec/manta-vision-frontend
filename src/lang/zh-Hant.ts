@@ -82,7 +82,7 @@ export default {
     feedPerVideo: '{count} 顆／支',
   },
   brand: {
-    name: '日安選物',
+    name: '我的品牌',
   },
   nav: {
     workbench: 'AI 生成工作台',
@@ -123,7 +123,7 @@ export default {
   },
   imagePicker: {
     defaultTitle: '從圖庫選擇',
-    subtitle: '隸屬機器人「日安選物」的素材與生成產物',
+    subtitle: '隸屬機器人「{name}」的素材與生成產物',
     searchPlaceholder: '搜尋素材名稱或標籤',
     selectedCount: '已選 {count} 項',
     addSelected: '加入所選（{count}）',
@@ -542,7 +542,7 @@ export default {
     deleteConfirm: '我了解此操作無法復原',
     deletePermanently: '永久刪除 {count} 筆',
     folderNote: '資料夾「{folder}」・{count} 筆素材。移出後素材仍保留在圖庫，只是不再屬於此資料夾。',
-    note: '此圖庫隸屬於機器人「日安選物」。切換機器人會顯示該機器人專屬的素材與生成產物。',
+    note: '此圖庫隸屬於機器人「{name}」。切換機器人會顯示該機器人專屬的素材與生成產物。',
     batchFailed: '{count} 筆操作失敗，請稍後再試。',
     uploadFailed: '{count} 筆上傳失敗，請稍後再試。',
   },

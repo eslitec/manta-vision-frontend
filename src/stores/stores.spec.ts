@@ -8,6 +8,7 @@ const saveBrand = vi.fn()
 const getConsent = vi.fn()
 const giveConsent = vi.fn()
 const listModels = vi.fn()
+const listBots = vi.fn()
 const login = vi.fn()
 const logout = vi.fn()
 
@@ -19,6 +20,7 @@ vi.mock('@/api', () => ({
     getConsent: () => getConsent(),
     giveConsent: () => giveConsent(),
     listModels: () => listModels(),
+    listBots: () => listBots(),
     login: (u: string, p: string) => login(u, p),
     logout: () => logout(),
   },
@@ -106,6 +108,25 @@ describe('brand store', () => {
     const brand = useBrandStore()
     await brand.save()
     expect(saveBrand).not.toHaveBeenCalled()
+  })
+
+  it('並行的 load 共用同一發請求（session store 與首頁會同時呼叫）', async () => {
+    getBrand.mockResolvedValue({ name: '日安選物' })
+    const brand = useBrandStore()
+    await Promise.all([brand.load(), brand.load()])
+    expect(getBrand).toHaveBeenCalledTimes(1)
+    expect(brand.profile?.name).toBe('日安選物')
+  })
+
+  it('reset 之後才回來的舊回應不寫進 profile', async () => {
+    let resolveOld!: (v: unknown) => void
+    getBrand.mockReturnValueOnce(new Promise((r) => (resolveOld = r)))
+    const brand = useBrandStore()
+    const pending = brand.load()
+    brand.reset()
+    resolveOld({ name: '上一個帳號' })
+    await pending
+    expect(brand.profile).toBeNull()
   })
 })
 
@@ -242,5 +263,65 @@ describe('session store', () => {
     expect(session.session).toBeNull()
     expect(ctx.token).toBe('')
     expect(logout).not.toHaveBeenCalled()
+  })
+
+  // 側欄／麵包屑／圖庫提示共用的機器人名稱：登入時各打一次 GET /bots 與 GET /brand
+  describe('botName', () => {
+    const ownBot = { botId: 'bot-123', botName: '我的機器人' }
+
+    it('登入前為空字串，登入後打一次 listBots 與 getBrand，品牌設定名稱優先', async () => {
+      login.mockResolvedValue(fakeSession({ botId: 'bot-123' }))
+      listBots.mockResolvedValue([ownBot])
+      getBrand.mockResolvedValue({ name: '春日選品' })
+      const session = useSessionStore()
+      expect(session.botName).toBe('')
+      await session.login('mavis', 'mavis123')
+      await vi.waitFor(() => expect(session.botName).toBe('春日選品'))
+      expect(listBots).toHaveBeenCalledTimes(1)
+      expect(getBrand).toHaveBeenCalledTimes(1)
+      expect(session.bots).toEqual([ownBot])
+    })
+
+    it('品牌設定沒有名稱時退回目前 botId 的 botName', async () => {
+      login.mockResolvedValue(fakeSession({ botId: 'bot-123' }))
+      listBots.mockResolvedValue([{ botId: 'bot-other', botName: '別人的' }, ownBot])
+      getBrand.mockResolvedValue({ name: '' })
+      const session = useSessionStore()
+      await session.login('mavis', 'mavis123')
+      await vi.waitFor(() => expect(session.botName).toBe('我的機器人'))
+    })
+
+    it('兩支 API 都失敗時退回 i18n 預設，且 login 不 reject', async () => {
+      login.mockResolvedValue(fakeSession())
+      listBots.mockRejectedValue(new Error('NETWORK_ERROR'))
+      getBrand.mockRejectedValue(new Error('NETWORK_ERROR'))
+      const session = useSessionStore()
+      await expect(session.login('mavis', 'mavis123')).resolves.toBeUndefined()
+      await vi.waitFor(() => expect(session.botName).toBe('我的品牌'))
+    })
+
+    it('restore 也會取名稱', async () => {
+      listBots.mockResolvedValue([{ botId: 'bot-test', botName: '我的機器人' }])
+      getBrand.mockResolvedValue({ name: '' })
+      localStorage.setItem('mv_session', JSON.stringify(fakeSession()))
+      const session = useSessionStore()
+      session.restore()
+      await vi.waitFor(() => expect(session.botName).toBe('我的機器人'))
+    })
+
+    it('登出清空 bots、brand profile 與名稱，換帳號不殘留', async () => {
+      login.mockResolvedValue(fakeSession({ botId: 'bot-123' }))
+      logout.mockResolvedValue(undefined)
+      listBots.mockResolvedValue([ownBot])
+      getBrand.mockResolvedValue({ name: '春日選品' })
+      const session = useSessionStore()
+      const brand = useBrandStore()
+      await session.login('mavis', 'mavis123')
+      await vi.waitFor(() => expect(session.botName).toBe('春日選品'))
+      await session.logout()
+      expect(session.bots).toEqual([])
+      expect(brand.profile).toBeNull()
+      expect(session.botName).toBe('')
+    })
   })
 })

@@ -9,15 +9,36 @@ export const useBrandStore = defineStore('brand', () => {
   const profile = ref<BrandProfile | null>(null)
   const saving = ref(false)
 
-  async function load(force = false) {
-    if (profile.value && !force) return
-    const loaded = await api.getBrand()
-    // 真後端從沒設定過就回空字串／null；沒有預設文案的話合規頁的兩個
-    // textarea 會是空的，使用者容易誤以為欄位壞掉。用跟畫面一致的
-    // i18n 預設文案補上，只在「真的沒有值」時才補，不覆蓋既有設定。
-    if (!loaded.portraitConsent) loaded.portraitConsent = i18n.global.t('brandSettings.defaults.portraitConsent')
-    if (!loaded.imageLicense) loaded.imageLicense = i18n.global.t('brandSettings.defaults.imageLicense')
-    profile.value = loaded
+  // 進行中的 GET /brand：session store（登入／還原）與首頁會同時呼叫 load()，
+  // 只看 profile 有沒有值擋不住兩發並行，所以共用同一個進行中的請求。
+  let inflight: Promise<void> | null = null
+
+  function load(force = false): Promise<void> {
+    if (profile.value && !force) return Promise.resolve()
+    if (!inflight) {
+      const request: Promise<void> = api
+        .getBrand()
+        .then((loaded) => {
+          if (inflight !== request) return // reset() 之後才回來的舊帳號回應，不能寫進來
+          // 真後端從沒設定過就回空字串／null；沒有預設文案的話合規頁的兩個
+          // textarea 會是空的，使用者容易誤以為欄位壞掉。用跟畫面一致的
+          // i18n 預設文案補上，只在「真的沒有值」時才補，不覆蓋既有設定。
+          if (!loaded.portraitConsent) loaded.portraitConsent = i18n.global.t('brandSettings.defaults.portraitConsent')
+          if (!loaded.imageLicense) loaded.imageLicense = i18n.global.t('brandSettings.defaults.imageLicense')
+          profile.value = loaded
+        })
+        .finally(() => {
+          if (inflight === request) inflight = null
+        })
+      inflight = request
+    }
+    return inflight
+  }
+
+  /** 登出時清掉：下一個帳號登入時要重新取，進行中的舊請求回來也不採用 */
+  function reset() {
+    profile.value = null
+    inflight = null
   }
 
   async function save() {
@@ -33,13 +54,5 @@ export const useBrandStore = defineStore('brand', () => {
     }
   }
 
-  // 登出時要清：brand 資料是綁 bot（`X-Bot-Id`）的，不清的話換帳號／換 bot
-  // 登入後 `load()` 的 `if (profile.value && !force) return` 會直接跳過重抓，
-  // 畫面顯示的會是上一個帳號的品牌設定。這個 setup store 寫法沒有 Pinia
-  // 內建的 `$reset()` 可用，所以自己補一個（session.ts::discard() 會呼叫）。
-  function $reset() {
-    profile.value = null
-  }
-
-  return { profile, saving, load, save, $reset }
+  return { profile, saving, load, save, reset }
 })

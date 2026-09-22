@@ -2,19 +2,42 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/api'
 import { clearAuth, setAuth } from '@/api/http'
-import { useBrandStore } from '@/stores/brand'
-import { useConsentStore } from '@/stores/consent'
-import { useFeedStore } from '@/stores/feed'
-import { useGenerationTasksStore } from '@/stores/generationTasks'
-import type { Session } from '@/types/api'
+import { i18n } from '@/lang'
+import { useBrandStore } from './brand'
+import type { Bot, Session } from '@/types/api'
 
 const STORAGE_KEY = 'mv_session'
 
 export const useSessionStore = defineStore('session', () => {
   const session = ref<Session | null>(null)
   const loading = ref(false)
+  /** `GET /bots` 整份清單（之後的機器人切換器用）；登入／還原時取一次，登出清空 */
+  const bots = ref<Bot[]>([])
+  const namesLoaded = ref(false)
+  const brand = useBrandStore()
 
   const isAuthenticated = computed(() => session.value !== null)
+
+  /**
+   * 側欄、麵包屑、圖庫提示共用的機器人名稱：品牌設定名稱 → 目前 botId 的 botName →
+   * i18n 預設。兩支 API 都還沒回來前留空白，免得先閃一下預設字串再換成真名。
+   */
+  const botName = computed(() => {
+    if (!namesLoaded.value) return ''
+    const own = bots.value.find((b) => b.botId === session.value?.botId)?.botName
+    return brand.profile?.name || own || i18n.global.t('brand.name')
+  })
+
+  // 登出後才回來的舊回應不能把上一個帳號的清單寫回來：序號不符就丟掉
+  let loadSeq = 0
+  async function loadNames() {
+    const seq = ++loadSeq
+    // 取不到就當沒有值（退到下一層），不擋操作也不顯示錯誤
+    const [listed] = await Promise.allSettled([api.listBots(), brand.load()])
+    if (seq !== loadSeq) return
+    if (listed.status === 'fulfilled') bots.value = listed.value
+    namesLoaded.value = true
+  }
 
   /**
    * 收下一個新的登入狀態：存記憶體、存 localStorage，**並把兩把鑰匙灌進 http 層**。
@@ -26,10 +49,15 @@ export const useSessionStore = defineStore('session', () => {
     session.value = next
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
     setAuth({ token: next.token, botId: next.botId })
+    void loadNames()
   }
 
   function discard() {
+    loadSeq++
     session.value = null
+    bots.value = []
+    namesLoaded.value = false
+    brand.reset()
     localStorage.removeItem(STORAGE_KEY)
     clearAuth()
 
@@ -99,5 +127,5 @@ export const useSessionStore = defineStore('session', () => {
     discard()
   }
 
-  return { session, loading, isAuthenticated, restore, login, register, logout, forceLogout }
+  return { session, loading, bots, botName, isAuthenticated, restore, login, register, logout, forceLogout }
 })
