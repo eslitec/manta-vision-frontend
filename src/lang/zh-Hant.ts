@@ -224,15 +224,15 @@ export default {
     },
   },
   image: {
-    steps: { reference: '1. 參考圖', prompt: '2. 描述你想要的圖片', model: '3. 生成模型' },
+    steps: { reference: '1. 參考圖（選填）', prompt: '2. 描述你想要的圖片', model: '3. 生成模型' },
     promptPlaceholder: '例：把商品放在木質桌面上，自然光、日系簡約風格…',
     assisting: '擴寫中…',
     assist: 'AI 輔助描述',
     assistHint: '把白話需求擴寫成完整 prompt',
     advancedSettings: '進階設定（參考強度・負面提示・種子）',
     referenceStrength: '參考強度',
-    strengthHint: '越高越貼近參考圖，越低越照描述生成；描述和參考圖無關時請調低',
-    referenceRequired: '（需先選參考圖）',
+    strengthHint: '沒有合適的參考圖可以不放；有參考圖時越高越貼近參考圖',
+    removeReference: '移除參考圖',
     negativePrompt: '負面提示',
     negativePlaceholder: '模糊、變形手指、雜亂背景',
     negativePresets: {

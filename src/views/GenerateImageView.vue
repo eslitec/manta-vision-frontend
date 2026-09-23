@@ -11,6 +11,7 @@
             span.dropzone__name(v-if="refImage") {{ refImage.name }}
           .dropzone__actions
             AppButton(variant="outline" @click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
+            AppButton(v-if="refImage" variant="subtle" @click="refImage = null") {{ t('image.removeReference') }}
             span.dropzone__hint {{ t('common.orDragUpload') }}
 
         .step
@@ -26,12 +27,12 @@
             span {{ t('image.advancedSettings') }}
             IconChevronDown(:class="{ isUp: advancedOpen }")
           .adv(v-show="advancedOpen")
-            .adv__row
+            .adv__row(v-if="refImage")
               label.adv__label(for="image-reference-strength")
                 span {{ t('image.referenceStrength') }}
                 span.adv__val {{ referenceStrength.toFixed(2) }}
               input#image-reference-strength.adv__range(type="range" min="0" max="1" step="0.05" v-model.number="referenceStrength" :aria-describedby="'image-reference-strength-hint'")
-              span#image-reference-strength-hint.adv__hint {{ t('image.strengthHint') }}{{ refImage ? '' : t('image.referenceRequired') }}
+              span#image-reference-strength-hint.adv__hint {{ t('image.strengthHint') }}
             .adv__row
               .adv__label
                 label(for="image-negative-prompt") {{ t('image.negativePrompt') }}
@@ -90,7 +91,7 @@
             button.cost__feedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true")
               IconFeedBottleSmall.cost__icon
             span {{ t('units.feed', { count: estCost }) }}
-        AppButton(:disabled="generating || !prompt.trim() || !refImage || perImage === undefined" @click="generate")
+        AppButton(:disabled="generating || !prompt.trim() || perImage === undefined" @click="generate")
           component(:is="generating ? IconLoader : IconAddObject" :class="{ spin: generating }")
           span {{ generating ? t('common.generating') : t('image.generate') }}
 
@@ -255,14 +256,16 @@ async function assist() {
   }
 }
 
-// 組請求。欄位名和後端 GenerateRequest 相同，real 整包當 body 送出
-function buildReq(imageId: string, n: number, regenOf?: string): GenerateImageReq {
+// 組請求。欄位名和後端 GenerateRequest 相同，real 整包當 body 送出。
+// 沒選參考圖＝純文字生圖（後端 v14）：不送 imageId，strength 也不送（後端會忽略，但畫面上滑桿已藏起來）
+function buildReq(n: number, regenOf?: string): GenerateImageReq {
+  const imageId = refImage.value?.id
   return {
     modelKey: imageTier.value,
     imageId,
     prompt: prompt.value,
     count: n, // 帶 regenOf 時後端一律當 1 張
-    strength: toBackendStrength(referenceStrength.value),
+    strength: imageId ? toBackendStrength(referenceStrength.value) : undefined,
     negativePrompt: negativePrompt.value.trim() || undefined,
     seed: parseSeed(seedInput.value) ?? undefined, // null（不合法）已由 seedRejected 擋在送出前
     useBrand: applyBrand.value,
@@ -279,14 +282,13 @@ const failText = (e: unknown, insufficient: string) =>
   isInsufficientFeed(e) ? insufficient : displayMessage(e, t('errors.generationFailed'))
 
 async function generate() {
-  const reference = refImage.value
   const price = perImage.value
-  if (!reference || generating.value || price === undefined || seedRejected()) return
+  if (generating.value || price === undefined || seedRejected()) return
   errorMsg.value = ''
   generating.value = true
   try {
     results.value = await tasksStore.createImageTask(
-      () => api.generateImages(buildReq(reference.id, count.value)),
+      () => api.generateImages(buildReq(count.value)),
       t('image.taskName', { name: prompt.value.slice(0, 12) || Date.now() }),
       price * count.value,
     )
@@ -332,14 +334,13 @@ async function saveToLib(r: GeneratedImage) {
   }
 }
 async function regen(r: GeneratedImage) {
-  const reference = refImage.value
   const price = perImage.value
-  if (!reference || generating.value || price === undefined || seedRejected()) return
+  if (generating.value || price === undefined || seedRejected()) return
   errorMsg.value = ''
   generating.value = true
   try {
     const [next] = await tasksStore.createImageTask(
-      () => api.generateImages(buildReq(reference.id, 1, r.id)),
+      () => api.generateImages(buildReq(1, r.id)), // 用當下的參考圖（可為空），後端不沿用原生成那張
       t('image.regenerationTaskName'),
       price,
     )

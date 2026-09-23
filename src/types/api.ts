@@ -24,10 +24,10 @@ export interface AiModel {
 // 欄位名等於後端 GenerateRequest，real 版整包當 body 送出
 export interface GenerateImageReq {
   modelKey: string
-  imageId: string // 必填：後端 v10 起沒有純文字生圖
+  imageId?: string // 選填（後端 v14）：帶＝圖生圖；不帶＝純文字生圖（同檔位同單價，輸出固定 1024×1024）
   prompt: string
   count: number // 只能 2 或 4；帶 regenOf 時後端視為 1
-  strength?: number // 後端語意 0..1：越低越貼近參考圖（畫面上的「參考強度」要翻轉後再送）
+  strength?: number // 後端語意 0..1：越低越貼近參考圖（畫面上的「參考強度」要翻轉後再送）；沒有 imageId 時不送
   negativePrompt?: string // 負面提示：不希望出現的元素
   seed?: number // 種子；未指定＝隨機（固定可重現同一張）
   useBrand: boolean
