@@ -247,16 +247,19 @@ export default {
     },
   },
   image: {
-    steps: { reference: '1. Reference image', prompt: '2. Describe the image you want', model: '3. Generation model' },
+    steps: {
+      reference: '1. Reference image (optional)',
+      prompt: '2. Describe the image you want',
+      model: '3. Generation model',
+    },
     promptPlaceholder: 'Example: Place the product on a wooden table with natural light and a minimal Japanese style…',
     assisting: 'Enhancing…',
     assist: 'AI prompt assistant',
     assistHint: 'Expand a simple request into a complete prompt',
     advancedSettings: 'Advanced settings (reference strength, negative prompt, seed)',
     referenceStrength: 'Reference strength',
-    strengthHint:
-      'Higher stays closer to the reference; lower follows your description more. Turn it down when the description is unrelated to the reference',
-    referenceRequired: ' (select a reference first)',
+    strengthHint: 'No suitable reference? Leave it out. With one, higher stays closer to the reference',
+    removeReference: 'Remove reference',
     negativePrompt: 'Negative prompt',
     negativePlaceholder: 'Blurry, deformed fingers, messy background',
     negativePresets: {

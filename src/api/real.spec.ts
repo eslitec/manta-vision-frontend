@@ -757,6 +757,16 @@ describe('POST /generate', () => {
     expect(res).toEqual(GENERATED)
   })
 
+  it('沒有參考圖（純文字生圖）：body 不含 imageId 與 strength', async () => {
+    const calls = stubRoutes({ '/generate': GEN_OK })
+    const textOnly: GenerateImageReq = { modelKey: 'imageStandard', prompt: '白T', count: 2, useBrand: false }
+
+    await realApi.generateImages({ ...textOnly, strength: undefined })
+
+    expect(calls[0].body).toStrictEqual(textOnly)
+    expect(Object.keys(calls[0].body as object)).not.toContain('strength')
+  })
+
   it('202 → 每 pollAfterMs 輪詢 GET /generations/{id} 直到 done，不會再送 /generate', async () => {
     const calls = stubRoutes({ '/generate': PENDING, '/generations/gen_1': [PROCESSING, DONE] })
 
