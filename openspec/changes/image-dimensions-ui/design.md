@@ -9,9 +9,9 @@
 
 ## Decisions
 
-### 決策 1：原圖尺寸來源＝`Asset.width`／`height` 優先，退回畫布 `<img>` 的 `naturalWidth`／`naturalHeight`，都沒有就 null
+### 決策 1：原圖尺寸來源＝先用 `Asset.width`／`height`，畫布 `<img>` 載入後以 `naturalWidth`／`naturalHeight` 覆蓋，都沒有就 null
 
-後端對舊資料與 Pillow 解不開的檔案回 null，這些圖在畫布載入後瀏覽器一樣知道尺寸，所以在主畫布 `<img>` 掛 `@load` 補上；`selectEditorAsset` 每次換素材都先重設，避免上一張的尺寸殘留。兩者都取不到（圖還沒載入或載入失敗）時 `cropOutputDimensions` 回 null，三個顯示點（側欄尺寸行、畫布徽章、畫布提示）都以 `v-if` 隱藏，不顯示假數字。替代方案「取不到時退回 1440 × 1080」被否決：那正是要拿掉的錯誤數字。
+後端對舊資料與 Pillow 解不開的檔案回 null，這些圖在畫布載入後瀏覽器一樣知道尺寸，所以在主畫布 `<img>` 掛 `@load` 補上；而且載入後一律以 natural 尺寸覆蓋、不只是補缺：後端 `measure()` 用 Pillow 讀檔頭不做 exif_transpose，瀏覽器的 `naturalWidth`／`naturalHeight` 與 canvas 都套 EXIF 方向，手機直拍的 JPEG 兩者寬高互換（實測 orientation=6 的 400 × 300：後端回 400 × 300、瀏覽器看到 300 × 400），`buildCroppedFile` 用的正是同一網址載入後的 natural 尺寸，顯示端跟它同源才等於實際輸出；`selectEditorAsset` 每次換素材都先重設，避免上一張的尺寸殘留。兩者都取不到（圖還沒載入或載入失敗）時 `cropOutputDimensions` 回 null，三個顯示點（側欄尺寸行、畫布徽章、畫布提示）都以 `v-if` 隱藏，不顯示假數字。替代方案「取不到時退回 1440 × 1080」被否決：那正是要拿掉的錯誤數字。
 
 ### 決策 2：顯示尺寸與 `buildCroppedFile` 共用同一套 cover 換算（`cropSourceRect`）
 
