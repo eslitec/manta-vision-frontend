@@ -661,7 +661,6 @@ export default {
       folderHeading: 'Location',
       folderDefault: 'My folders',
       folderHint: 'The system category is set to “Edited output” automatically — no manual step needed.',
-      keepLayers: 'Keep layer data so you can edit it again later',
       alsoDownload: 'Also download a copy to this device',
       noCost: 'Saving costs no feed',
       errorNoSourceImage:

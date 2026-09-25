@@ -597,7 +597,6 @@ export default {
       folderHeading: '存放位置',
       folderDefault: '我的資料夾',
       folderHint: '系統分類會自動歸入「編輯產物」，不需手動指定。',
-      keepLayers: '保留圖層資訊，之後可再編輯',
       alsoDownload: '同時下載一份到本機',
       noCost: '儲存不消耗飼料',
       errorNoSourceImage: '目前的素材沒有真實圖檔可以裁切，請先從圖庫選擇一張真的素材再試一次。',

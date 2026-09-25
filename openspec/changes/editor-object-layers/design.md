@@ -2,7 +2,7 @@
 
 `src/components/ImageEditorWorkspace.vue` 的畫布（`.artboard`）是固定 4:3 的框，底圖用 `object-fit: cover` 鋪滿；裁切框 `cropRect`、文字圖層 `TextEditorLayer.x/y`、物件圖層 `ObjectEditorLayer.x/y` 全都是相對這個框的百分比（0–100，x/y 為圖層中心點，元素用 `translate(-50%, -50%)` 對齊）。既有的裁切另存已經有一套「百分比 → 原圖像素」換算（`cropSourceRect`：先算 cover 顯示區在原圖裡的位置，再把 `cropRect` 換進去），以及跨網域安全的圖片載入（`fetch` 跳過快取取 Blob → `blob:` 網址餵 `Image`，canvas 不被污染）。
 
-物件圖層目前沒有 `url`，模板固定畫 `IconImagePlaceholder`，`objectLayerStyle` 寬度 `24% × scale`、`aspect-ratio: 1`。拖曳／縮放／複製／刪除／圖層清單排序都已經是多實例架構（`usePercentDrag`／`usePointerDrag`、`duplicateSelectedLayer`、`layerZIndex`），只差圖層本身有沒有真圖。
+物件圖層目前沒有 `url`，模板固定畫 `IconImagePlaceholder`，`objectLayerStyle` 寬度 `24% × scale`、`aspect-ratio: 1`。拖曳／縮放／複製／圖層清單排序都已經是多實例架構（`usePercentDrag`／`usePointerDrag`、`duplicateSelectedLayer`、`layerZIndex`），只差圖層本身有沒有真圖。
 
 `ImagePickerDialog` 一律 `load({ pageSize: 100 })` 並在前端過濾掉 `source === 'builtin'`（內建素材的 id 送到生成／編輯端點會 404，見 `library-builtin-source` 決策 6）。
 
@@ -10,7 +10,7 @@
 
 **Goals:**
 
-- 「加入物件」可從圖庫（`source=object`，含內建物件）選圖成為真實的 `<img>` 物件圖層，沿用既有拖曳／縮放／複製／刪除／排序。
+- 「加入物件」可從圖庫（`source=object`，含內建物件）選圖成為真實的 `<img>` 物件圖層，沿用既有拖曳／縮放／複製／排序（圖層目前沒有刪除功能，加錯只能取消顯示；不在本 change 範圍）。
 - 「另存為新素材」把底圖＋物件圖層＋文字圖層合成成一張 PNG（原圖像素解析度）上傳真後端；任何工具下只要底圖有 `url` 就走這條。
 - 座標換算抽成純函式並有單元測試；裁切顯示的尺寸（`cropOutputDimensions`）與實際輸出繼續共用同一套換算。
 
@@ -44,18 +44,18 @@
 
 輸出矩形 `out`：`tool === 'crop'` 時＝`percentRectInSource(cropRect, cover)`（先裁再疊，框外的圖層自然被 canvas 邊界裁掉）；其餘工具＝`cover`（畫布顯示區）。選「畫布顯示區」而不是「整張原圖」的理由：圖層是相對畫布擺的，使用者放在畫布上緣的文字若輸出整張 9:16 原圖會落在圖中間，違反所見即所得；4:3 cover 本身是既有畫布的既定語意，這裡不擴大範圍。
 
-畫的順序：底圖 `drawImage(img, out.x, out.y, out.width, out.height, 0, 0, w, h)` → `[...layers].reverse()`（`layers[0]` 在最上層，見 `layerZIndex`）逐一畫，跳過 `original` 與 `visible === false`：
+畫的順序：底圖 `drawImage(img, out.x, out.y, out.width, out.height, 0, 0, w, h)`（原圖圖層被使用者解鎖後取消勾選時不畫，PNG 底保持透明——「隱藏的圖層不畫」對原圖一體適用）→ `[...layers].reverse()`（`layers[0]` 在最上層，見 `layerZIndex`）逐一畫，跳過 `original` 與 `visible === false`：
 
 - 物件：`loadImageForCanvas(url)`（與底圖同一條跨網域安全載入），`layerRectInSource(layer, 40 × scale, naturalW / naturalH, cover)`，平移 `-out.x / -out.y` 後 `drawImage`。沒有 `url`（AI mock）略過。
-- 文字：字級 `1.25rem × scale` 是不隨畫布寬度變的 rem，換成原圖像素用「目前畫布顯示寬」當比例尺：`sizePx = 1.25 × scale × rootPx × (cover.width / artboardRef.offsetWidth)`（`offsetWidth` 不受 zoom 的 `transform: scale` 影響）。`textAlign = 'center'`、`textBaseline = 'middle'`，中心點 `percentPointInSource(layer, cover)` 平移後 `fillText`——`.textObject` 的 padding／border 對稱，中心就是文字中心。
+- 文字：字級 `1.25rem × scale` 是不隨畫布寬度變的 rem，換成原圖像素用「目前畫布顯示寬」當比例尺：`sizePx = 1.25 × scale × rootPx × (cover.width / artboardRef.clientWidth)`（`clientWidth` 是 padding box——圖層百分比定位的基準，不含 `.artboard` 的 1px 邊框；也不受 zoom 的 `transform: scale` 影響）。已知微差：`.objectObject` 帶 1px 邊框，畫布上的 `<img>` 比合成矩形窄 2 畫布 px（≈0.4%），肉眼不可見，程式內以 `ponytail:` 註解標明。`textAlign = 'center'`、`textBaseline = 'middle'`，中心點 `percentPointInSource(layer, cover)` 平移後 `fillText`——`.textObject` 的 padding／border 對稱，中心就是文字中心。
 
-字型策略（`resolveCanvasFont`）：`await document.fonts.load(spec)` 後 `document.fonts.check(spec)` 為真才用該字型；Google Fonts 走 `display=swap` 延遲載入，畫布上顯示過不代表載完。載不到（reject 或 check 為假）就 `console.warn` 並退回 `sans-serif`——寧可字型不對也不要整張存不下來。系統字（Arial／Georgia 等）不在瀏覽器的字型集合裡，`check` 依規範回 true，不受影響。
+字型策略（`resolveCanvasFont`）：`await document.fonts.load(spec, text)` 後 `document.fonts.check(spec, text)` 為真才用該字型，`text` 是該圖層的文字內容——Noto Sans／Serif TC 依 unicode-range 切成上百片，不帶文字只會等到含空白字元的那一片；`load()` 以 `Promise.race` 加 3 秒上限（`FONT_LOAD_TIMEOUT_MS`）：實測 headless Chrome 下 Google Fonts 可變字型多個字重共用同一個 woff2，部分 FontFace 會卡在 `status === 'loading'` 永不結束（無網路請求在飛），`fonts.load()` 跟著永不 resolve，沒有上限另存會無限轉圈；逾時後 `check` 為假就退回系統字型並警告；Google Fonts 走 `display=swap` 延遲載入，畫布上顯示過不代表載完。載不到（reject 或 check 為假）就 `console.warn` 並退回 `sans-serif`——寧可字型不對也不要整張存不下來。系統字（Arial／Georgia 等）不在瀏覽器的字型集合裡，`check` 依規範回 true，不受影響。
 
 錯誤碼沿用既有 `CROP_NO_SOURCE_IMAGE`／`CROP_IMAGE_LOAD_FAILED`／`CROP_EXPORT_BLOCKED` 與 `classifySaveError`，物件圖層載入失敗也歸「圖片讀取被擋」那句訊息，不另增文案。
 
 ### 4. 走真上傳的條件從「裁切工具」放寬到「底圖有 `url`」
 
-`saveAsNewAsset`：`if (selectedAssetUrl.value)` → `buildOutputFile` + `upload(file, folder, sourceImageId, name)`；否則維持 mock `saveEdited(name, { folder })`。`SaveAssetDialog` 移除「保留圖層」checkbox 與 `keepLayers` 欄位（真上傳沒有圖層概念）；`useAssets.saveEdited` 的 `keepLayers` 參數保留（既有測試與 mock 契約不動），只是呼叫端不再傳。
+`saveAsNewAsset`：`if (selectedAssetUrl.value && props.mode !== 'retouch')` → `buildOutputFile` + `upload(file, folder, sourceImageId, name)`；否則維持 mock `saveEdited(name, { folder })`。AI 修圖頁（`mode === 'retouch'`）明確排除：那一頁沒有畫布與裁切 UI、修圖結果仍是 mock（`retouchImage` 沒有結果圖），走 `buildOutputFile` 只會把未修圖的原圖 4:3 置中裁切後上傳成「修圖版」；等 retouch 接上真實結果圖再改。`SaveAssetDialog` 移除「保留圖層」checkbox 與 `keepLayers` 欄位（真上傳沒有圖層概念）；`useAssets.saveEdited` 的 `keepLayers` 參數保留（既有測試與 mock 契約不動），只是呼叫端不再傳。
 
 ### 5. 「有未儲存的變更」改盯所有圖層
 

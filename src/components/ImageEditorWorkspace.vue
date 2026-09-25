@@ -583,11 +583,20 @@ async function loadImageForCanvas(url: string): Promise<HTMLImageElement> {
 }
 // 字型策略：先請瀏覽器把該字型載進來（Google Fonts 走 display=swap 延遲載入，畫布上顯示過不代表
 // 已經載完），載不到就退回系統 sans-serif 並在 console 留紀錄——寧可字型不對，也不要整張存不下來。
-async function resolveCanvasFont(family: string, weight: number, sizePx: number): Promise<string> {
+// load／check 要帶「要畫的文字」：Noto Sans／Serif TC 依 unicode-range 切成上百片，不帶文字只會
+// 等到含空白字元的那一片，check 為真也不代表這幾個中文字的字形已載入。
+// ponytail: load() 加 3 秒上限——實測（headless Chrome）Google Fonts 的可變字型多個字重共用同一個
+// woff2，部分 FontFace 會卡在 status='loading' 永不結束（沒有任何網路請求在飛），fonts.load()
+// 跟著永不 resolve，另存會轉圈到天荒地老；逾時就走下面的 check → 退回系統字型。
+const FONT_LOAD_TIMEOUT_MS = 3000
+async function resolveCanvasFont(family: string, weight: number, sizePx: number, text: string): Promise<string> {
   const spec = `${weight} ${sizePx}px ${family}`
   try {
-    await document.fonts.load(spec)
-    if (document.fonts.check(spec)) return spec
+    await Promise.race([
+      document.fonts.load(spec, text),
+      new Promise((resolve) => setTimeout(resolve, FONT_LOAD_TIMEOUT_MS)),
+    ])
+    if (document.fonts.check(spec, text)) return spec
   } catch {
     // 走下方 fallback
   }
@@ -605,11 +614,15 @@ async function buildOutputFile(name: string): Promise<File> {
   canvas.height = Math.max(1, Math.round(out.height))
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('canvas-context-unavailable')
-  ctx.drawImage(img, out.x, out.y, out.width, out.height, 0, 0, canvas.width, canvas.height)
+  // 原圖圖層解鎖後可被取消勾選（畫布只剩物件／文字）；跟其他圖層一樣隱藏就不畫，PNG 底保持透明。
+  if (originalLayer.value?.visible !== false) {
+    ctx.drawImage(img, out.x, out.y, out.width, out.height, 0, 0, canvas.width, canvas.height)
+  }
   // 畫布上文字的字級是 rem（不隨畫布寬度縮放），換成原圖像素要拿「目前畫布顯示寬」當比例尺；
-  // offsetWidth 不受 zoom 的 transform: scale 影響，量到的就是未縮放的版面寬。
+  // clientWidth 是 padding box（不含 .artboard 的 1px 邊框，圖層的百分比定位就是相對它），
+  // 且不受 zoom 的 transform: scale 影響，量到的就是未縮放的版面寬。
   const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
-  const artboardWidth = artboardRef.value?.offsetWidth || 520
+  const artboardWidth = artboardRef.value?.clientWidth || 520
   const sourcePxPerArtboardPx = cover.width / artboardWidth
   // layers[0] 在最上層（見 layerZIndex），所以從尾端往前畫；原圖已當底圖畫過、隱藏的圖層不畫。
   for (const layer of [...layers].reverse()) {
@@ -624,12 +637,14 @@ async function buildOutputFile(name: string): Promise<File> {
         objectImg.naturalWidth / objectImg.naturalHeight,
         cover,
       )
+      // ponytail: .objectObject 帶 1px 邊框，畫布上的 <img> 比這個矩形窄 2 畫布 px（520px 畫布約 0.4%），
+      // 肉眼看不出；要歸零就把 .hasImage 的邊框改成 outline。
       ctx.drawImage(objectImg, rect.x - out.x, rect.y - out.y, rect.width, rect.height)
     } else {
       const textLayer = layer as TextEditorLayer
       const font = fontOptions.find((option) => option.id === textLayer.fontId) ?? fontOptions[0]
       const sizePx = TEXT_LAYER_BASE_REM * textLayer.scale * rootPx * sourcePxPerArtboardPx
-      ctx.font = await resolveCanvasFont(font.family, font.weight, sizePx)
+      ctx.font = await resolveCanvasFont(font.family, font.weight, sizePx, textLayer.content)
       ctx.fillStyle = textLayer.color
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
@@ -669,7 +684,10 @@ const saveAsNewAsset = async (payload: SaveAssetPayload) => {
   try {
     // 底圖是圖庫裡的真實素材（有 url）就把畫布（底圖＋物件圖層＋文字圖層；裁切工具下先裁）合成
     // 一張 PNG 上傳到真後端；沒有真實圖檔來源的 demo 素材才維持原本 mock 的另存行為。
-    if (selectedAssetUrl.value) {
+    // AI 修圖頁（mode === 'retouch'）例外：那一頁沒有畫布也沒有裁切 UI，修圖結果目前仍是 mock
+    // （沒有真的結果圖），走 buildOutputFile 只會把「未修圖的原圖」4:3 置中裁掉一截當修圖版上傳，
+    // 所以維持 mock 另存，等 retouch 接上真實結果圖再改。
+    if (selectedAssetUrl.value && props.mode !== 'retouch') {
       const file = await buildOutputFile(payload.name)
       const saved = await upload(file, payload.folder || undefined, selectedAssetId.value || undefined, payload.name)
       savedAssetId.value = saved.id
@@ -1013,9 +1031,10 @@ const insertTextLayer = async () => {
   const layer = addTextLayer()
   await beginTextEdit(layer.key)
 }
-// 「加入物件」對齊 Figma（1141:906）：畫布上先框選範圍，右側面板輸入描述、
-// 點選常用物件預設可快速帶入描述，「生成物件」才會真的建立新圖層——
-// 不是從素材庫挑現成圖片直接疊上去。加入物件本身不扣飼料（見 editor.costNote）。
+// 「加入物件」有兩條路：(1) 從圖庫選圖（openObjectPicker → selectEditorAsset 的 object 分支）建立
+// 有真圖 url 的物件圖層；(2) AI 生成（mock，對齊 Figma 1141:906）：畫布上先框選範圍、右側面板輸入
+// 描述（常用物件預設可快速帶入），「生成物件」才建立一個佔位圖層。下面這幾個狀態只服務 (2)。
+// 加入物件本身不扣飼料（見 editor.costNote）。
 const objectSelection = reactive({ x: 43, y: 17, width: 37, height: 36 })
 const objectDescription = ref('')
 const generatingObject = ref(false)
