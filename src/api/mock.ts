@@ -108,6 +108,9 @@ const db = {
       type: 'image',
       folderId: 'folder_spring',
       referencedBy: 2,
+      // 底圖與物件都給一張真圖（比照試穿模特的 picsum），mock 模式才走得到「物件圖層真的顯示、
+      // 另存合成上傳」這條路徑；其他素材維持沒有 url、退回佔位圖示
+      url: 'https://picsum.photos/seed/mvspring1/1024/768',
     },
     {
       id: 'a2',
@@ -119,6 +122,7 @@ const db = {
       type: 'image',
       folderId: 'folder_product',
       referencedBy: 1,
+      url: 'https://picsum.photos/seed/mvobj1/400/400',
     },
     {
       id: 'a3',
@@ -151,6 +155,7 @@ const db = {
       type: 'image',
       folderId: 'folder_product',
       referencedBy: 1,
+      url: 'https://picsum.photos/seed/mvobj2/400/400',
     },
     {
       id: 'a7',
