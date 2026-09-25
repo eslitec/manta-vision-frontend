@@ -42,7 +42,7 @@
 - `percentPointInSource(point, cover)`／`percentRectInSource(rect, cover)`：畫布百分比 → 原圖像素。
 - `layerRectInSource(layer, widthPercent, aspect, cover)`：以中心點＋畫布寬百分比＋圖層本身寬高比展開成原圖像素矩形。
 
-輸出矩形 `out`：`tool === 'crop'` 時＝`percentRectInSource(cropRect, cover)`（先裁再疊，框外的圖層自然被 canvas 邊界裁掉）；其餘工具＝`cover`（畫布顯示區）。選「畫布顯示區」而不是「整張原圖」的理由：圖層是相對畫布擺的，使用者放在畫布上緣的文字若輸出整張 9:16 原圖會落在圖中間，違反所見即所得；4:3 cover 本身是既有畫布的既定語意，這裡不擴大範圍。
+輸出矩形 `out`：`tool === 'crop'` 時＝`percentRectInSource(cropRect, cover)`（先裁再疊，框外的圖層自然被 canvas 邊界裁掉）；其餘工具＝`cover`（畫布顯示區）。選「畫布顯示區」而不是「整張原圖」的理由：圖層是相對畫布擺的，使用者放在畫布上緣的文字若輸出整張 9:16 原圖會落在圖中間，違反所見即所得；4:3 cover 本身是既有畫布的既定語意，這裡不擴大範圍。**2026-09-26 使用者拍板維持此方案（整張原圖請改用裁切工具「自訂」拉滿）。**
 
 畫的順序：底圖 `drawImage(img, out.x, out.y, out.width, out.height, 0, 0, w, h)`（原圖圖層被使用者解鎖後取消勾選時不畫，PNG 底保持透明——「隱藏的圖層不畫」對原圖一體適用）→ `[...layers].reverse()`（`layers[0]` 在最上層，見 `layerZIndex`）逐一畫，跳過 `original` 與 `visible === false`：
 
