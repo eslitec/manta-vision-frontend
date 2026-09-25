@@ -923,6 +923,8 @@ const layerLabel = (layer: EditorLayer) => {
 }
 const layerDescription = (layer: EditorLayer) => {
   if (layer.type === 'original') return t(layer.locked ? 'editor.originalLocked' : 'editor.originalUnlocked')
+  // 有 url 的是圖庫選來的物件，沒有的才是 AI 生成（mock）
+  if (layer.type === 'object' && (layer as ObjectEditorLayer).url) return t('editor.layerDescriptions.objectLibrary')
   return t(`editor.layerDescriptions.${layer.type}`)
 }
 const selectLayer = (key: string) => {
@@ -1787,9 +1789,12 @@ const previews = computed(() =>
 }
 // 對齊 Figma（1141:1140 selection_marquee）：選取範圍要有淡淡的藍色底色 rgba(46,53,103,0.1)
 // 才看得出框選了哪塊區域，原本沒有底色，只有虛線框；圓角也應該是 6px，原本是 4px。
+// z-index 壓在所有圖層（layerZIndex ≥ 2）之下：原本 100 會蓋住置中加入的圖庫物件，從物件中心
+// 拖曳完全不動、只有抓框外才拖得動。現在最上層可見者接到 pointer——物件蓋到的地方拖物件，
+// 框選區其餘部分仍可拖曳，AI 生成流程的框選不受影響。
 .objectSelection {
   position: absolute;
-  z-index: 100;
+  z-index: 1;
   display: flex;
   align-items: flex-end;
   justify-content: center;

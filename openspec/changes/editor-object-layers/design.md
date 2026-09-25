@@ -32,7 +32,7 @@
 
 ### 2. 物件圖層資料模型：`ObjectEditorLayer.url: string`
 
-圖庫選來的圖有 `url`；AI 生成（mock）傳空字串。模板 `img.objectObject__img(v-if="objectLayer.url")` / `IconImagePlaceholder(v-else)`；有 `url` 時加 class `hasImage`（`aspect-ratio: auto; background: transparent`，高度跟著圖片等比）。寬度：有 `url` 用 `OBJECT_LAYER_WIDTH_PERCENT = 40`（底圖顯示寬的 40%）× `scale`，佔位方塊維持 24%。圖庫選來的圖 `x/y = 50/50` 置中，AI mock 沿用框選範圍位置。`duplicateSelectedLayer` 的 `...source` 展開會一併複製 `url`，不用另外改。
+圖庫選來的圖有 `url`；AI 生成（mock）傳空字串。模板 `img.objectObject__img(v-if="objectLayer.url")` / `IconImagePlaceholder(v-else)`；有 `url` 時加 class `hasImage`（`aspect-ratio: auto; background: transparent`，高度跟著圖片等比）。寬度：有 `url` 用 `OBJECT_LAYER_WIDTH_PERCENT = 40`（底圖顯示寬的 40%）× `scale`，佔位方塊維持 24%。圖庫選來的圖 `x/y = 50/50` 置中，AI mock 沿用框選範圍位置。`duplicateSelectedLayer` 的 `...source` 展開會一併複製 `url`，不用另外改。圖層清單副標也依 `url` 分流：有 `url` 顯示 `editor.layerDescriptions.objectLibrary`（「圖庫物件」），沒有才是「AI 生成物件」。框選覆蓋層 `.objectSelection` 的 z-index 壓在所有圖層之下（`1`，圖層 `layerZIndex` ≥ 2）：置中加入的圖庫物件才接得到 pointer，框選區其餘部分仍可拖曳，AI 生成流程不受影響。
 
 ### 3. 合成：`buildOutputFile` 取代 `buildCroppedFile`，輸出範圍＝「所見即所得」
 

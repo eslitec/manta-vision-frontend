@@ -698,6 +698,7 @@ export default {
     layerDescriptions: {
       text: '文字圖層',
       object: 'AI 生成物件',
+      objectLibrary: '圖庫物件',
     },
     previews: { igPost: 'IG 貼文 1:1', igStory: 'IG 限動 9:16', fbPost: 'FB 貼文 4:5', line: 'LINE 圖文 16:9' },
     retouch: {
