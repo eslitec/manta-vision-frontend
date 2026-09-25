@@ -2,7 +2,7 @@
 
 ### Requirement: 素材可依來源與關鍵字篩選
 
-圖庫管理中心 SHALL 提供來源篩選（全部／上傳／AI 生成／編輯產物／內建素材）與關鍵字搜尋，兩者可與資料夾篩選同時套用；每一種篩選 SHALL 以一次分頁的 `GET /images` 查詢取得結果，SHALL NOT 在前端把 `GET /materials` 的內建素材合併進清單。「內建素材」篩選 SHALL 對應後端 `source=builtin`，只列出內建素材；「全部」SHALL 直接顯示後端合併好的使用者素材與內建素材。來源篩選 chip SHALL NOT 覆寫 `line-height: 1`，維持與其他 chip／pill 元件一致的預設行高。
+圖庫管理中心 SHALL 提供來源篩選（全部／上傳／AI 生成／編輯產物／內建素材）與關鍵字搜尋，兩者可與資料夾篩選同時套用；每一種篩選 SHALL 以一次分頁的 `GET /images` 查詢取得結果，SHALL NOT 在前端把 `GET /materials` 的內建素材合併進清單。「內建素材」篩選 SHALL 對應後端 `source=builtin`，只列出內建素材；「全部」SHALL 直接顯示後端合併好的使用者素材與內建素材；「物件素材」系統分類 SHALL 對應後端 `source=object`，清單 SHALL 含內建的物件類素材（與 `counts.object` 的計算口徑一致）。「從圖庫選擇」彈窗 SHALL NOT 列出內建素材（底圖／參考圖／商品圖端點只接受使用者圖庫的 imageId）。來源篩選 chip SHALL NOT 覆寫 `line-height: 1`，維持與其他 chip／pill 元件一致的預設行高。
 
 #### Scenario: 使用者篩選來源
 
@@ -13,6 +13,28 @@
 
 - **WHEN** 使用者點選「內建素材」
 - **THEN** 前端以 `source=builtin` 查詢 `GET /images`，素材清單只顯示內建素材，總筆數採用後端回傳的 `total`
+
+#### Scenario: 使用者篩選物件素材
+
+- **WHEN** 使用者點選左側「物件素材」系統分類
+- **THEN** 前端以 `source=object` 查詢 `GET /images`，素材清單同時顯示使用者的物件素材與內建的物件類素材，總筆數與左側「物件素材」的數字（`counts.object`）一致
+
+##### Example:
+
+- GIVEN 使用者自己有 1 筆物件素材「商品_去背_白T」，內建素材中有 1 筆 `category=object` 的「春季花束」
+- WHEN 使用者點選左側「物件素材」
+- THEN 清單顯示這 2 筆，「共 2 筆」與左側「物件素材（2）」一致，「春季花束」的來源標籤是「內建素材」且沒有核取方塊
+
+#### Scenario: 從圖庫選擇彈窗不列內建素材
+
+- **WHEN** 使用者在生成／編輯／試穿頁開啟「從圖庫選擇」彈窗
+- **THEN** 彈窗的「全部」與各篩選 pill 都不出現來源為內建素材的項目，只能選到使用者自己的圖
+
+##### Example:
+
+- GIVEN 後端 `GET /images?pageSize=100` 回傳 4 筆使用者的圖與 32 筆內建素材（內建排在最後）
+- WHEN 使用者在圖生圖頁開啟「從圖庫選擇」並停在「全部」
+- THEN 彈窗只列出那 4 筆使用者的圖，沒有任何一張標「內建素材」
 
 #### Scenario: 使用者輸入搜尋關鍵字
 
@@ -96,7 +118,7 @@ SHALL NOT 為了合併內建素材而把使用者素材整批撈回前端切頁�
 #### Scenario: 總筆數與分類計數採用後端提供的統計
 
 - **WHEN** 圖庫顯示「全部素材」、「系統分類」與「未分類」旁的數字
-- **THEN** 這些數字直接採用後端回傳的統計值（`counts.all` 已含內建素材、`counts.object` 已含內建物件類素材、「未分類」用 `unfiledCount`）
+- **THEN** 這些數字直接採用後端回傳的統計值（`counts.all` 已含內建素材、`counts.object` 已含內建物件類素材——與「物件素材」清單的內容一致、「未分類」用 `unfiledCount`）
 
 ##### Example:
 

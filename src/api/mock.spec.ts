@@ -302,6 +302,62 @@ describe('素材（圖庫）', () => {
     expect(byKeyword.items.every((a) => a.name.includes('春季'))).toBe(true)
   })
 
+  it('listImages 不帶 source 時合併內建素材：使用者的圖在前、內建在後、不重複，total＝counts.all', async () => {
+    const all = await api.listImages({ pageSize: 100 })
+    const firstBuiltin = all.items.findIndex((a) => a.source === 'builtin')
+    expect(firstBuiltin).toBeGreaterThan(0)
+    expect(all.items.slice(0, firstBuiltin).every((a) => a.source !== 'builtin')).toBe(true)
+    expect(all.items.slice(firstBuiltin).every((a) => a.source === 'builtin')).toBe(true)
+    expect(new Set(all.items.map((a) => a.id)).size).toBe(all.items.length)
+    expect(all.total).toBe(all.counts.all)
+  })
+
+  it('listImages source=builtin 只回內建：一律圖片、沒有資料夾、帶 category，total＝counts.builtin', async () => {
+    const builtin = await api.listImages({ source: 'builtin', pageSize: 100 })
+    expect(builtin.items.length).toBeGreaterThan(0)
+    expect(
+      builtin.items.every(
+        (a) => a.source === 'builtin' && a.type === 'image' && a.folderId === undefined && a.category !== undefined,
+      ),
+    ).toBe(true)
+    expect(builtin.total).toBe(builtin.counts.builtin)
+  })
+
+  it('listImages 帶 folderId（含未分類）或 mediaType=video 都不含內建', async () => {
+    const queries = [{ folderId: null }, { folderId: 'folder_spring' }, { mediaType: 'video' as const }]
+    for (const q of queries) {
+      const res = await api.listImages({ ...q, pageSize: 100 })
+      expect(res.items.some((a) => a.source === 'builtin')).toBe(false)
+    }
+  })
+
+  it('listImages source=object 含內建的物件類素材（與 counts.object 一致），不含其他類別的內建', async () => {
+    const objects = await api.listImages({ source: 'object', pageSize: 100 })
+    expect(objects.items.some((a) => a.source === 'object')).toBe(true)
+    expect(objects.items.some((a) => a.source === 'builtin' && a.category === 'object')).toBe(true)
+    expect(objects.items.every((a) => a.source === 'object' || a.category === 'object')).toBe(true)
+    expect(objects.total).toBe(objects.counts.object)
+  })
+
+  it('counts：all／builtin／object 含內建，其餘桶不含，各桶加總等於 all', async () => {
+    const { counts } = await api.listImages()
+    const builtin = (await api.listImages({ source: 'builtin', pageSize: 100 })).items
+    const builtinObjects = builtin.filter((a) => a.category === 'object').length
+    const userObjects = (await api.listImages({ source: 'object', pageSize: 100 })).items.filter(
+      (a) => a.source === 'object',
+    ).length
+    expect(counts.builtin).toBe(builtin.length)
+    expect(counts.object).toBe(userObjects + builtinObjects)
+    expect(counts.all).toBe(
+      counts.upload +
+        counts.aiGenerate +
+        counts.edit +
+        counts.video +
+        counts.builtin +
+        (counts.object - builtinObjects),
+    )
+  })
+
   it('updateImage 改名不影響 folderId（folderId 這個 key 沒帶＝不動）', async () => {
     const before = (await api.listImages({})).items.find((a) => a.id === 'a1')!
     const updated = await api.updateImage('a1', { name: '改個名字' })

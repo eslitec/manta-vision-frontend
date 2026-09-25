@@ -363,7 +363,8 @@ export const mockApi = {
 
   // GET /images（對齊後端分頁：{ total, page, items, counts }；counts 是整個圖庫的統計，不受這裡的篩選影響）
   // 不帶 source ＝ 使用者的圖 ∪ 內建素材（內建排在後面，對齊後端 createdAt DESC、內建素材最舊）；
-  // source=builtin 只回內建；帶 folderId（含未分類）或 mediaType=video 都不含內建。
+  // source=builtin 只回內建；source=object 另含內建的物件類素材（與 counts.object 一致）；
+  // 帶 folderId（含未分類）或 mediaType=video 都不含內建。
   async listImages(query: ImageListQuery = {}): Promise<ImageListResponse> {
     await delay(250)
     const page = query.page ?? 1
@@ -372,7 +373,8 @@ export const mockApi = {
     const pool = includeBuiltin ? [...db.assets, ...MATERIALS.map(materialAsAsset)] : db.assets
     const filtered = pool.filter((a) => {
       if (query.mediaType && a.type !== query.mediaType) return false
-      if (query.source && a.source !== query.source) return false
+      if (query.source && a.source !== query.source && !(query.source === 'object' && a.category === 'object'))
+        return false
       if (query.folderId === null && a.folderId !== undefined) return false
       if (typeof query.folderId === 'string' && a.folderId !== query.folderId) return false
       if (query.q && !a.name.includes(query.q)) return false
