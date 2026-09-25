@@ -1,7 +1,7 @@
 <template lang="pug">
 .tryon
   h1.visuallyHidden {{ t('routeTitles.generateTryOn') }}
-  .consentBar(v-if="!consented")
+  .consentBar(v-if="consentLoaded && !consented")
     IconAlertTriangleFilled.consentBar__icon
     .consentBar__text
       strong {{ t('tryOn.consentBanner.title') }}
@@ -85,7 +85,7 @@
         button.linkbtn(:disabled="generating" @click="download") {{ t('common.download') }}
         button.linkbtn(:disabled="!canGenerate" @click="onGenerate") {{ t('common.regenerate') }}
 
-  ImagePickerDialog(v-model:open="pickerOpen" :title="t('tryOn.pickerTitle')" @select="onPick")
+  ImagePickerDialog(v-model:open="pickerOpen" :title="t('tryOn.pickerTitle')" :exclude-sources="['tryonModel']" @select="onPick")
   TopUpDialog(v-model:open="topUpOpen")
 
   Teleport(to="body")
@@ -101,6 +101,7 @@
         .terms
           p.terms__text {{ consentTemplate }}
         AppCheckbox.ack(v-model="ackChecked") {{ t('tryOn.terms.acknowledgement') }}
+        p.err(v-if="consentErr" role="alert") {{ consentErr }}
         .cdialog__act
           span.cdialog__grow
           AppButton(variant="outline" @click="goCompliance") {{ t('tryOn.terms.openCompliance') }}
@@ -146,7 +147,7 @@ import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 const router = useRouter()
 const brand = useBrandStore()
 const consentStore = useConsentStore()
-const { consented } = storeToRefs(consentStore)
+const { consented, loaded: consentLoaded } = storeToRefs(consentStore)
 const feed = useFeedStore()
 const { saveGenerated, upload, deleteAssets } = useAssets()
 const { t } = useI18n()
@@ -176,6 +177,7 @@ const modelRef = computed<Pick<TryOnReq, 'modelSource' | 'modelRefId'>>(() =>
 )
 const personConsent = ref(true) // 面板「我已取得此人肖像使用同意」勾選
 const ackChecked = ref(false) // 對話框「我已取得當事人同意…」勾選
+const consentErr = ref('') // 同意視窗裡的錯誤（視窗蓋在底部固定區上面，errorMsg 在那裡看不到）
 
 const apparel = ref<Asset | null>(null)
 const pickerOpen = ref(false)
@@ -228,6 +230,8 @@ onMounted(() => {
     .listModels('tryon')
     .then((tiers) => {
       price.value = tiers[0]?.costFeeds
+      // 後端只回啟用的檔位；一檔都沒開（例如切換供應商期間）就跟載入失敗一樣：留「…」並說明，不讓按鈕無聲停用
+      if (price.value === undefined) errorMsg.value = t('errors.loadFailed')
     })
     .catch((e: unknown) => {
       errorMsg.value = displayMessage(e, t('errors.loadFailed'))
@@ -242,7 +246,9 @@ async function onModelUpload(e: Event) {
   const f = input.files?.[0]
   input.value = '' // 允許重複選同一檔
   if (!f || uploading.value) return
-  // 上傳真人照片涉及肖像權：未同意就先開同意視窗、檔案不離開瀏覽器（同意後再選一次），比照 onGenerate
+  // 上傳真人照片涉及肖像權：未同意就先開同意視窗、檔案不離開瀏覽器（同意後再選一次），比照 onGenerate。
+  // 先等掛載時的 GET 回來（已載入就直接回），不然已同意的人搶在回應前選檔會被當成未同意、檔案白選
+  await consentStore.load().catch(() => undefined)
   if (!consented.value) {
     showConsent.value = true
     return
@@ -281,13 +287,21 @@ async function removeModel(id: string) {
 }
 function closeConsent() {
   showConsent.value = false
+  ackChecked.value = false // 下次開啟要重新勾
+  consentErr.value = ''
 }
 useAccessibleDialog(showConsent, consentDialogRef, closeConsent)
 async function acknowledge() {
   if (!ackChecked.value) return // 未勾選確認前不可繼續
-  await consentStore.give()
-  personConsent.value = true
-  showConsent.value = false
+  consentErr.value = ''
+  try {
+    await consentStore.give() // 已同意（從「查看條款」開的）時 store 不重打 PUT
+    personConsent.value = true
+    closeConsent()
+  } catch (e: unknown) {
+    // PUT 失敗視窗留著、錯誤顯示在視窗裡，使用者才知道要再按一次
+    consentErr.value = displayMessage(e, t('errors.submitFailed'))
+  }
 }
 const goCompliance = () => router.push('/settings')
 async function saveResult() {
@@ -315,7 +329,8 @@ async function download() {
   errorMsg.value = ''
   try {
     await downloadFile(r.url)
-    // 採用事件：後端 record_adoption_event 只查 generation 屬不屬於本 bot，不看類型，試穿也收
+    // 採用事件：後端 record_adoption_event 只查 generation 屬不屬於本 bot，不看類型，試穿也收；
+    // 但 MV-07 採用率（metrics_calc）只算 type='generate'，這一發目前只記在結果列上、不進採用率
     if (!r.adopted) {
       await api.recordAdoption(r)
       r.adopted = true
@@ -328,6 +343,7 @@ async function download() {
 async function onGenerate() {
   const cloth = apparel.value
   if (!canGenerate.value || !cloth) return
+  await consentStore.load().catch(() => undefined) // 同 onModelUpload：先等同意狀態回來再判斷
   if (!consented.value) {
     showConsent.value = true
     return

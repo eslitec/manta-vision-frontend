@@ -2,7 +2,7 @@
 
 ### Requirement: 試穿生成走真後端
 
-按下「生成試穿」時系統 SHALL 呼叫 `api.tryOn({ modelSource, modelRefId, clothImageId })`：`modelSource` 依目前模特分頁決定（「內建模特庫」→ `material`、`modelRefId` 為選中的 `materialId`；「上傳模特照」→ `upload`、`modelRefId` 為選中模特照的 `imageId`），`clothImageId` 為所選服飾素材的 `id`。真後端 SHALL 以既有付費管線送 `POST /tryon`（`Idempotency-Key`、100 秒逾時、只在不確定送達時重送），收到 202 時 SHALL 輪詢 `GET /generations/{id}` 直到 `done` 或 `failed`，並把 `results[0]` 翻成 `GeneratedImage`（`id`＝`resultId`、`url`＝`tempUrl`）。尚未選模特、尚未選服飾、價格尚未載入或生成進行中時，「生成試穿」與「重新生成」SHALL 停用。後端回 403 `CONSENT_REQUIRED` 時 SHALL 把本機同意狀態改回未同意並開啟肖像同意視窗，不顯示生成失敗；飼料不足顯示既有文案，其他錯誤顯示後端訊息。生成結束（不論成敗）SHALL 刷新飼料餘額。生成進行中離開頁面 SHALL 先確認。假資料模式 SHALL 走同一條呼叫路徑，由 mock 的 `tryOn` 扣 12 顆並回一張帶圖的結果。
+按下「生成試穿」時系統 SHALL 呼叫 `api.tryOn({ modelSource, modelRefId, clothImageId })`：`modelSource` 依目前模特分頁決定（「內建模特庫」→ `material`、`modelRefId` 為選中的 `materialId`；「上傳模特照」→ `upload`、`modelRefId` 為選中模特照的 `imageId`），`clothImageId` 為所選服飾素材的 `id`；「選擇服飾素材」彈窗 SHALL NOT 列出模特照（`source: 'tryonModel'`）。真後端 SHALL 以既有付費管線送 `POST /tryon`（`Idempotency-Key`、100 秒逾時、只在不確定送達時重送），收到 202 時 SHALL 輪詢 `GET /generations/{id}` 直到 `done` 或 `failed`，並把 `results[0]` 翻成 `GeneratedImage`（`id`＝`resultId`、`url`＝`tempUrl`）。尚未選模特、尚未選服飾、價格尚未載入或生成進行中時，「生成試穿」與「重新生成」SHALL 停用。後端回 403 `CONSENT_REQUIRED` 時 SHALL 把本機同意狀態改回未同意並開啟肖像同意視窗，不顯示生成失敗；飼料不足顯示既有文案，其他錯誤顯示後端訊息。生成結束（不論成敗）SHALL 刷新飼料餘額。生成進行中離開頁面 SHALL 先確認。假資料模式 SHALL 走同一條呼叫路徑，由 mock 的 `tryOn` 扣 12 顆並回一張帶圖的結果。
 
 #### Scenario: 內建模特＋服飾素材生成
 
@@ -33,7 +33,7 @@
 
 ### Requirement: 肖像同意讀寫後端
 
-頁面載入時系統 SHALL 呼叫 `api.getConsent()`（真後端 `GET /users/me/consent`，回 `{ consented: portraitConsent }`）決定是否顯示頂部同意提示。肖像同意視窗的條款內容 SHALL 顯示品牌設定的肖像權同意條款模板（brand store 的 `portraitConsent`；尚未設定時為 i18n `brandSettings.defaults.portraitConsent` 的預設文字），保留換行。使用者勾選確認並按「我知道了」時 SHALL 呼叫 `api.giveConsent()`（真後端 `PUT /users/me/consent` body `{ consent: true }`），成功後關閉視窗並視為已同意。視窗 SHALL NOT 提供「下載條款範本（PDF）」按鈕。
+頁面載入時系統 SHALL 呼叫 `api.getConsent()`（真後端 `GET /users/me/consent`，回 `{ consented: portraitConsent }`）決定是否顯示頂部同意提示；回應到達前 SHALL NOT 顯示提示，上傳／生成的同意檢查 SHALL 等回應到達後才判斷。同意狀態綁使用者：登出 SHALL 清除本機同意狀態，下一個帳號 SHALL 重新讀取。肖像同意視窗的條款內容 SHALL 顯示品牌設定的肖像權同意條款模板（brand store 的 `portraitConsent`；尚未設定時為 i18n `brandSettings.defaults.portraitConsent` 的預設文字），保留換行。使用者勾選確認並按「我知道了」時 SHALL 呼叫 `api.giveConsent()`（真後端 `PUT /users/me/consent` body `{ consent: true }`），成功後關閉視窗並視為已同意；已同意時按「我知道了」SHALL NOT 重送 `PUT`；`PUT` 失敗時視窗 SHALL 留著並在視窗內顯示錯誤。視窗 SHALL NOT 提供「下載條款範本（PDF）」按鈕。
 
 #### Scenario: 頁面載入讀取同意狀態
 
@@ -57,6 +57,16 @@
 
 - **WHEN** 使用者勾選確認後按「我知道了」
 - **THEN** 送出 `PUT /users/me/consent` body `{ consent: true }` 一發；回 200 後視窗關閉、頂部提示消失
+
+#### Scenario: 已同意者從「查看條款」開視窗
+
+- **WHEN** `GET /users/me/consent` 已回 `true` 的使用者開啟視窗、勾選並按「我知道了」
+- **THEN** 不送出 `PUT /users/me/consent`，視窗關閉
+
+#### Scenario: 同一分頁換帳號
+
+- **WHEN** 已同意的使用者登出，另一個尚未同意的使用者在同一分頁登入並進入試穿頁
+- **THEN** 重新送出 `GET /users/me/consent`，依其回應顯示提示；選取模特照時同意視窗開啟、不送 `POST /upload`
 
 ---
 
@@ -88,7 +98,7 @@
 
 ### Requirement: 顯示飼料消耗
 
-設定區底部 SHALL 顯示預估飼料消耗與生成動作；預估值 SHALL 讀 `GET /ai-models?modelType=tryon` 回傳的第一個檔位的 `costFeeds`（目前 12 顆），載入前顯示「…」且生成鈕停用。設定區 SHALL NOT 顯示「套用品牌設定」開關（契約定案試穿不做品牌介入，取代原「顯示品牌設定開關與飼料消耗」要求）。
+設定區底部 SHALL 顯示預估飼料消耗與生成動作；預估值 SHALL 讀 `GET /ai-models?modelType=tryon` 回傳的第一個檔位的 `costFeeds`（目前 12 顆），載入前顯示「…」且生成鈕停用；回應的 `items` 為空時 SHALL 顯示載入失敗訊息（`errors.loadFailed`）。設定區 SHALL NOT 顯示「套用品牌設定」開關（契約定案試穿不做品牌介入，取代原「顯示品牌設定開關與飼料消耗」要求）。
 
 #### Scenario: 使用者檢視設定區底部
 
@@ -177,7 +187,7 @@
 
 ### Requirement: 結果可存入圖庫／下載／重新生成
 
-生成完成後 SHALL 提供「存入圖庫」「下載」「重新生成」動作。「存入圖庫」SHALL 呼叫 `saveGenerated(name, { generationId, id })`（真後端 `POST /generations/{id}/save` body `{ resultId, imageName }`，來源由後端標 `tryon`），成功或後端回 `ALREADY_SAVED` 都 SHALL 顯示「已存入」。「下載」SHALL 走共用的 `downloadFile(url)`，並在首次下載後呼叫 `api.recordAdoption({ generationId, id })`（`POST /generations/{id}/events` `{ event: 'downloaded', resultId }`）。「重新生成」SHALL 以同一組模特與服飾再送一次 `POST /tryon`。生成進行中三個動作 SHALL 停用。
+生成完成後 SHALL 提供「存入圖庫」「下載」「重新生成」動作。「存入圖庫」SHALL 呼叫 `saveGenerated(name, { generationId, id })`（真後端 `POST /generations/{id}/save` body `{ resultId, imageName }`，來源由後端標 `tryon`），成功或後端回 `ALREADY_SAVED` 都 SHALL 顯示「已存入」。「下載」SHALL 走共用的 `downloadFile(url)`，並在首次下載後呼叫 `api.recordAdoption({ generationId, id })`（`POST /generations/{id}/events` `{ event: 'downloaded', resultId }`）。「重新生成」SHALL 以目前選取的模特與服飾再送一次 `POST /tryon`（同圖生圖頁，不快照上一次的組合）。生成進行中三個動作 SHALL 停用。
 
 #### Scenario: 使用者存入試穿結果
 

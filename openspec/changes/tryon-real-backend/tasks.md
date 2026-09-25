@@ -1,7 +1,7 @@
 ## 1. API 層（types、errors、real.ts、mock.ts、useAssets、spec）
 
 - [x] 1.1 對齊 Requirement「試穿生成走真後端」，落實設計決策「202 輪詢與冪等鍵沿用 runGeneration」：`src/types/api.ts` 的 `TryOnReq` 改成 `{ modelSource: 'material' | 'upload', modelRefId, clothImageId }`；`src/api/errors.ts` 加 `CONSENT_REQUIRED`；`src/api/real.ts` 新增 `tryOn(req)`（`runGeneration('/tryon', req)` → `results[0]` 經 `toGeneratedImage`，沒有結果丟 `UNEXPECTED_RESPONSE`）並加入 `realApi`。驗證：`real.spec.ts`「200：打 /tryon…」「202 → 輪詢…」「403 CONSENT_REQUIRED…不重送」三條全綠
-- [x] 1.2 對齊 Requirement「肖像同意讀寫後端」的 API 部分：`real.ts` 新增 `getConsent()`（`GET /users/me/consent` → `{ consented: portraitConsent }`）、`giveConsent()`（`PUT /users/me/consent` body `{ consent: true }`）並加入 `realApi`；`src/stores/consent.ts` 不改。驗證：「getConsent 打 GET…」「giveConsent 打 PUT…」兩條全綠；「已接上的方法不是 mock 的那一份」多 `tryOn`／`getConsent`／`giveConsent` 三行
+- [x] 1.2 對齊 Requirement「肖像同意讀寫後端」的 API 部分：`real.ts` 新增 `getConsent()`（`GET /users/me/consent` → `{ consented: portraitConsent }`）、`giveConsent()`（`PUT /users/me/consent` body `{ consent: true }`）並加入 `realApi`（`src/stores/consent.ts` 的改動見 4.1）。驗證：「getConsent 打 GET…」「giveConsent 打 PUT…」兩條全綠；「已接上的方法不是 mock 的那一份」多 `tryOn`／`getConsent`／`giveConsent` 三行
 - [x] 1.3 對齊 Requirement「模特照持久化」的 API 部分：`src/types/asset.ts` 的 `AssetSource` 加 `'tryonModel'`、新增 `UploadSource`；`real.ts`／`mock.ts` 的 `uploadImage` 加第 5 個選填參數 `source`（有帶才 `form.append('source', …)`；mock 標成該來源、`countByBucket` 把 `tryonModel` 算進 `upload`）；`useAssets.upload` 轉發。驗證：`real.spec.ts`「uploadImage 帶 source=tryonModel…」與既有三條 `uploadImage` 測試全綠（不帶時 `form.get('source')` 為 `null`）；`useAssets.spec.ts`「upload 把 source 原樣轉給 uploadImage」全綠；`mock.spec.ts`「uploadImage 帶 source=tryonModel…」全綠
 - [x] 1.4 對齊 Requirement「結果可存入圖庫／下載／重新生成」的 API 部分：`real.ts`／`mock.ts`／`useAssets.ts` 的 `saveGenerated(name, from)` 改 `from` 必填，刪掉 real 版落 mock 的過渡分支；`mock.ts` 的 `MOCK_MODELS` 加 `tryonStandard`（12）、`tryOn(req)` 扣 12 回帶圖的 `GeneratedImage`。驗證：`real.spec.ts` 刪掉「沒帶 from 時不打網路」、新增「saveGenerated 對試穿結果也走同一支 /save」全綠；`mock.spec.ts`「tryOn 扣 tryonStandard 的 12 顆…」全綠
 
@@ -22,3 +22,13 @@
 - [x] 3.4 mock 冒煙（`VITE_USE_MOCK= npx vite --port 5174 --strictPort`，puppeteer-core＋系統 Chrome headless，`browser.close()` 在 `finally`）：同意流程、上傳模特照進清單並可選、選內建模特＋服飾 → 試穿 → 結果出現圖片與存入／下載按鈕、餘額扣 12；截圖在 scratchpad `tryon-ui/`
 - [x] 3.5 真後端（免費部分）冒煙：先 `DELETE /images/{id}` 刪 3 張模特照；頁面載入看到 `GET /users/me/consent`、`GET /images?source=tryonModel`（17 張）、`GET /ai-models?modelType=tryon`（估價 12）；上傳一張模特照 201 且清單 +1；不按試穿
 - [ ] 3.6 PR 合併並確認畫面驗收無誤後執行 `spectra archive tryon-real-backend`（先歸檔 `tryon-model-upload-real-backend`，本 change 的「模特照持久化」覆蓋其「不帶 source」的敘述）
+
+## 4. 審查修正
+
+- [x] 4.1 對齊 Requirement「肖像同意讀寫後端」，落實設計決策「同意：後端為真相，403 時本機狀態回退」的補充：`src/stores/consent.ts` 加 `reset()`、進行中請求共用一發、`give()` 已同意不重打；`src/stores/session.ts` `discard()` 呼叫 `consent.reset()`；`TryOnView.vue` 頂部提示改 `consentLoaded && !consented`、`onModelUpload`／`onGenerate` 先 `await consentStore.load()`、`acknowledge()` try/catch 把錯誤顯示在視窗內 `consentErr`、`closeConsent()` 重設 `ackChecked`。驗證：`stores.spec.ts`「登出清掉肖像同意狀態」「已同意時 give 不重打 PUT」「並行的 load 共用同一發」「reset 之後才回來的舊回應不採用」全綠；先讓它紅：拿掉 `consent.reset()` → 第一條紅、拿掉 `give()` 的守衛 → 第二條紅
+- [x] 4.2 對齊 Requirement「顯示飼料消耗」：`GET /ai-models?modelType=tryon` 回空清單時 `errorMsg = t('errors.loadFailed')`。驗證：vue-tsc／lint 通過（無獨立測試：view 層無測試框架）
+- [x] 4.3 落實設計決策「服飾選擇不列模特照」：`ImagePickerDialog` 加 `excludeSources` prop（預設空），試穿頁帶 `['tryonModel']`。驗證：vue-tsc 通過；其他四個呼叫端不帶＝行為不變
+- [x] 4.4 落實設計決策「價格與採用事件」修正：`mock.ts` 的 `tryOn` 不再 `imageGenerations.add`；design.md 採用率敘述改正；`TryOnView.vue` 下載處註解同步。驗證：`mock.spec.ts`「試穿結果的存入／下載不算採用」全綠；先讓它紅：加回 `imageGenerations.add` → 紅
+- [x] 4.5 補測試：`real.spec.ts`「200 但 results[] 是空的：丟 UNEXPECTED_RESPONSE」。先讓它紅：`real.ts` 的 `if (!r)` 改 `if (!r && false)` → 紅
+- [x] 4.6 `src/api/index.ts` 的 `useRealBackend` 取消匯出並改註解（唯一消費者已在 2.2 拿掉）。驗證：`grep -rn useRealBackend src/` 只剩 index.ts 兩行
+- [x] 4.7 落實設計決策「「重新生成」用目前選取的模特與服飾」：不改程式（`onGenerate` 沿用），spec「結果可存入圖庫／下載／重新生成」的敘述改成「以目前選取的模特與服飾」對齊圖生圖頁。驗證：`spectra analyze` Consistency 無發現

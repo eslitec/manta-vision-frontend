@@ -37,7 +37,7 @@ import { useAssets } from '@/composables/useAssets'
 import AppButton from '@/components/AppButton.vue'
 import AppSearchbar from '@/components/AppSearchbar.vue'
 import { IconCheck, IconClose, IconImagePlaceholder, IconMovie } from '@/components/icons'
-import type { Asset } from '@/types/asset'
+import type { Asset, AssetSource } from '@/types/asset'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 import { useSessionStore } from '@/stores/session'
 
@@ -45,12 +45,20 @@ import { useSessionStore } from '@/stores/session'
 // 'object'＝編輯器「加入物件」挑圖，只列 GET /images?source=object（後端已含內建物件），
 // 且不過濾內建——物件圖層只拿 url 畫在畫布上、不把 id 送後端，內建素材在這裡選了不會 404。
 const props = withDefaults(
-  defineProps<{ title?: string; subtitle?: string; multiple?: boolean; mode?: 'asset' | 'object' }>(),
+  defineProps<{
+    title?: string
+    subtitle?: string
+    multiple?: boolean
+    mode?: 'asset' | 'object'
+    /** 這個彈窗不該列出的來源（例如試穿頁選服飾時不列模特照——後端不擋，選了會扣點生出無意義的結果） */
+    excludeSources?: AssetSource[]
+  }>(),
   {
     title: undefined,
     subtitle: undefined,
     multiple: false,
     mode: 'asset',
+    excludeSources: () => [],
   },
 )
 const emit = defineEmits<{
@@ -98,6 +106,7 @@ const sourceLabel = (source: string) => t(`sources.${source}`)
 const filtered = computed(() =>
   assets.value.filter((a) => {
     if (a.source === 'builtin' && props.mode !== 'object') return false
+    if (props.excludeSources.includes(a.source)) return false
     const bySource = activeSource.value === 'all' || a.source === activeSource.value
     const byKeyword = !keyword.value || a.name.includes(keyword.value)
     return bySource && byKeyword
