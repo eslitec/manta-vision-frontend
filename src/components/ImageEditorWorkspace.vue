@@ -432,12 +432,13 @@ const selectedAssetUrl = ref('')
 // 「另存為新素材」要真的把裁切結果傳給後端（POST /upload 帶 sourceImageId）才能讓後端
 // 標成 source=edit、非破壞性關聯回原圖，所以要記住目前選的是圖庫裡哪一張真實素材。
 const selectedAssetId = ref('')
-// 原圖真尺寸：優先用後端量好的 width／height（Asset.width／height），舊資料量不出來
-// （undefined）就等主畫布 <img> 載入後拿 naturalWidth／naturalHeight；兩者都沒有就是 null，
+// 原圖真尺寸：先用後端量好的 width／height（Asset.width／height）當初值，主畫布 <img> 載入後一律
+// 改用 naturalWidth／naturalHeight 覆蓋——瀏覽器的 naturalWidth 與 canvas 都套 EXIF 方向，後端
+// Pillow 量的是未轉正的檔頭尺寸，手機直拍的 JPEG 兩者寬高會互換；buildCroppedFile 用的是同一個
+// 網址載入後的 natural 尺寸，顯示端跟著它才會等於實際輸出。兩者都沒有就是 null，
 // 畫布徽章／提示與側欄尺寸文字一律不顯示，不再拿 Figma 稿上寫死的尺寸頂替。
 const originalDimensions = ref<{ width: number; height: number } | null>(null)
 const onSourceImgLoad = (event: Event) => {
-  if (originalDimensions.value) return
   const { naturalWidth, naturalHeight } = event.target as HTMLImageElement
   if (naturalWidth && naturalHeight) originalDimensions.value = { width: naturalWidth, height: naturalHeight }
 }

@@ -5,7 +5,7 @@
 
 ## 2. 編輯器
 
-- [x] 2.1 對齊 Requirement「裁切提供各通路預覽且不扣飼料」，落地設計決策「決策 1：原圖尺寸來源＝`Asset.width`／`height` 優先，退回畫布 `<img>` 的 `naturalWidth`／`naturalHeight`，都沒有就 null」：`src/components/ImageEditorWorkspace.vue` 加 `originalDimensions`（`selectEditorAsset` 取 `asset.width`／`height`，主畫布 `<img>` `@load="onSourceImgLoad"` 退回 natural 尺寸）；側欄尺寸行、畫布徽章、畫布提示（`canvasHint`）在取不到尺寸時不顯示；刪除 `ORIGINAL_IMAGE_DIMENSIONS`。驗證：`grep -c 1440 src/components/ImageEditorWorkspace.vue` 為 0
+- [x] 2.1 對齊 Requirement「裁切提供各通路預覽且不扣飼料」，落地設計決策「決策 1：原圖尺寸來源＝先用 `Asset.width`／`height`，畫布 `<img>` 載入後以 `naturalWidth`／`naturalHeight` 覆蓋，都沒有就 null」：`src/components/ImageEditorWorkspace.vue` 加 `originalDimensions`（`selectEditorAsset` 取 `asset.width`／`height`，主畫布 `<img>` `@load="onSourceImgLoad"` 載入後以 natural 尺寸覆蓋）；側欄尺寸行、畫布徽章、畫布提示（`canvasHint`）在取不到尺寸時不顯示；刪除 `ORIGINAL_IMAGE_DIMENSIONS`。驗證：`grep -c 1440 src/components/ImageEditorWorkspace.vue` 為 0
 - [x] 2.2 落地設計決策「決策 2：顯示尺寸與 `buildCroppedFile` 共用同一套 cover 換算（`cropSourceRect`）」：cover 換算抽成 `cropSourceRect`，`buildCroppedFile` 與 `cropOutputDimensions` 共用，各比例寫死的輸出尺寸一併刪除
 
 ## 3. 驗證

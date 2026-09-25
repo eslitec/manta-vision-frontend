@@ -5,7 +5,7 @@
 ## What Changes
 
 - `Asset` 加選填 `width`／`height` 數字欄位（`dim` 仍是顯示字串）；`real.ts` 的 `toAsset` 帶出（null → undefined）；mock 的假素材補上合理尺寸、`materialAsAsset` 帶出 Material 的寬高
-- 編輯器：原圖尺寸優先取所選素材的 `width`／`height`，沒有就退回主畫布 `<img>` 載入後的 `naturalWidth`／`naturalHeight`，兩者都沒有就不顯示尺寸文字（側欄尺寸行、畫布徽章、畫布提示）；刪除 `ORIGINAL_IMAGE_DIMENSIONS` 與各比例寫死的輸出尺寸
+- 編輯器：原圖尺寸先取所選素材的 `width`／`height`，主畫布 `<img>` 載入後以 `naturalWidth`／`naturalHeight` 覆蓋（套 EXIF 方向，與另存輸出同源），兩者都沒有就不顯示尺寸文字（側欄尺寸行、畫布徽章、畫布提示）；刪除 `ORIGINAL_IMAGE_DIMENSIONS` 與各比例寫死的輸出尺寸
 - 顯示的裁切輸出尺寸改用與 `buildCroppedFile` 同一套 cover 換算（抽成 `cropSourceRect`），顯示數字＝實際另存的像素
 - `real.ts` 對後端 migration 的註解改指向 `feat/image-dimensions`（後端 migration 檔尚未 commit，無法引用檔名）
 
