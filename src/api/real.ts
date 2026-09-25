@@ -119,8 +119,8 @@ interface WireImage {
   folderId: string | null
   isInUse: boolean
   createdAt: string
-  // 可為 null：舊資料與 Pillow 解不開的檔案都是（見後端 migration
-  // 20260904b_image_dimensions）；新上傳的檔案才有值。
+  // 可為 null：舊資料與 Pillow 解不開的檔案都是（見後端 feat/image-dimensions）；
+  // 新上傳的檔案才有值。
   width: number | null
   height: number | null
   // 內建素材投影成 ImageResponse 時才有值（background／object／model）；images 為 null
@@ -139,6 +139,8 @@ function toAsset(row: WireImage): Asset {
     name: row.imageName,
     source: row.source,
     dim: formatDimensions(row.width, row.height),
+    width: row.width ?? undefined,
+    height: row.height ?? undefined,
     type: row.mediaType,
     folderId: row.folderId ?? undefined,
     // 後端只有布林值 isInUse，沒有實際引用「筆數」；沿用既有「> 0 視為被引用」
