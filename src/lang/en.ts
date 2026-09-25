@@ -771,6 +771,7 @@ export default {
     layerDescriptions: {
       text: 'Text layer',
       object: 'AI-generated object',
+      objectLibrary: 'Library object',
     },
     previews: { igPost: 'IG Post 1:1', igStory: 'IG Story 9:16', fbPost: 'FB Post 4:5', line: 'LINE Image 16:9' },
     retouch: {
