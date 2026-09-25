@@ -83,8 +83,14 @@ const sourceLabel = (source: string) => t(`sources.${source}`)
 // 篩選跟關鍵字都在前端做（不像圖庫頁另外打 GET /images）：這個彈窗一次把整個圖庫拉回來
 // （pageSize 帶到後端上限 100），資料量不大，本地篩選比每次點 pill／打字都重打一次後端划算；
 // 真的超過 100 筆時目前沒有翻頁 UI，會看不到後面的素材——量體大到那個程度前，這裡先不做分頁。
+//
+// 內建素材（source='builtin'）一律不列：後端 GET /images 不帶 source 時會把它們合併進來，
+// 但生成／編輯／試穿的底圖、參考圖、商品圖端點只查 images 表，選了 materialId 會 404。
+// 後端沒有「排除內建」的參數，所以在前端過濾；內建素材 createdAt 最舊、排在這一頁的尾端，
+// 過濾掉不會讓使用者自己的圖變少（見 library-builtin-source design.md 決策 6）。
 const filtered = computed(() =>
   assets.value.filter((a) => {
+    if (a.source === 'builtin') return false
     const bySource = activeSource.value === 'all' || a.source === activeSource.value
     const byKeyword = !keyword.value || a.name.includes(keyword.value)
     return bySource && byKeyword
