@@ -19,11 +19,11 @@
     aside#library-folders.folders(:class="{ 'isMobileOpen': foldersOpen }")
       button.folders__item(:class="{ 'isActive': activeView.kind === 'all' }" @click="setView({ kind: 'all' })")
         span {{ t('library.allAssets') }}
-        span.folders__count {{ allAssetsTotal }}
+        span.folders__count {{ counts.all }}
       .folders__section {{ t('library.systemCategories') }}
       button.folders__item(v-for="c in categoryTags" :key="c.tag" :class="{ 'isActive': activeView.kind === 'category' && activeView.tag === c.tag }" @click="setView({ kind: 'category', tag: c.tag, dimension: c.dimension })")
         span {{ t(`sources.${c.tag}`) }}
-        span.folders__count {{ c.tag === 'object' ? counts[c.tag] + objectMaterialsCount : counts[c.tag] }}
+        span.folders__count {{ counts[c.tag] }}
       .folders__section.folders__section--folders
         span {{ t('library.myFolders') }}
         button.folders__addIcon(type="button" @click="startAddFolder" :aria-label="t('library.addFolder')")
@@ -73,7 +73,7 @@
         .batchbar__selection
           span.batchbar__minus
           span {{ t('library.selectedCount', { count: selectedIds.size }) }}
-          button.batchbar__link(@click="selectAllOnPage") {{ t('library.selectPage', { count: pagedRealAssets.length }) }}
+          button.batchbar__link(@click="selectAllOnPage") {{ t('library.selectPage', { count: selectableAssets.length }) }}
           button.batchbar__link(@click="clearSelection") {{ t('common.clear') }}
         .batchbar__actions
           AppButton.batchbar__action.batchbar__action--moveToFolder(variant="primary" @click="openMoveDialog") {{ t('library.moveToFolder') }}
@@ -90,7 +90,7 @@
           .assetSkeleton__meta
             .assetSkeleton__chip
             .assetSkeleton__dim
-      .assets__empty(v-else-if="!pagedRealAssets.length && !pendingTasks.length && !showMaterials") {{ t('library.empty') }}
+      .assets__empty(v-else-if="!visibleAssets.length && !pendingTasks.length") {{ t('library.empty') }}
       .assets__grid(v-else)
         .asset.asset--pending(v-for="t in pendingTasks" :key="t.id")
           .pending
@@ -102,20 +102,8 @@
             span.pending__eta(v-if="t.status !== 'pending'") {{ etaText(t.progress) }}
           .asset__name {{ t.name }}
           .asset__pmeta {{ $t('library.pendingVideoMeta', { ratio: t.videoReq?.ratio || '9:16' }) }}
-        template(v-if="showMaterials")
-          p.assets__materialsLabel {{ t('library.builtinMaterials') }}
-          AssetCard(
-            v-for="m in pagedMaterials"
-            :key="m.materialId"
-            :name="m.materialName"
-            :tag="m.category"
-            :tag-label="materialCategoryLabel(m.category)"
-            :dimensions="formatDimensions(m.width, m.height)"
-            :url="m.url"
-            :selectable="false"
-          )
         AssetCard(
-          v-for="a in pagedRealAssets"
+          v-for="a in visibleAssets"
           :key="a.id"
           :name="a.name"
           :tag="a.source"
@@ -123,6 +111,7 @@
           :dimensions="a.dim"
           :type="a.type"
           :url="a.url"
+          :selectable="a.source !== 'builtin'"
           :selected="selectedIds.has(a.id)"
           @toggle="toggleSelect(a.id)"
         )
@@ -222,12 +211,8 @@ import {
   type AssetSource,
   type CategoryTag,
   type ImageListQuery,
-  type ImageListResponse,
 } from '@/types/asset'
-import type { Material } from '@/types/asset'
-import { api } from '@/api'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
-import { formatDimensions } from '@/utils/dimensions'
 import { downloadFile } from '@/utils/download'
 import { isDuplicateName, isFileTooLarge, isFolderLimitExceeded, isUnsupportedFormat } from '@/utils/error'
 
@@ -252,22 +237,7 @@ const session = useSessionStore()
 const moveDialogRef = ref<HTMLElement | null>(null)
 const deleteDialogRef = ref<HTMLElement | null>(null)
 const uploadInput = ref<HTMLInputElement | null>(null)
-const materials = ref<Material[]>([])
-
-const materialCategoryLabels: Record<Material['category'], string> = {
-  background: '背景素材',
-  object: '物件素材',
-  model: '模特素材',
-}
-function materialCategoryLabel(category: Material['category']): string {
-  return materialCategoryLabels[category]
-}
-// 內建素材不屬於任何資料夾，但「分類」是例外：素材本身有 category（background／object／model），
-// 跟系統分類的「物件素材」（source === 'object'，使用者自己的圖庫）剛好標籤撞名，使用者會很自然
-// 以為點「物件素材」分類就看得到標「物件素材」的內建素材卡片——所以這裡讓兩者真的合流。
-// 「背景素材」「模特素材」目前沒有對應的系統分類（見 CATEGORY_TAGS），所以只在「全部素材」出現；
-// 資料夾／關鍵字搜尋／其他系統分類仍然不會混入任何內建素材，避免使用者誤以為那些篩選結果裡有它們。
-// 使用者要求「來源」工具列（全部／上傳／AI生成／編輯產物）要照字面篩選：選了「物件素材」
+// 使用者要求「來源」工具列（全部／上傳／AI生成／編輯產物／內建素材）要照字面篩選：選了「物件素材」
 // 系統分類、又選「上傳」來源，兩個都是 source 欄位、字面上不可能同時成立（一張圖的
 // source 只能是一個值），這種組合就該照字面顯示「沒有符合的素材」，而不是像過去那樣
 // 讓 chip 看起來能點、點了卻完全沒反應。
@@ -277,63 +247,14 @@ const sourceConflictsWithCategory = computed(() => {
     v.kind === 'category' && v.dimension === 'source' && activeSource.value !== 'all' && activeSource.value !== v.tag
   )
 })
-const objectMaterialsCount = computed(() => materials.value.filter((m) => m.category === 'object').length)
-// 會混入內建素材的檢視：「全部素材」、「未分類」資料夾（內建素材本來就沒有資料夾歸屬，
-// 理所當然算未分類）、跟系統分類裡的「物件素材」（見下面 materialsForView 的分類篩選）。
-const mergesMaterials = computed(() => {
-  const v = activeView.value
-  if (v.kind === 'all') return true
-  if (v.kind === 'category' && v.dimension === 'source' && v.tag === 'object') return true
-  if (v.kind === 'folder' && v.folderId === null) return true
-  return false
-})
-const materialsForView = computed<Material[]>(() => {
-  if (!mergesMaterials.value) return []
-  // 「來源」工具列選到「全部」以外的值時，內建素材要整批消失：素材字面上沒有「來源」
-  // 這個欄位，不算「上傳」也不算「AI 生成」，選了具體來源卻還看得到內建素材會誤導使用者。
-  if (activeSource.value !== 'all') return []
-  const v = activeView.value
-  // 「物件素材」分類只混同分類的內建素材；「全部素材」跟「未分類」沒有分類限制，全部混進去。
-  if (v.kind === 'category') return materials.value.filter((m) => m.category === 'object')
-  return materials.value
-})
+// 內建素材（source='builtin'）由後端 GET /images 合併進來、跟使用者自己的圖走同一份分頁與
+// counts（見 design.md 決策 1），前端不再自己合併或整批撈取；它們不可選取、不可批次操作。
+const visibleAssets = computed(() => (sourceConflictsWithCategory.value ? [] : assets.value))
+const selectableAssets = computed(() => visibleAssets.value.filter((a) => a.source !== 'builtin'))
+const displayTotal = computed(() => (sourceConflictsWithCategory.value ? 0 : total.value))
 
-// 內建素材（materialsForView）永遠整批載入、不分頁；使用者自己的圖庫在會合流的檢視裡
-// 也已經整批撈回來（見 fetchAllRealAssets），兩邊在這裡合併成一份虛擬清單，依內建素材
-// 排在前、真實素材排在後的順序，用 PAGE_SIZE 在前端切出目前這一頁。
-const pagedMaterials = computed(() => {
-  if (sourceConflictsWithCategory.value) return []
-  const start = (page.value - 1) * PAGE_SIZE
-  return materialsForView.value.slice(start, start + PAGE_SIZE)
-})
-const pagedRealAssets = computed(() => {
-  if (sourceConflictsWithCategory.value) return []
-  if (!mergesMaterials.value) return assets.value
-  const start = (page.value - 1) * PAGE_SIZE
-  const end = page.value * PAGE_SIZE
-  const realStart = Math.max(0, start - materialsForView.value.length)
-  const realEnd = Math.max(0, end - materialsForView.value.length)
-  return assets.value.slice(realStart, realEnd)
-})
-const showMaterials = computed(() => pagedMaterials.value.length > 0)
-
-// 左下角「共 N 筆素材」、手機版切換列的數字（會合流內建素材的檢視）都要跟畫面上看得到的
-// 東西一致：目前這個檢視查到的使用者圖庫張數（total，query-scoped，換檢視就會變）
-// 加上這個檢視會顯示的內建素材數（materialsForView，非合流檢視或來源衝突時是空陣列）。
-// sourceConflictsWithCategory 時兩邊字面上都不該有東西，直接歸零。
-const displayTotal = computed(() =>
-  sourceConflictsWithCategory.value ? 0 : total.value + materialsForView.value.length,
-)
-
-// 側欄「全部素材」徽章要跟「目前選哪個檢視」無關、永遠顯示整個圖庫的總數，不能用
-// displayTotal（那個會隨目前檢視變動）——要用 counts.all，這是後端 count_by_bucket()
-// 算出來的，不受目前篩選條件影響的權威值（見 useAssets.ts 的 counts 註解）。
-const allAssetsTotal = computed(() => counts.value.all + materials.value.length)
-
-// 不會合流內建素材的視圖（資料夾／大部分系統分類）是伺服器分頁，assets 只有「目前這一頁」
-// 的內容；會合流內建素材的視圖（見 mergesMaterials）為了合併分頁，assets 改成整批撈回來
-// （見 fetchAllRealAssets）。不管哪種情況，
-// 批次選取都允許跨頁累積（見下方 selectedIds），刪除確認彈窗要秀出所有已選素材的縮圖與
+// 素材清單是伺服器分頁，assets 只有「目前這一頁」的內容；
+// 批次選取允許跨頁累積（見下方 selectedIds），刪除確認彈窗要秀出所有已選素材的縮圖與
 // 名稱，不能只看目前這頁看得到的。這裡把每次載入過的素材都記下來，選取時就查得到完整資料。
 const assetCache = ref<Record<string, Asset>>({})
 watch(
@@ -363,12 +284,6 @@ const pendingTasks = computed(() =>
     ? generationTasks.value.filter((t) => t.kind === 'video' && (t.status === 'pending' || t.status === 'processing'))
     : [],
 )
-// 對齊 Figma（1309:7666 panel_assets）：素材清單載入中（尚無已顯示的素材／pending 任務／
-// 內建素材）時，骨架卡片、工具列、頁碼列三者一起呈現載入中的視覺，不是只有卡片格線變化。
-const wouldShowEmptySkeleton = computed(
-  () => !pagedRealAssets.value.length && !pendingTasks.value.length && !showMaterials.value,
-)
-
 // 決策 5（add-library-loading-skeleton）：真後端本機查詢實測只需約 36ms，遠短於 shimmer
 // 動畫一個週期（1.5s），骨架屏一閃即逝、掃光動畫來不及被看見。這裡讓骨架屏至少維持顯示
 // MIN_SKELETON_DURATION_MS，查詢提早完成也延後到滿這個時間才切換成實際內容；查詢本來就
@@ -378,11 +293,8 @@ const skeletonHoldActive = ref(false)
 let skeletonHoldTimer: ReturnType<typeof setTimeout> | undefined
 let skeletonLoadStartedAt = 0
 
-// 決策 8（add-library-loading-skeleton）：骨架屏開始顯示的判斷，從「目標內容是否為空」
-// （wouldShowEmptySkeleton）改成「是否有新查詢正在進行」——不管切換後的頁面／分類本來
-// 就有內建素材可以顯示，只要查詢一開始，骨架屏就固定出現，維持視覺一致性。
-// wouldShowEmptySkeleton 仍保留給下面 .assets__empty 分支使用，只是不再用來決定骨架屏
-// 要不要開始這次的顯示。
+// 對齊 Figma（1309:7666 panel_assets）：載入中時骨架卡片、工具列、頁碼列三者一起呈現載入中的視覺。
+// 決策 8（add-library-loading-skeleton）：只要有新查詢正在進行，骨架屏就固定出現，維持視覺一致性。
 watch(loading, (isLoading) => {
   if (isLoading) {
     skeletonLoadStartedAt = performance.now()
@@ -443,7 +355,7 @@ const tabs = computed(() =>
 )
 const activeTab = ref('library')
 const sources = computed(() =>
-  ['all', 'upload', 'aiGenerate', 'edit'].map((value) => ({ label: t(`sources.${value}`), value })),
+  ['all', 'upload', 'aiGenerate', 'edit', 'builtin'].map((value) => ({ label: t(`sources.${value}`), value })),
 )
 const activeSource = ref('all')
 const keyword = ref('')
@@ -478,52 +390,9 @@ function buildQuery(): ImageListQuery {
   return q
 }
 
-// 「全部素材」要跟內建素材合併分頁（materials + 使用者自己的圖庫混在同一組頁碼裡），
-// 但內建素材完全不分頁、使用者圖庫是後端分頁——兩邊分頁機制不一樣，沒辦法直接合併查詢。
-// 做法：這個檢視改成把使用者自己的圖庫「一次全部撈完」，回來後跟 materials 一起交給
-// pagedMaterials／pagedRealAssets 在前端切頁。後端 page_size 上限是 100
-// （app/schemas/image.py），超過 100 筆要分好幾次要，這裡用迴圈把每一頁都撈回來。
-const REAL_FETCH_PAGE_SIZE = 100
-async function fetchAllRealAssets(filters: Omit<ImageListQuery, 'page' | 'pageSize'>) {
-  let collected: Asset[] = []
-  let p = 1
-  let total = Infinity
-  let counts = null as ImageListResponse['counts'] | null
-  for (;;) {
-    const res = await api.listImages({ ...filters, page: p, pageSize: REAL_FETCH_PAGE_SIZE })
-    collected = collected.concat(res.items)
-    total = res.total
-    counts = res.counts
-    // 保險：後端回傳異常（例如 items 空但 total 還沒撈完）時別無限迴圈下去
-    if (res.items.length === 0 || collected.length >= total) break
-    p += 1
-  }
-  return { items: collected, total, counts: counts! }
-}
-
-// 決策 6（add-library-loading-skeleton）：只在「非合流」查詢（單頁伺服器分頁：資料夾、
-// 分類為 aiGenerate／edit／video 等）清空 assets.value 再查詢。這種檢視每次翻頁／切換
-// 篩選拿到的都是「目前這一頁真正還沒有的新資料」，不清空的話舊頁殘留的素材會在整段等待
-// 期間被誤判成「已經有素材」，骨架屏完全不會觸發，等新資料回來又會整批瞬間替換成別的
-// 內容，體感是「畫面內容莫名其妙跳一下」而不是「先顯示載入中再顯示新內容」。
-// 合流檢視（mergesMaterials，例如「全部素材」）刻意不清空：fetchAllRealAssets 一次就把
-// 使用者圖庫整批全部撈回來、不分頁，翻頁只是把同一份已快取的完整資料重新切一次，資料本
-// 身沒有變、也沒有真的在等待新內容，清空只會讓每次翻頁都多閃一次骨架屏，是不必要的退步。
+// 決策 8（add-library-loading-skeleton）：查詢一開始就清空 assets，舊頁殘留的素材才不會讓
+// 骨架屏漏掉不觸發；所有檢視（含「全部素材」）都是單次伺服器分頁的 GET /images。
 async function fetchAssets() {
-  if (mergesMaterials.value) {
-    loading.value = true
-    try {
-      const { page: _page, pageSize: _pageSize, ...filters } = buildQuery()
-      const res = await fetchAllRealAssets(filters)
-      assets.value = res.items
-      total.value = res.total
-      counts.value = res.counts
-      // page.value 維持使用者目前點的頁碼——這裡是前端自己切頁，不能被後端回傳蓋掉
-    } finally {
-      loading.value = false
-    }
-    return
-  }
   assets.value = []
   await load(buildQuery())
 }
@@ -531,16 +400,11 @@ async function fetchAssets() {
 onMounted(() => {
   loadFolders()
   fetchAssets()
-  api.listMaterials().then((res) => {
-    materials.value = res.items
-  })
 })
 
 // 頂部提示文字：檢視「全部素材」／系統分類時顯示機器人情境；檢視某個資料夾時改顯示該資料夾的說明
 function folderImageCount(folderId: string | null): number {
-  // 「未分類」不只是使用者自己沒歸檔的圖片——內建素材本來就沒有資料夾這個概念，
-  // 邏輯上也都算「未分類」，所以這裡跟 mergesMaterials／materialsForView 一樣要加進去。
-  if (folderId === null) return unfiledCount.value + materials.value.length
+  if (folderId === null) return unfiledCount.value
   return folders.value.find((f) => f.folderId === folderId)?.imageCount ?? 0
 }
 
@@ -561,8 +425,7 @@ const activeViewLabel = computed(() => {
 const activeViewCount = computed(() => {
   const view = activeView.value
   if (view.kind === 'folder') return folderImageCount(view.folderId)
-  // 'all' 跟 'category' 都改用 displayTotal：已經考慮了目前這個檢視混了哪些內建素材、
-  // 以及來源 chip 選到衝突組合時要歸零，跟畫面上實際顯示的東西保持一致。
+  // 'all' 跟 'category' 用 displayTotal：來源 chip 選到衝突組合時要歸零，跟畫面上實際顯示的一致。
   return displayTotal.value
 })
 
@@ -614,9 +477,8 @@ function toggleSelect(id: string) {
 }
 function selectAllOnPage() {
   const next = new Set(selectedIds.value)
-  // 「全選本頁」要跟畫面上這一頁看得到的真實素材一致——「全部素材」視圖的 assets
-  // 現在整批撈回來給合併分頁用，不能直接拿來全選，否則會把其他頁的素材也選進去。
-  for (const a of pagedRealAssets.value) next.add(a.id)
+  // 「全選本頁」只選得到可選取的素材（內建素材不可選）
+  for (const a of selectableAssets.value) next.add(a.id)
   selectedIds.value = next
 }
 function clearSelection() {
@@ -1189,14 +1051,6 @@ async function onUpload(e: Event) {
   flex: 1; // 佔滿面板剩餘高度，讓分頁列貼齊底部
   align-content: flex-start; // 素材列靠上排列，不因多餘空間被拉開
   overflow-y: auto;
-}
-// 內建素材跟使用者自己的素材混在同一個 grid 裡，用一行小字隔開，
-// 標明這批是內建素材（下方「共 N 筆素材」已經把這批算進去了，見 displayTotal 註解）
-.assets__materialsLabel {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: $gray-100;
-  font-size: 0.75rem;
 }
 // 對齊 Figma（1309:7676 grid_assets）：素材清單載入中顯示的骨架卡片，取代純文字「載入中…」。
 // 佔位色塊統一用同一組漸層＋掃光動畫（決策 3：Figma 靜態稿本身無法標註動畫時序，

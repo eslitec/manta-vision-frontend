@@ -311,6 +311,29 @@ describe('圖庫（images）', () => {
     expect(calls[0].params).toMatchObject({ folderId: 'null' })
   })
 
+  it('listImages 的 source=builtin 原樣送給後端，內建素材投影的 category 帶進 Asset、images 的 null 正規化成 undefined', async () => {
+    const calls = stubRoutes({
+      '/images': {
+        data: {
+          total: 2,
+          page: 1,
+          items: [
+            { ...WIRE_IMAGE, imageId: 'mat_1', source: 'builtin', folderId: null, category: 'object' },
+            { ...WIRE_IMAGE, category: null },
+          ],
+          counts: { all: 2, upload: 1, aiGenerate: 0, edit: 0, object: 1, video: 0, builtin: 1 },
+        },
+      },
+    })
+
+    const res = await realApi.listImages({ source: 'builtin' })
+
+    expect(calls[0].params).toMatchObject({ source: 'builtin' })
+    expect(res.counts.builtin).toBe(1)
+    expect(res.items[0]).toMatchObject({ id: 'mat_1', source: 'builtin', category: 'object', folderId: undefined })
+    expect(res.items[1].category).toBeUndefined()
+  })
+
   it('uploadImage 送 multipart，帶了 folderId 才會出現在表單裡', async () => {
     const calls = stubRoutes({ '/upload': { status: 201, data: WIRE_IMAGE } })
 

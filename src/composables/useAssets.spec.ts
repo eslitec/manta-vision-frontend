@@ -29,7 +29,7 @@ vi.mock('@/api', () => ({
 
 const asset = (id: string, name: string): Asset => ({ id, name, source: 'upload', dim: '1024×768', type: 'image' })
 const folder = (id: string, name: string): Folder => ({ folderId: id, folderName: name, imageCount: 0 })
-const emptyCounts = { all: 0, upload: 0, aiGenerate: 0, edit: 0, object: 0, video: 0 }
+const emptyCounts = { all: 0, upload: 0, aiGenerate: 0, edit: 0, object: 0, video: 0, builtin: 0 }
 
 // useAssets 的資料夾清單是模組層級單例（圖庫頁與彈窗共用同一份），
 // 但素材清單改成每次呼叫都是獨立的一份狀態——所以每個測試只需要 resetModules
