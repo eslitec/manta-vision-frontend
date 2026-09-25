@@ -119,7 +119,7 @@
             IconImagePlaceholder
             span.canvasEmpty__hint {{ t('editor.emptyState.canvasHint') }}
           template(v-else-if="originalLayer.visible")
-            img.editorSourceImg(v-if="selectedAssetUrl" :src="selectedAssetUrl" :alt="selectedAssetName")
+            img.editorSourceImg(v-if="selectedAssetUrl" :src="selectedAssetUrl" :alt="selectedAssetName" @load="onSourceImgLoad")
             IconImagePlaceholder(v-else)
           .textObject(
             v-for="textLayer in textLayers"
@@ -197,7 +197,7 @@
             .objectSelection__handle.objectSelection__handle--se
             span.objectSelection__tip {{ t('editor.addObject.selectionTip') }}
           .cropFrame(v-if="tool === 'crop'" :style="cropFrameStyle" :class="{ isDragging: cropDragging }" @pointerdown="startCropMove")
-            .cropAppliedBadge(v-if="ratio !== 'custom'") {{ t('editor.cropApplied.badge', { ratio: cropRatioLabel, width: cropOutputDimensions.width, height: cropOutputDimensions.height }) }}
+            .cropAppliedBadge(v-if="ratio !== 'custom' && cropOutputDimensions") {{ t('editor.cropApplied.badge', { ratio: cropRatioLabel, width: cropOutputDimensions.width, height: cropOutputDimensions.height }) }}
             button.cropHandle.cropHandle--nw(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'nw')")
             button.cropHandle.cropHandle--ne(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'ne')")
             button.cropHandle.cropHandle--sw(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'sw')")
@@ -211,7 +211,7 @@
           AppButton(variant="outline" size="compact" @click="undoAppliedCrop") {{ t('editor.cropApplied.undo') }}
           AppButton(variant="outline" size="compact" @click="recropCustom") {{ t('editor.cropApplied.recrop') }}
           AppButton(size="compact" :disabled="Boolean(savedAssetId)" @click="openSaveDialog") {{ savedAssetId ? t('common.saved') : t('editor.saveAsNew') }}
-        p(:style="canvasHintStyle") {{ tool === 'crop' ? t('editor.cropInstructionDynamic', cropOutputDimensions) : t('editor.selectionInstruction') }}
+        p(v-if="canvasHint" :style="canvasHintStyle") {{ canvasHint }}
       footer.canvasFoot {{ t('editor.nonDestructive') }}
     aside.layers(v-if="tool!=='crop'")
       h3 {{ t('editor.layers') }} #[button(:aria-label="t('editor.duplicateLayer')" :disabled="!canDuplicateSelectedLayer" @click="duplicateSelectedLayer"): IconAddObject]
@@ -331,7 +331,7 @@
       .ratioRow
         button(v-for="option in ratioOptions" :key="option.id" :class="{active:ratio===option.id}" :aria-pressed="ratio === option.id" @click="applyCropRatio(option.id)") {{ option.label }}
       button.custom(:class="{ active: ratio === 'custom' }" :aria-pressed="ratio === 'custom'" @click="ratio = 'custom'") {{ t('editor.custom') }}
-      p {{ ratio === 'custom' ? t('editor.dimensionsDynamic', cropOutputDimensions) : t('editor.croppedToDynamic', { width: cropOutputDimensions.width, height: cropOutputDimensions.height, origWidth: ORIGINAL_IMAGE_DIMENSIONS.width, origHeight: ORIGINAL_IMAGE_DIMENSIONS.height }) }}
+      p(v-if="cropOutputDimensions") {{ t(ratio === 'custom' ? 'editor.dimensionsDynamic' : 'editor.croppedToDynamic', cropOutputDimensions) }}
       h3.channelPreviewsTitle {{ ratio === 'custom' ? t('editor.channelPreviews') : t('editor.channelPreviewsApplied') }}
       .previews
         .preview(v-for="p in previews" :key="p.name")
@@ -432,6 +432,15 @@ const selectedAssetUrl = ref('')
 // 「另存為新素材」要真的把裁切結果傳給後端（POST /upload 帶 sourceImageId）才能讓後端
 // 標成 source=edit、非破壞性關聯回原圖，所以要記住目前選的是圖庫裡哪一張真實素材。
 const selectedAssetId = ref('')
+// 原圖真尺寸：優先用後端量好的 width／height（Asset.width／height），舊資料量不出來
+// （undefined）就等主畫布 <img> 載入後拿 naturalWidth／naturalHeight；兩者都沒有就是 null，
+// 畫布徽章／提示與側欄尺寸文字一律不顯示，不再拿 Figma 稿上寫死的尺寸頂替。
+const originalDimensions = ref<{ width: number; height: number } | null>(null)
+const onSourceImgLoad = (event: Event) => {
+  if (originalDimensions.value) return
+  const { naturalWidth, naturalHeight } = event.target as HTMLImageElement
+  if (naturalWidth && naturalHeight) originalDimensions.value = { width: naturalWidth, height: naturalHeight }
+}
 const savingAsset = ref(false)
 const savedAssetId = ref('')
 const saveError = ref(false)
@@ -451,6 +460,7 @@ const selectEditorAsset = (asset: Asset) => {
   selectedAssetName.value = asset.name
   selectedAssetUrl.value = asset.url ?? ''
   selectedAssetId.value = asset.id
+  originalDimensions.value = asset.width && asset.height ? { width: asset.width, height: asset.height } : null
   savedAssetId.value = ''
   // 換了來源素材＝重新開始，先前的扣款紀錄不再屬於這張圖
   usedTools.value = []
@@ -519,6 +529,27 @@ function downloadEditedCopy(name: string) {
 // 取景範圍換算：畫布用 object-fit: cover 顯示原圖（4:3 置中裁切滿版），所以 cropRect 的
 // 百分比是相對「原圖被 cover 裁掉後、實際塞進 4:3 框的那塊範圍」，不是相對整張原圖——
 // 這裡先算出那塊 cover 範圍在原圖座標系裡的實際位置，使用者的裁切框才是這塊範圍裡的子區域。
+// buildCroppedFile（實際輸出）與 cropOutputDimensions（畫面顯示的尺寸）共用，兩邊數字才會一致。
+const ARTBOARD_ASPECT = 4 / 3
+function cropSourceRect(naturalWidth: number, naturalHeight: number) {
+  let coverX = 0
+  let coverY = 0
+  let coverWidth = naturalWidth
+  let coverHeight = naturalHeight
+  if (naturalWidth / naturalHeight > ARTBOARD_ASPECT) {
+    coverWidth = naturalHeight * ARTBOARD_ASPECT
+    coverX = (naturalWidth - coverWidth) / 2
+  } else {
+    coverHeight = naturalWidth / ARTBOARD_ASPECT
+    coverY = (naturalHeight - coverHeight) / 2
+  }
+  return {
+    x: coverX + (cropRect.x / 100) * coverWidth,
+    y: coverY + (cropRect.y / 100) * coverHeight,
+    width: (cropRect.width / 100) * coverWidth,
+    height: (cropRect.height / 100) * coverHeight,
+  }
+}
 async function buildCroppedFile(name: string): Promise<File> {
   const sourceUrl = selectedAssetUrl.value
   if (!sourceUrl) throw new Error('CROP_NO_SOURCE_IMAGE')
@@ -545,24 +576,7 @@ async function buildCroppedFile(name: string): Promise<File> {
   } finally {
     URL.revokeObjectURL(blobUrl)
   }
-  const ARTBOARD_ASPECT = 4 / 3
-  const naturalWidth = img.naturalWidth
-  const naturalHeight = img.naturalHeight
-  let coverX = 0
-  let coverY = 0
-  let coverWidth = naturalWidth
-  let coverHeight = naturalHeight
-  if (naturalWidth / naturalHeight > ARTBOARD_ASPECT) {
-    coverWidth = naturalHeight * ARTBOARD_ASPECT
-    coverX = (naturalWidth - coverWidth) / 2
-  } else {
-    coverHeight = naturalWidth / ARTBOARD_ASPECT
-    coverY = (naturalHeight - coverHeight) / 2
-  }
-  const sx = coverX + (cropRect.x / 100) * coverWidth
-  const sy = coverY + (cropRect.y / 100) * coverHeight
-  const sWidth = (cropRect.width / 100) * coverWidth
-  const sHeight = (cropRect.height / 100) * coverHeight
+  const { x: sx, y: sy, width: sWidth, height: sHeight } = cropSourceRect(img.naturalWidth, img.naturalHeight)
   const canvas = document.createElement('canvas')
   canvas.width = Math.max(1, Math.round(sWidth))
   canvas.height = Math.max(1, Math.round(sHeight))
@@ -1268,20 +1282,23 @@ const cropFrameStyle = computed(() => ({
   width: `${cropRect.width}%`,
   height: `${cropRect.height}%`,
 }))
-// 對齊 Figma（1144:631）：套用結果文字要寫「原圖 1440 × 1080」，跟 cropOutputDimensions
-// 的 'original' 分支共用同一組原圖尺寸常數，避免兩處寫死的數字之後跑掉。
-const ORIGINAL_IMAGE_DIMENSIONS = { width: 1440, height: 1080 }
+// 畫面上的裁切尺寸（畫布徽章／提示／側欄「已裁切為 … （原圖 …）」）一律從所選素材的真尺寸
+// 換算，跟 buildCroppedFile 走同一套 cropSourceRect，顯示的數字就是實際另存出來的像素；
+// 原圖尺寸還不知道（見 originalDimensions）時回 null，各處不顯示那行。
 const cropOutputDimensions = computed(() => {
-  const option = ratioOptions.value.find((item) => item.id === ratio.value)
-  if (option?.id === 'original') return ORIGINAL_IMAGE_DIMENSIONS
-  if (option?.id === 'fourFive') return { width: 1080, height: 1350 }
-  if (option?.id === 'story') return { width: 1080, height: 1920 }
-  if (option?.id === 'wide') return { width: 1920, height: 1080 }
-  if (option?.id === 'square') return { width: 1080, height: 1080 }
+  const orig = originalDimensions.value
+  if (!orig) return null
+  const rect = cropSourceRect(orig.width, orig.height)
   return {
-    width: Math.round(1440 * (cropRect.width / 100)),
-    height: Math.round(1080 * (cropRect.height / 100)),
+    width: Math.max(1, Math.round(rect.width)),
+    height: Math.max(1, Math.round(rect.height)),
+    origWidth: orig.width,
+    origHeight: orig.height,
   }
+})
+const canvasHint = computed(() => {
+  if (tool.value !== 'crop') return t('editor.selectionInstruction')
+  return cropOutputDimensions.value ? t('editor.cropInstructionDynamic', cropOutputDimensions.value) : ''
 })
 const applyCropRatio = (id: Exclude<CropRatioId, 'custom'>) => {
   ratio.value = id

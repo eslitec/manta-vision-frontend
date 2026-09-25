@@ -274,10 +274,12 @@ describe('圖庫（images）', () => {
       url: WIRE_IMAGE.url,
       referencedBy: 0,
       dim: '1024×768',
+      width: 1024,
+      height: 768,
     })
   })
 
-  it('listImages 對量不出寬高的舊資料，dim 回空字串而不是 "null×null"', async () => {
+  it('listImages 對量不出寬高的舊資料，dim 回空字串而不是 "null×null"，width／height 正規化成 undefined', async () => {
     stubRoutes({
       '/images': {
         data: {
@@ -292,6 +294,8 @@ describe('圖庫（images）', () => {
     const res = await realApi.listImages()
 
     expect(res.items[0].dim).toBe('')
+    expect(res.items[0].width).toBeUndefined()
+    expect(res.items[0].height).toBeUndefined()
   })
 
   it('listImages 的 folderId 三態：null 篩「未分類」時送字面值 "null"', async () => {

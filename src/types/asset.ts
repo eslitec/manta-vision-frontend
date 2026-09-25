@@ -18,6 +18,8 @@ export interface Asset {
   dim: string // 尺寸顯示文字（由 width×height 格式化而成，見 utils/dimensions.ts）；
   // 舊資料或 Pillow 解不開的檔案後端會回 null，這裡正規化成空字串
   // （AssetCard 對空字串的處理等同沒有這行 meta）
+  width?: number // 後端 width／height 的數字本體，編輯器原圖資訊用；量不出來時後端回 null，這裡正規化成 undefined
+  height?: number
   type: MediaType // 後端 mediaType
   folderId?: string // 後端 folderId；未歸檔時後端回 null，這裡一律正規化成 undefined
   editable?: boolean // 是否保留可再編輯的圖層資訊（編輯產物專用；純前端概念，後端無對應欄位）
