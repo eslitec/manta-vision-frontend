@@ -14,6 +14,7 @@ import type {
   ImageListResponse,
   MaterialListResponse,
   MediaType,
+  UploadSource,
 } from '@/types/asset'
 import type {
   AiModel,
@@ -29,6 +30,7 @@ import type {
   Metrics,
   PeriodParams,
   Session,
+  TryOnReq,
   UsageQuery,
   UsageSummary,
 } from '@/types/api'
@@ -38,8 +40,9 @@ import type {
 // 後端 33 支端點裡，目前接得上的是身分驗證三支、`GET /bots`、
 // `feat/gallery-finish` 分支帶來的圖庫／資料夾／內建素材共 10 支，以及
 // 品牌設定 `GET/PUT /brand` 兩支（見 docs/api-status.md 的「✅ 可串」清單），
-// 以及圖生圖／行銷 PO 文／飼料餘額（`feat/mv-07-metrics` 分支的契約）。
-// 其餘（指標、修圖、影片、試穿）都還是空殼，所以這裡把 `mockApi` 展開當底，
+// 以及圖生圖／行銷 PO 文／飼料餘額（`feat/mv-07-metrics` 分支的契約）、
+// 試穿與肖像同意（`feat/tryon` 分支，docs/api/v14.md #17／#24／#25）。
+// 其餘（修圖、影片）都還是空殼，所以這裡把 `mockApi` 展開當底，
 // 只覆寫已經接得上的方法。
 //
 // 後端每補完一支，就把對應的方法從這裡加上去——展開的假資料會自動被蓋掉，
@@ -175,12 +178,21 @@ async function listImages(query: ImageListQuery = {}): Promise<ImageListResponse
 // sourceImageId：編輯器「另存為新素材」帶原圖 id 時才有值，後端依此標 source=edit、
 // derivedFrom 指回原圖（非破壞性）；見 manta-vision-backend docs/api/v7.md §4。
 // imageName：另存為新素材時使用者在對話框輸入的名稱；不帶時後端用檔名。
-async function uploadImage(file: File, folderId?: string, sourceImageId?: string, imageName?: string): Promise<Asset> {
+// source：試穿頁的模特照帶 'tryonModel'（每隻機器人上限 20 張，第 21 張後端 400 VALUE_OUT_OF_RANGE）；
+// 不帶＝upload。帶 sourceImageId 時後端一律標 edit、忽略 source。見 docs/api/v14.md #4。
+async function uploadImage(
+  file: File,
+  folderId?: string,
+  sourceImageId?: string,
+  imageName?: string,
+  source?: UploadSource,
+): Promise<Asset> {
   const form = new FormData()
   form.append('file', file)
   if (folderId) form.append('folderId', folderId)
   if (sourceImageId) form.append('sourceImageId', sourceImageId)
   if (imageName) form.append('imageName', imageName)
+  if (source) form.append('source', source)
   const { data } = await http.post<WireImage>('/upload', form)
   return toAsset(data)
 }
@@ -579,11 +591,35 @@ async function generatePost(req: GeneratePostReq): Promise<GeneratedPost> {
   return post
 }
 
+// ── 試穿（POST /tryon）：與 /generate 同一條付費管線（冪等鍵、100 秒逾時、202 輪詢）──
+// 契約：docs/api/v14.md #17。模型固定（後端取 modelType=tryon 且啟用的那一列）、無 prompt、無 useBrand。
+// 403 CONSENT_REQUIRED（upload 來源且未同意）與 404（模特／衣服不存在或非本 bot）都是 4xx，postPaid 不重送。
+async function tryOn(req: TryOnReq): Promise<GeneratedImage> {
+  const out = await runGeneration('/tryon', req)
+  const r = out.results?.[0]
+  // 後端 results[] 固定一張；沒有就是回應形狀不對，不能讓畫面拿到 undefined 當成功
+  if (!r)
+    throw new ApiError({
+      code: CLIENT_ERROR_CODES.UNEXPECTED_RESPONSE,
+      message: i18n.global.t('errors.generationFailed'),
+    })
+  return toGeneratedImage(out.generationId, r)
+}
+
+// ── 肖像同意（GET／PUT /users/me/consent；user-scoped，不看 X-Bot-Id）──
+// 契約：docs/api/v14.md #24／#25。同意綁使用者個人，沒有撤回（PUT 只收 true）。
+async function getConsent(): Promise<{ consented: boolean }> {
+  const { data } = await http.get<{ portraitConsent: boolean }>('/users/me/consent')
+  return { consented: data.portraitConsent }
+}
+
+async function giveConsent(): Promise<void> {
+  await http.put('/users/me/consent', { consent: true })
+}
+
 // ── 生成結果：存入圖庫、採用事件（不扣點，不帶 Idempotency-Key）──
 
-async function saveGenerated(name: string, from?: GenerationRef): Promise<Asset> {
-  // ponytail: 試穿還沒有後端，TryOnView 不帶 from，繼續用假資料；接試穿時拿掉這條
-  if (!from) return mockApi.saveGenerated(name)
+async function saveGenerated(name: string, from: GenerationRef): Promise<Asset> {
   const { data } = await http.post<WireImage>(`/generations/${from.generationId}/save`, {
     resultId: from.id,
     imageName: name,
@@ -623,6 +659,9 @@ export const realApi = {
   saveGenerated,
   recordAdoption,
   listInspirations,
+  tryOn,
+  getConsent,
+  giveConsent,
   // 儲值明確停用：`...mockApi` 會把假儲值帶進來，按下去會把 mock 的假餘額寫進 feed store，
   // 而右上角已改讀真的 GET /feeds，畫面會出現「儲值成功、生成卻 402」。TopUpDialog 已有「不支援」分支。
   // 後端的 POST /feeds/topup 是不收錢的模擬儲值，要不要接等產品確認。

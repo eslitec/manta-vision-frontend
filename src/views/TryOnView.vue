@@ -37,16 +37,14 @@
                 .uphead
                   span.uphead__title {{ t('tryOn.uploadedModels') }}
                   span.uphead__grow
-                  span.uphead__count {{ uploadedModels.length }} / 20
+                  span.uphead__count {{ uploadedModels.length }} / {{ MODEL_PHOTO_LIMIT }}
                 .uplist
-                  .uprow(v-for="u in uploadedModels" :key="u.id" :class="{ 'isOk': u.status === 'available' }")
-                    span.uprow__thumb
-                      img.uprow__thumbImage(v-if="u.url" :src="u.url" :alt="u.name" @error="u.url = undefined")
-                      IconImagePlaceholder(v-else)
-                    .uprow__col
+                  .uprow(v-for="u in uploadedModels" :key="u.id" :class="{ 'isActive': uploadedModel === u.id }")
+                    button.uprow__pick(type="button" :aria-pressed="uploadedModel === u.id" @click="uploadedModel = u.id")
+                      span.uprow__thumb
+                        img.uprow__thumbImage(v-if="u.url" :src="u.url" :alt="u.name" @error="u.url = undefined")
+                        IconImagePlaceholder(v-else)
                       span.uprow__name {{ u.name }}
-                      span.uprow__note(:class="{ 'isWarn': u.status !== 'available' }") {{ t(`tryOn.upload.notes.${u.noteKey}`) }}
-                    span.statuspill(:class="u.status === 'available' ? 'isOk' : 'isReupload'") {{ u.status === 'available' ? t('tryOn.upload.available') : t('tryOn.upload.reupload') }}
                     button.uprow__del(@click="removeModel(u.id)" :aria-label="t('common.delete')")
                       IconDelete
                 .pconsent
@@ -60,7 +58,6 @@
             .dropzone__actions
               AppButton(variant="outline" @click="pickerOpen = true") {{ t('common.selectFromLibrary') }}
               span.dropzone__hint {{ t('tryOn.removeBackgroundHint') }}
-          BrandToggle.tryon__brand(v-model="applyBrand" @edit="goBrandSettings")
         span.tryon__fade(aria-hidden="true")
       .tryon__sticky
         p.err(v-if="errorMsg" role="alert") {{ errorMsg }}
@@ -70,8 +67,8 @@
             .cost__value
               button.cost__feedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true")
                 IconFeedBottleSmall.cost__icon
-              span {{ t('units.feed', { count: 12 }) }}
-          AppButton(:disabled="generating" @click="onGenerate")
+              span {{ price === undefined ? '…' : t('units.feed', { count: price }) }}
+          AppButton(:disabled="!canGenerate" @click="onGenerate")
             IconLoader.spin(v-if="generating")
             span {{ generating ? t('common.generating') : t('tryOn.generate') }}
 
@@ -81,12 +78,12 @@
         span.result__hint {{ t('tryOn.resultHint') }}
       .result__wrap
         .result__box
-          IconPlayCircle.result__play
-          span.result__placeholder(v-if="done") {{ t('tryOn.generated') }}
-      .result__actions(v-if="done" role="status" aria-live="polite")
-        AppButton(variant="outline" @click="saveResult") {{ savedId ? t('common.saved') : t('common.saveToLibrary') }}
-        button.linkbtn(@click="download") {{ t('common.download') }}
-        button.linkbtn(@click="onGenerate") {{ t('common.regenerate') }}
+          img.result__img(v-if="result" :src="result.url" :alt="t('tryOn.resultTitle')")
+          IconPlayCircle.result__play(v-else)
+      .result__actions(v-if="result" role="status" aria-live="polite")
+        AppButton(variant="outline" :disabled="generating || saving" @click="saveResult") {{ result.savedAssetId ? t('common.saved') : t('common.saveToLibrary') }}
+        button.linkbtn(:disabled="generating" @click="download") {{ t('common.download') }}
+        button.linkbtn(:disabled="!canGenerate" @click="onGenerate") {{ t('common.regenerate') }}
 
   ImagePickerDialog(v-model:open="pickerOpen" :title="t('tryOn.pickerTitle')" @select="onPick")
   TopUpDialog(v-model:open="topUpOpen")
@@ -102,11 +99,9 @@
             IconClose
         p#consent-dialog-intro.cdialog__intro {{ t('tryOn.terms.intro') }}
         .terms
-          p.terms__item(v-for="(term, index) in tm('tryOn.terms.items')" :key="index") {{ term }}
-          p.terms__more {{ t('tryOn.terms.more') }}
+          p.terms__text {{ consentTemplate }}
         AppCheckbox.ack(v-model="ackChecked") {{ t('tryOn.terms.acknowledgement') }}
         .cdialog__act
-          AppButton.cdialog__pdf(variant="ghost" @click="downloadTerms") {{ t('tryOn.terms.download') }}
           span.cdialog__grow
           AppButton(variant="outline" @click="goCompliance") {{ t('tryOn.terms.openCompliance') }}
           AppButton(:disabled="!ackChecked" @click="acknowledge") {{ t('tryOn.terms.understand') }}
@@ -115,9 +110,10 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
+import { useEventListener } from '@vueuse/core'
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import { Navigation } from 'swiper/modules'
 import 'swiper/css'
@@ -126,7 +122,6 @@ import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
 import TopUpDialog from '@/components/TopUpDialog.vue'
 import AppButton from '@/components/AppButton.vue'
 import AppCheckbox from '@/components/AppCheckbox.vue'
-import BrandToggle from '@/components/BrandToggle.vue'
 import {
   IconPlayCircle,
   IconFeedBottleSmall,
@@ -137,20 +132,27 @@ import {
   IconLoader,
   IconUpload,
 } from '@/components/icons'
+import { useBrandStore } from '@/stores/brand'
 import { useConsentStore } from '@/stores/consent'
 import { useFeedStore } from '@/stores/feed'
 import { useAssets } from '@/composables/useAssets'
-import { api, useRealBackend } from '@/api'
-import { isFileTooLarge, isInsufficientFeed, isUnsupportedFormat } from '@/utils/error'
-import type { Asset, Material } from '@/types/api'
+import { api } from '@/api'
+import { API_ERROR_CODES, hasErrorCode } from '@/api/errors'
+import { displayMessage, isFileTooLarge, isInsufficientFeed, isUnsupportedFormat } from '@/utils/error'
+import { downloadFile } from '@/utils/download'
+import type { Asset, GeneratedImage, Material, TryOnReq } from '@/types/api'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 
 const router = useRouter()
+const brand = useBrandStore()
 const consentStore = useConsentStore()
 const { consented } = storeToRefs(consentStore)
 const feed = useFeedStore()
 const { saveGenerated, upload, deleteAssets } = useAssets()
-const { t, tm } = useI18n()
+const { t } = useI18n()
+
+// 後端每隻機器人的模特照上限（docs/api/v14.md #4）；只用來顯示 n／20，擋不擋由後端 400 決定
+const MODEL_PHOTO_LIMIT = 20
 
 const modelTabs = computed(() => [
   { value: 'builtIn', label: t('tryOn.tabs.builtIn') },
@@ -161,17 +163,16 @@ const modelTab = ref('builtIn')
 const models = ref<Material[]>([])
 const model = ref('')
 
-// id＝後端 imageId（之後 POST /tryon 的 modelRefId 就用它）；url＝後端 R2 縮圖，mock 沒有真實檔案時為 undefined
-type UploadedModel = { id: string; name: string; url?: string; status: 'available' | 'reupload'; noteKey: string }
-// 前端示範資料：對應設計稿「已上傳模特」兩種審核狀態，只在假資料模式顯示——
-// 真後端沒有審核欄位、也沒有這兩筆，正式環境看到「需重傳・審核未過」會誤以為系統有審核機制
-const uploadedModels = ref<UploadedModel[]>(
-  useRealBackend
-    ? []
-    : [
-        { id: 'demo-a', name: t('tryOn.demoModels.a'), status: 'available', noteKey: 'consented' },
-        { id: 'demo-b', name: t('tryOn.demoModels.b'), status: 'reupload', noteKey: 'backgroundPeople' },
-      ],
+// 已上傳的模特照（GET /images?source=tryonModel）：id＝後端 imageId（POST /tryon 的 modelRefId）；
+// url＝後端 R2 縮圖，mock 沒有真實檔案時為 undefined。後端沒有審核，沒有狀態欄位
+type UploadedModel = { id: string; name: string; url?: string }
+const uploadedModels = ref<UploadedModel[]>([])
+const uploadedModel = ref('') // 「上傳模特照」分頁選中的那張（imageId）
+// 送給後端的模特：看目前在哪個分頁——內建分頁送 material＋materialId，上傳分頁送 upload＋imageId
+const modelRef = computed<Pick<TryOnReq, 'modelSource' | 'modelRefId'>>(() =>
+  modelTab.value === 'builtIn'
+    ? { modelSource: 'material', modelRefId: model.value }
+    : { modelSource: 'upload', modelRefId: uploadedModel.value },
 )
 const personConsent = ref(true) // 面板「我已取得此人肖像使用同意」勾選
 const ackChecked = ref(false) // 對話框「我已取得當事人同意…」勾選
@@ -183,13 +184,28 @@ const showConsent = ref(false)
 const consentDialogRef = ref<HTMLElement | null>(null)
 const generating = ref(false)
 const uploading = ref(false)
-const done = ref(false)
+const saving = ref(false)
 const errorMsg = ref('')
-const applyBrand = ref(false)
-const savedId = ref('')
+const result = ref<GeneratedImage | null>(null)
+// 單價讀 GET /ai-models?modelType=tryon（只回啟用的那一檔）；載入前不能生成
+const price = ref<number>()
+const canGenerate = computed(
+  () => !generating.value && price.value !== undefined && !!modelRef.value.modelRefId && !!apparel.value,
+)
+// 同意視窗顯示品牌設定的肖像權條款模板；還沒設定過就用 i18n 預設文字（brand store 載入後也會補同一段）
+const consentTemplate = computed(() => brand.profile?.portraitConsent || t('brandSettings.defaults.portraitConsent'))
+
+// 生成中離開頁面，結果只活在這個元件裡、卸載就沒了，後端卻照樣結清飼料
+onBeforeRouteLeave(() => !generating.value || window.confirm(t('common.leaveWhileGenerating')))
+useEventListener(window, 'beforeunload', (e) => {
+  if (generating.value) e.preventDefault()
+})
 
 onMounted(() => {
-  consentStore.load()
+  // 三支載入互不依賴，失敗各自處理：同意狀態失敗當未同意（PUT 時會再問）、模特庫失敗顯示空狀態、
+  // 價格失敗顯示載入錯誤且生成鈕維持停用
+  consentStore.load().catch(() => undefined)
+  brand.load().catch(() => undefined)
   api
     .listMaterials('model')
     .then((res) => {
@@ -199,6 +215,22 @@ onMounted(() => {
     .catch(() => {
       // 失敗模式：載入失敗時比照空陣列處理，畫面顯示空狀態文字，不渲染壞掉的 Swiper
       models.value = []
+    })
+  api
+    .listImages({ source: 'tryonModel', pageSize: MODEL_PHOTO_LIMIT })
+    .then((res) => {
+      uploadedModels.value = res.items.map((a) => ({ id: a.id, name: a.name, url: a.url }))
+    })
+    .catch((e: unknown) => {
+      errorMsg.value = displayMessage(e, t('errors.loadFailed'))
+    })
+  api
+    .listModels('tryon')
+    .then((tiers) => {
+      price.value = tiers[0]?.costFeeds
+    })
+    .catch((e: unknown) => {
+      errorMsg.value = displayMessage(e, t('errors.loadFailed'))
     })
 })
 
@@ -218,32 +250,34 @@ async function onModelUpload(e: Event) {
   uploading.value = true
   errorMsg.value = ''
   try {
-    // 走既有的素材上傳路徑（真後端 POST /upload、mock 走假資料），不帶 source／folderId：
-    // 後端沒有「模特照」來源值，素材落未分類、由後端自標 upload
-    const a = await upload(f)
-    uploadedModels.value.push({ id: a.id, name: a.name, url: a.url, status: 'available', noteKey: 'consented' })
+    // 走既有的素材上傳路徑（真後端 POST /upload、mock 走假資料），帶 source=tryonModel 標成模特照：
+    // 重新整理後用 GET /images?source=tryonModel 撈得回來，圖庫卡片也分得出是模特照
+    const a = await upload(f, undefined, undefined, undefined, 'tryonModel')
+    // 放最前面：與重新整理後 GET /images 的 createdAt 倒序一致，新上傳的那張不會被推到清單底部看不見
+    uploadedModels.value.unshift({ id: a.id, name: a.name, url: a.url })
+    uploadedModel.value = a.id
   } catch (e: unknown) {
+    // 第 21 張後端回 400 VALUE_OUT_OF_RANGE，直接顯示後端寫給人看的訊息
     errorMsg.value = isFileTooLarge(e)
       ? t('errors.fileTooLarge')
       : isUnsupportedFormat(e)
         ? t('errors.unsupportedFormat')
-        : t('errors.submitFailed')
+        : displayMessage(e, t('errors.submitFailed'))
   } finally {
     uploading.value = false
   }
 }
 async function removeModel(id: string) {
-  // 示範列後端沒有這筆，只移出清單；真上傳的要連圖庫裡的素材一起刪（DELETE /images/{id}），
-  // 否則按了「刪除」肖像照仍留在 R2 與圖庫。刪不掉就留著列、顯示錯誤，不假裝已刪
-  if (!id.startsWith('demo-')) {
-    errorMsg.value = ''
-    const { failedIds } = await deleteAssets([id])
-    if (failedIds.length) {
-      errorMsg.value = t('library.batchFailed', { count: 1 })
-      return
-    }
+  // 要連圖庫裡的素材一起刪（DELETE /images/{id}），否則按了「刪除」肖像照仍留在 R2 與圖庫。
+  // 刪不掉就留著列、顯示錯誤，不假裝已刪
+  errorMsg.value = ''
+  const { failedIds } = await deleteAssets([id])
+  if (failedIds.length) {
+    errorMsg.value = t('library.batchFailed', { count: 1 })
+    return
   }
   uploadedModels.value = uploadedModels.value.filter((m) => m.id !== id)
+  if (uploadedModel.value === id) uploadedModel.value = ''
 }
 function closeConsent() {
   showConsent.value = false
@@ -256,36 +290,65 @@ async function acknowledge() {
   showConsent.value = false
 }
 const goCompliance = () => router.push('/settings')
-function downloadTerms() {
-  // TODO: 後端提供條款範本 PDF 後觸發下載
-}
-const goBrandSettings = () => router.push('/settings')
 async function saveResult() {
-  if (savedId.value) return
-  const a = await saveGenerated(t('tryOn.savedName', { timestamp: Date.now() }))
-  savedId.value = a.id
+  const r = result.value
+  if (!r || r.savedAssetId || saving.value) return
+  errorMsg.value = ''
+  saving.value = true
+  try {
+    const a = await saveGenerated(t('tryOn.savedName', { timestamp: Date.now() }), r)
+    r.savedAssetId = a.id
+    r.adopted = true // 後端 /save 自己會記採用，不必再送 events
+  } catch (e: unknown) {
+    // 前一發其實存進去了、只是回應在路上丟了：當成已存入（同圖生圖頁）
+    if (hasErrorCode(e, API_ERROR_CODES.ALREADY_SAVED)) {
+      r.savedAssetId = 'unknown'
+      r.adopted = true
+    } else errorMsg.value = displayMessage(e, t('errors.submitFailed'))
+  } finally {
+    saving.value = false
+  }
 }
-function download() {
-  // TODO: 後端回傳試穿圖 URL 後觸發實際下載
+async function download() {
+  const r = result.value
+  if (!r) return
+  errorMsg.value = ''
+  try {
+    await downloadFile(r.url)
+    // 採用事件：後端 record_adoption_event 只查 generation 屬不屬於本 bot，不看類型，試穿也收
+    if (!r.adopted) {
+      await api.recordAdoption(r)
+      r.adopted = true
+    }
+  } catch (e: unknown) {
+    errorMsg.value = displayMessage(e, t('errors.downloadFailed'))
+  }
 }
 
 async function onGenerate() {
+  const cloth = apparel.value
+  if (!canGenerate.value || !cloth) return
   if (!consented.value) {
     showConsent.value = true
     return
   } // 未同意 → 擋住並要求同意
   errorMsg.value = ''
   generating.value = true
-  done.value = false
-  savedId.value = ''
   try {
-    await api.tryOn()
-    await feed.refresh()
-    done.value = true
+    result.value = await api.tryOn({ ...modelRef.value, clothImageId: cloth.id })
   } catch (e: unknown) {
-    errorMsg.value = isInsufficientFeed(e) ? t('errors.insufficientFeed') : t('errors.generationFailed')
+    // 後端說這個使用者還沒同意（本機狀態過期）：改回未同意並開同意視窗，不當成生成失敗
+    if (hasErrorCode(e, API_ERROR_CODES.CONSENT_REQUIRED)) {
+      consented.value = false
+      showConsent.value = true
+    } else
+      errorMsg.value = isInsufficientFeed(e)
+        ? t('errors.insufficientFeed')
+        : displayMessage(e, t('errors.generationFailed'))
   } finally {
     generating.value = false
+    // 成功或失敗都刷新：內容被擋會扣點、失敗的 202 會退點；刷新失敗不覆蓋生成的錯誤訊息
+    await feed.refresh().catch(() => undefined)
   }
 }
 </script>
@@ -539,9 +602,15 @@ async function onGenerate() {
   border: 1px solid $gray;
   border-radius: 8px;
   background: $white;
-  &.isOk {
+  &.isActive {
     background: $blue-light;
-    border-color: transparent;
+    border-color: $blue;
+  }
+  &__pick {
+    @include flex(flex-start, center, 0.625rem);
+    flex: 1;
+    min-width: 0;
+    text-align: left;
   }
   &__thumb {
     @include flex(center, center);
@@ -559,24 +628,15 @@ async function onGenerate() {
     height: 100%;
     object-fit: cover;
   }
-  &__col {
+  &__name {
     flex: 1;
     min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-  }
-  &__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 0.75rem;
     font-weight: 500;
     color: $blue-dark-500;
-  }
-  &__note {
-    font-size: 0.6875rem;
-    color: $gray-100;
-    &.isWarn {
-      color: $orange;
-    }
   }
   &__del {
     @include flex(center, center);
@@ -588,22 +648,6 @@ async function onGenerate() {
     &:hover {
       color: $red;
     }
-  }
-}
-.statuspill {
-  flex-shrink: 0;
-  padding: 0.1875rem 0.75rem;
-  border-radius: 16px;
-  font-size: 0.8125rem;
-  background: $white;
-  border: 1px solid $gray;
-  &.isOk {
-    color: $green;
-    border-color: $green;
-  }
-  &.isReupload {
-    color: #ff6148;
-    border-color: #ff6148;
   }
 }
 .pconsent {
@@ -734,7 +778,13 @@ async function onGenerate() {
   aspect-ratio: 360 / 480;
   background: #e4e9f2;
   border-radius: 10px;
+  overflow: hidden;
   color: #aeb8cc; // Figma node 841:618 (ph_video) 圖示實際色碼，比 $babyBlue 更偏灰藍
+}
+.result__img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 // Figma 14:113：result_img 為 360 × 480，置於 638 × 606 的 result_wrap 中。
@@ -785,17 +835,10 @@ async function onGenerate() {
   width: 4rem;
   height: 4rem;
 }
-.result__placeholder {
-  font-size: 0.8125rem;
-  color: $gray-100;
-}
 .tryon__result {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-}
-.tryon__brand {
-  margin: 1rem 0;
 }
 .result__actions {
   @include flex(center, center, 0.75rem);
@@ -806,6 +849,10 @@ async function onGenerate() {
   padding: 0.5625rem 0.5rem;
   &:hover {
     color: $blue;
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
 }
 .cmodal {
@@ -862,11 +909,6 @@ async function onGenerate() {
   &__act {
     @include flex(flex-start, center, 0.625rem);
   }
-  &__pdf {
-    font-size: 0.8125rem;
-    font-weight: 500;
-    color: $blue-dark-500;
-  }
   &__foot {
     font-size: 0.6875rem;
     color: $gray-100;
@@ -880,14 +922,13 @@ async function onGenerate() {
   padding: 0.875rem 1rem;
   border-radius: 10px;
   background: $blue-light;
-  &__item {
+  max-height: 14rem;
+  overflow-y: auto;
+  &__text {
     font-size: 0.75rem;
     line-height: 1.6;
     color: $blue-dark-500;
-  }
-  &__more {
-    font-size: 0.6875rem;
-    color: $gray-100;
+    white-space: pre-line; // 品牌設定的條款模板是多行純文字，保留換行
   }
 }
 .ack {

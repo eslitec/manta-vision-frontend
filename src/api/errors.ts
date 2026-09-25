@@ -34,6 +34,8 @@ export const API_ERROR_CODES = {
   UPSTREAM_ERROR: 'UPSTREAM_ERROR',
   // 存入圖庫：這張已經存過了（連點、或前一發的回應遺失）；圖生圖頁當成已存入
   ALREADY_SAVED: 'ALREADY_SAVED',
+  // 試穿：用上傳的真人照但該使用者還沒同意肖像使用（403，擋在扣點之前）；試穿頁改開同意視窗
+  CONSENT_REQUIRED: 'CONSENT_REQUIRED',
 } as const
 
 /**
