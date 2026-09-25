@@ -115,10 +115,12 @@ export interface GenerationTask {
   videoReq?: VideoJobReq // kind === 'video' 才有；保留原始請求供「重試」使用
 }
 
-// ── 試穿 ──
+// ── 試穿（POST /tryon）──
+// 欄位名等於後端 TryonRequest，real 版整包當 body；無 prompt、無 useBrand、無 modelKey（模型固定、試穿不做品牌介入）
 export interface TryOnReq {
-  modelRef: string // 內建模特 id 或上傳 id
-  apparelId?: string
+  modelSource: 'material' | 'upload' // material＝內建模特庫；upload＝使用者上傳的模特照（source=tryonModel）
+  modelRefId: string // material 時＝materialId；upload 時＝該模特照的 imageId
+  clothImageId: string // 服飾素材：這隻機器人任一張圖
 }
 
 // ── 錢包、用量與指標（GET /feeds、GET /feeds/usage、GET /metrics）──

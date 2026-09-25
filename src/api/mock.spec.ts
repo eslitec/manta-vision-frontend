@@ -90,10 +90,13 @@ describe('計費與扣點', () => {
     }
   })
 
-  it('tryOn 固定扣 15 顆', async () => {
+  it('tryOn 扣 tryonStandard 的 12 顆並回一張帶圖的結果', async () => {
     const before = (await api.getFeed()).balance
-    await api.tryOn()
-    expect((await api.getFeed()).balance).toBe(before - 15)
+    const r = await api.tryOn({ modelSource: 'material', modelRefId: 'm1', clothImageId: 'a1' })
+    expect((await api.getFeed()).balance).toBe(before - 12)
+    expect(r.url).toContain('picsum')
+    expect(r.generationId).toBeTruthy()
+    expect((await api.listModels('tryon')).map((m) => m.costFeeds)).toEqual([12])
   })
 
   it('createVideoJob 扣 45 顆並回傳 pending 與 0% 進度', async () => {
@@ -272,8 +275,18 @@ describe('素材（圖庫）', () => {
   })
 
   it('saveGenerated 落地成「AI 生成」素材', async () => {
-    const a = await api.saveGenerated('生成結果')
+    const a = await api.saveGenerated('生成結果', { generationId: 'g_x', id: 'r_x' })
     expect(a.source).toBe('aiGenerate')
+  })
+
+  it('uploadImage 帶 source=tryonModel 標成模特照、算進 upload 格，GET /images?source=tryonModel 只回模特照', async () => {
+    const uploadBefore = (await api.listImages()).counts.upload
+    const a = await api.uploadImage(new File(['x'], '模特.png'), undefined, undefined, undefined, 'tryonModel')
+    expect(a.source).toBe('tryonModel')
+    const res = await api.listImages({ source: 'tryonModel' })
+    expect(res.items.map((x) => x.id)).toContain(a.id)
+    expect(res.items.every((x) => x.source === 'tryonModel')).toBe(true)
+    expect(res.counts.upload).toBe(uploadBefore + 1)
   })
 
   it('uploadImage 指定資料夾則落到該資料夾', async () => {

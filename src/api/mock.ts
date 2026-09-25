@@ -26,11 +26,13 @@ import type {
   RetouchReq,
   RetouchResult,
   Session,
+  TryOnReq,
   UsageQuery,
   UsageSummary,
   VideoJob,
   VideoJobReq,
 } from '@/types/api'
+import type { UploadSource } from '@/types/asset'
 import { VIDEO_MODEL_TIERS } from '@/types/api'
 import { formatDimensions } from '@/utils/dimensions'
 
@@ -230,6 +232,7 @@ const MOCK_MODELS: AiModel[] = [
   { modelKey: 'imagePro', name: '專業', modelType: 'image', costFeeds: 24 },
   { modelKey: 'marketingImage', name: '行銷海報圖', modelType: 'marketing', costFeeds: 5 },
   { modelKey: 'marketingText', name: '行銷文案', modelType: 'marketing', costFeeds: 0 },
+  { modelKey: 'tryonStandard', name: '標準', modelType: 'tryon', costFeeds: 12 },
 ]
 const priceOf = (modelKey: string) => MOCK_MODELS.find((m) => m.modelKey === modelKey)?.costFeeds
 
@@ -349,8 +352,8 @@ function countByBucket(): ImageCounts {
       counts.video += 1
       continue
     }
-    // 後端把 tryon 併入 aiGenerate 桶（左側欄沒有「試穿」分類）
-    const bucket = a.source === 'tryon' ? 'aiGenerate' : a.source
+    // 後端把 tryon 併入 aiGenerate 桶、模特照併入 upload 桶（左側欄沒有這兩個分類）
+    const bucket = a.source === 'tryon' ? 'aiGenerate' : a.source === 'tryonModel' ? 'upload' : a.source
     counts[bucket] += 1
   }
   return counts
@@ -490,8 +493,15 @@ export const mockApi = {
   // POST /upload（上傳；落到指定資料夾，未指定則進「未分類」）
   // sourceImageId：編輯器「另存為新素材」帶原圖 id 時才有值——跟真後端一樣，來源改標
   // source=edit，且用 object URL 讓假資料模式下縮圖也看得到真的裁切結果，不是永遠佔位圖示；
-  // 一般上傳（不帶 sourceImageId）維持原本行為不變。
-  async uploadImage(file: File, folderId?: string, sourceImageId?: string, imageName?: string): Promise<Asset> {
+  // 一般上傳（不帶 sourceImageId）維持原本行為不變。source：同真後端，'tryonModel' 標成模特照、
+  // 有 sourceImageId 時被 edit 蓋過。
+  async uploadImage(
+    file: File,
+    folderId?: string,
+    sourceImageId?: string,
+    imageName?: string,
+    source?: UploadSource,
+  ): Promise<Asset> {
     await delay(400)
     if (file.size > MAX_UPLOAD_MB * 1024 * 1024) throw new Error('FILE_TOO_LARGE')
     const extension = file.name.split('.').pop()?.toLowerCase() ?? ''
@@ -500,7 +510,7 @@ export const mockApi = {
     const a: Asset = {
       id: uid('a'),
       name: imageName || file.name,
-      source: sourceImageId ? 'edit' : 'upload',
+      source: sourceImageId ? 'edit' : (source ?? 'upload'),
       dim: '1024×768',
       width: 1024,
       height: 768,
@@ -671,19 +681,20 @@ export const mockApi = {
     return { id, status, progress, cost: j.cost }
   },
 
-  // POST /generate/tryon
-  async tryOn(): Promise<{ ok: true }> {
-    deduct(15)
+  // POST /tryon（同真後端：固定檔位 tryonStandard、回一張結果；結果圖用 picsum 依模特 id 取一張假圖）
+  async tryOn(req: TryOnReq): Promise<GeneratedImage> {
+    deduct(priceOf('tryonStandard') ?? 0)
     db.totalGen += 1
     db.generatedThisMonth += 1
     db.successGen += 1
     await delay(1000)
-    return { ok: true }
+    const generationId = uid('g')
+    db.imageGenerations.add(generationId)
+    return { id: uid('r'), generationId, url: `https://picsum.photos/seed/${req.modelRefId}/400/500`, adopted: false }
   },
 
   // POST /generations/{id}/save → 生成結果落地成 AI 生成素材；同後端，存入圖庫本身就算採用。
-  // 沒帶 from（試穿，還沒有後端）只落地素材。
-  async saveGenerated(name: string, from?: GenerationRef): Promise<Asset> {
+  async saveGenerated(name: string, from: GenerationRef): Promise<Asset> {
     await delay(300)
     const a: Asset = {
       id: uid('a'),
@@ -695,7 +706,7 @@ export const mockApi = {
       type: 'image',
     }
     db.assets.unshift(a)
-    if (from) markAdopted(from)
+    markAdopted(from)
     return a
   },
 

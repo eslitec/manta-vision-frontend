@@ -8,8 +8,12 @@
 /** 素材媒體型態 */
 export type MediaType = 'image' | 'video'
 
-/** 素材來源；'ai' 改名為 'aiGenerate' 對齊後端 camelCase 列舉值（ImageSource.api_value） */
-export type AssetSource = 'upload' | 'aiGenerate' | 'edit' | 'object' | 'tryon' | 'builtin'
+/** 素材來源；'ai' 改名為 'aiGenerate' 對齊後端 camelCase 列舉值（ImageSource.api_value）。
+ *  'tryonModel'＝試穿頁上傳的模特照（`POST /upload` 帶 `source=tryonModel`；counts 算進 upload 格） */
+export type AssetSource = 'upload' | 'aiGenerate' | 'edit' | 'object' | 'tryon' | 'tryonModel' | 'builtin'
+
+/** `POST /upload` 可指定的來源（後端 UploadSource 白名單）；不帶＝upload */
+export type UploadSource = 'object' | 'tryonModel'
 
 export interface Asset {
   id: string // 後端 imageId

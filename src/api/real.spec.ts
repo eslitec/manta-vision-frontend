@@ -4,7 +4,8 @@ import { http } from './http'
 import { mockApi } from './mock'
 import { realApi } from './real'
 import { i18n } from '@/lang'
-import type { GenerateImageReq, GeneratePostReq } from '@/types/api'
+import type { GenerateImageReq, GeneratePostReq, TryOnReq } from '@/types/api'
+import { API_ERROR_CODES, hasErrorCode } from './errors'
 
 // 跟 http.spec.ts 一樣用假 adapter 取代網路，但這裡關心的是**上一層**：
 // 送出去的 URL 與 body 對不對、後端的回應有沒有被正確翻成 Session。
@@ -197,9 +198,8 @@ describe('尚未接上的方法', () => {
     // realApi 是 { ...mockApi, login, register, logout, ... }。這個測試釘住那個
     // 展開——有人把它拿掉的話，整站會在執行期才炸「api.editImage is not a
     // function」，而不是在這裡。
-    // 圖庫「編輯產物」與試穿目前後端沒有對應端點，仍然吃假資料
+    // 圖庫「編輯產物」目前後端沒有對應端點，仍然吃假資料
     expect(typeof realApi.editImage).toBe('function')
-    expect(typeof realApi.tryOn).toBe('function')
   })
 
   it('已接上的方法不是 mock 的那一份', () => {
@@ -214,6 +214,9 @@ describe('尚未接上的方法', () => {
     expect(realApi.saveGenerated).not.toBe(mockApi.saveGenerated)
     expect(realApi.recordAdoption).not.toBe(mockApi.recordAdoption)
     expect(realApi.listInspirations).not.toBe(mockApi.listInspirations)
+    expect(realApi.tryOn).not.toBe(mockApi.tryOn)
+    expect(realApi.getConsent).not.toBe(mockApi.getConsent)
+    expect(realApi.giveConsent).not.toBe(mockApi.giveConsent)
   })
 
   it('儲值在真後端模式明確停用（TopUpDialog 走「不支援」分支）', () => {
@@ -368,7 +371,19 @@ describe('圖庫（images）', () => {
     const form = calls[0].body as FormData
     expect(form.get('sourceImageId')).toBe('img_0')
     expect(form.get('imageName')).toBe('裁切版')
+    expect(form.get('source')).toBeNull()
     expect(calls[0].url).toBe('/upload')
+  })
+
+  it('uploadImage 帶 source=tryonModel 時表單多一個 source 欄位（試穿頁的模特照），回應的來源原樣帶出', async () => {
+    const calls = stubRoutes({ '/upload': { status: 201, data: { ...WIRE_IMAGE, source: 'tryonModel' } } })
+
+    const asset = await realApi.uploadImage(new File(['x'], 'model.png'), undefined, undefined, undefined, 'tryonModel')
+
+    const form = calls[0].body as FormData
+    expect(form.get('source')).toBe('tryonModel')
+    expect(form.get('sourceImageId')).toBeNull()
+    expect(asset.source).toBe('tryonModel')
   })
 
   it('updateImage 只帶 name 時，body 不會有 folderId 這個 key（三態語意：不動）', async () => {
@@ -1155,16 +1170,16 @@ describe('生成結果：存入圖庫／下載事件／靈感', () => {
     expect(asset).toMatchObject({ id: 'img_1', name: '春季主視覺_01', source: 'aiGenerate', url: WIRE_IMAGE.url })
   })
 
-  it('saveGenerated 沒帶 from 時不打網路（試穿仍是假資料）', async () => {
-    const calls = stubRoutes({})
+  it('saveGenerated 對試穿結果也走同一支 /generations/{id}/save（來源由後端標 tryon）', async () => {
+    const calls = stubRoutes({
+      '/generations/gen_t/save': { status: 201, data: { ...WIRE_IMAGE, source: 'tryon' } },
+    })
 
-    // 走 mockApi.saveGenerated，裡面有 delay(300)，而這個檔開了 fake timers
-    const p = realApi.saveGenerated('x')
-    await vi.advanceTimersByTimeAsync(300)
-    const asset = await p
+    const asset = await realApi.saveGenerated('試穿圖_1', { generationId: 'gen_t', id: 'res_t' })
 
-    expect(calls).toHaveLength(0)
-    expect(asset.source).toBe('aiGenerate')
+    expect(calls[0].url).toBe('/generations/gen_t/save')
+    expect(calls[0].body).toEqual({ resultId: 'res_t', imageName: '試穿圖_1' })
+    expect(asset.source).toBe('tryon')
   })
 
   it('recordAdoption 只送 downloaded 與 resultId', async () => {
@@ -1196,5 +1211,72 @@ describe('生成結果：存入圖庫／下載事件／靈感', () => {
     const items = await realApi.listInspirations()
 
     expect(items).toEqual([{ id: 'insp_1', name: '極簡白底', url: 'https://cdn.example.com/insp_1.png' }])
+  })
+})
+
+describe('POST /tryon 與肖像同意', () => {
+  const TRYON_REQ: TryOnReq = { modelSource: 'upload', modelRefId: 'img_m', clothImageId: 'img_c' }
+
+  it('200：打 /tryon、body 就是契約的三個欄位、帶 Idempotency-Key 與 100 秒逾時，results[0] 翻成 GeneratedImage', async () => {
+    const calls = stubRoutes({ '/tryon': GEN_OK })
+
+    const res = await realApi.tryOn(TRYON_REQ)
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0].url).toBe('/tryon')
+    expect(calls[0].method).toBe('post')
+    expect(calls[0].body).toStrictEqual({ modelSource: 'upload', modelRefId: 'img_m', clothImageId: 'img_c' })
+    expect(calls[0].headers?.['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/)
+    expect(calls[0].timeout).toBe(100000)
+    expect(res).toEqual(GENERATED[0])
+  })
+
+  it('202 → 輪詢 GET /generations/{id} 到 done 才回，不會再送 /tryon', async () => {
+    const calls = stubRoutes({ '/tryon': PENDING, '/generations/gen_1': [PROCESSING, DONE] })
+
+    const p = realApi.tryOn({ ...TRYON_REQ, modelSource: 'material' })
+    await vi.advanceTimersByTimeAsync(5000)
+    await vi.advanceTimersByTimeAsync(5000)
+    const res = await p
+
+    expect(calls.filter((c) => c.url === '/tryon')).toHaveLength(1)
+    expect(calls.filter((c) => c.url === '/generations/gen_1')).toHaveLength(2)
+    expect(res).toEqual(GENERATED[0])
+  })
+
+  it('403 CONSENT_REQUIRED（上傳來源且未同意）不重送，碼原樣往上丟給試穿頁開同意視窗', async () => {
+    const calls = stubRoutes({
+      '/tryon': {
+        status: 403,
+        data: { code: 'CONSENT_REQUIRED', message: '請先同意肖像使用條款', fieldErrors: null, requestId: 'r' },
+      },
+    })
+
+    const err = await realApi.tryOn(TRYON_REQ).catch((e: unknown) => e)
+
+    expect(API_ERROR_CODES.CONSENT_REQUIRED).toBe('CONSENT_REQUIRED')
+    expect(hasErrorCode(err, API_ERROR_CODES.CONSENT_REQUIRED)).toBe(true)
+    expect(calls).toHaveLength(1)
+  })
+
+  it('getConsent 打 GET /users/me/consent，把 portraitConsent 翻成 { consented }', async () => {
+    const calls = stubRoutes({ '/users/me/consent': { data: { portraitConsent: true } } })
+
+    const res = await realApi.getConsent()
+
+    expect(calls[0].method).toBe('get')
+    expect(res).toEqual({ consented: true })
+  })
+
+  it('giveConsent 打 PUT /users/me/consent，body 只有 { consent: true }', async () => {
+    const calls = stubRoutes({
+      '/users/me/consent': { data: { portraitConsent: true, updatedAt: '2026-01-01T00:00:00Z' } },
+    })
+
+    await realApi.giveConsent()
+
+    expect(calls[0].method).toBe('put')
+    expect(calls[0].body).toEqual({ consent: true })
+    expect(calls[0].headers?.['Idempotency-Key']).toBeUndefined()
   })
 })
