@@ -9,7 +9,7 @@
 export type MediaType = 'image' | 'video'
 
 /** 素材來源；'ai' 改名為 'aiGenerate' 對齊後端 camelCase 列舉值（ImageSource.api_value） */
-export type AssetSource = 'upload' | 'aiGenerate' | 'edit' | 'object' | 'tryon'
+export type AssetSource = 'upload' | 'aiGenerate' | 'edit' | 'object' | 'tryon' | 'builtin'
 
 export interface Asset {
   id: string // 後端 imageId
@@ -24,6 +24,7 @@ export interface Asset {
   referencedBy?: number // 後端目前只有布林值 isInUse；這裡用 0/1 表示，沿用既有「> 0 視為被引用」的判斷
   url?: string // 後端 url；mock 沒有真實檔案來源，留空
   createdAt?: string // 後端 createdAt（ISO 字串）
+  category?: Material['category'] // 只有 source='builtin'（內建素材投影）才有值；使用者自己的圖後端回 null
 }
 
 /** 使用者歸檔的資料夾（對齊後端 FolderResponse；後端明確表示不存在「系統資料夾」概念） */
@@ -47,6 +48,7 @@ export interface ImageCounts {
   edit: number
   object: number
   video: number
+  builtin: number
 }
 
 export interface ImageListResponse {
@@ -98,7 +100,7 @@ export interface BatchResult {
 export const UNFILED_FOLDER = '未分類'
 
 /** CATEGORY_TAGS 只會用到 ImageCounts 的這幾個桶（'all' 不是分類，'upload' 走上傳按鈕不走這份清單） */
-export type CategoryTag = keyof Omit<ImageCounts, 'all' | 'upload'>
+export type CategoryTag = keyof Omit<ImageCounts, 'all' | 'upload' | 'builtin'>
 
 // 圖庫左側「系統分類」：object／aiGenerate／edit 依 source 分類，video 依 mediaType 分類——
 // 兩個維度剛好都塞進同一份清單，用 dimension 標記該用哪個欄位比對，避免又把 video 誤當成 source。

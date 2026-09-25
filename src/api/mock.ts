@@ -32,6 +32,7 @@ import type {
   VideoJobReq,
 } from '@/types/api'
 import { VIDEO_MODEL_TIERS } from '@/types/api'
+import { formatDimensions } from '@/utils/dimensions'
 
 // ⚠️ 這是「假後端」：所有資料在記憶體中，讓前端功能可端到端運作。
 // 之後把每個函式改成呼叫 http（api/http.ts）即可，介面不變。
@@ -291,9 +292,29 @@ const MATERIALS: Material[] = [
   },
 ]
 
+// 內建素材投影成圖庫素材（對齊後端 GET /images 把全域 materials 合併進來的形狀）：
+// id＝materialId、source='builtin'、沒有資料夾、不可被引用、一律是圖片
+function materialAsAsset(m: Material): Asset {
+  return {
+    id: m.materialId,
+    name: m.materialName,
+    source: 'builtin',
+    dim: formatDimensions(m.width, m.height),
+    type: 'image',
+    url: m.url,
+    category: m.category,
+  }
+}
+
 // 依 source／mediaType 兩個維度統計整個圖庫（不受目前查詢條件篩選；對齊後端 count_by_bucket）
+// all 含內建素材、object 含內建的物件類素材
 function countByBucket(): ImageCounts {
-  const counts: ImageCounts = { all: 0, upload: 0, aiGenerate: 0, edit: 0, object: 0, video: 0 }
+  const counts: ImageCounts = { all: 0, upload: 0, aiGenerate: 0, edit: 0, object: 0, video: 0, builtin: 0 }
+  for (const m of MATERIALS) {
+    counts.all += 1
+    counts.builtin += 1
+    if (m.category === 'object') counts.object += 1
+  }
   for (const a of db.assets) {
     counts.all += 1
     if (a.type === 'video') {
@@ -341,11 +362,15 @@ export const mockApi = {
   },
 
   // GET /images（對齊後端分頁：{ total, page, items, counts }；counts 是整個圖庫的統計，不受這裡的篩選影響）
+  // 不帶 source ＝ 使用者的圖 ∪ 內建素材（內建排在後面，對齊後端 createdAt DESC、內建素材最舊）；
+  // source=builtin 只回內建；帶 folderId（含未分類）或 mediaType=video 都不含內建。
   async listImages(query: ImageListQuery = {}): Promise<ImageListResponse> {
     await delay(250)
     const page = query.page ?? 1
     const pageSize = query.pageSize ?? 8
-    const filtered = db.assets.filter((a) => {
+    const includeBuiltin = query.folderId === undefined && query.mediaType !== 'video'
+    const pool = includeBuiltin ? [...db.assets, ...MATERIALS.map(materialAsAsset)] : db.assets
+    const filtered = pool.filter((a) => {
       if (query.mediaType && a.type !== query.mediaType) return false
       if (query.source && a.source !== query.source) return false
       if (query.folderId === null && a.folderId !== undefined) return false

@@ -65,7 +65,7 @@ export function useAssets() {
   const assets = ref<Asset[]>([])
   const total = ref(0)
   const page = ref(1)
-  const counts = ref<ImageCounts>({ all: 0, upload: 0, aiGenerate: 0, edit: 0, object: 0, video: 0 })
+  const counts = ref<ImageCounts>({ all: 0, upload: 0, aiGenerate: 0, edit: 0, object: 0, video: 0, builtin: 0 })
   const loading = ref(false)
 
   async function load(query: ImageListQuery = {}) {

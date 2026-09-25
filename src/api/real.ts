@@ -123,6 +123,8 @@ interface WireImage {
   // 20260904b_image_dimensions）；新上傳的檔案才有值。
   width: number | null
   height: number | null
+  // 內建素材投影成 ImageResponse 時才有值（background／object／model）；images 為 null
+  category?: Asset['category'] | null
 }
 interface WireImageListResponse {
   total: number
@@ -144,6 +146,7 @@ function toAsset(row: WireImage): Asset {
     referencedBy: row.isInUse ? 1 : 0,
     url: row.url,
     createdAt: row.createdAt,
+    category: row.category ?? undefined,
   }
 }
 
