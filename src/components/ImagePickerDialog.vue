@@ -10,7 +10,7 @@ Teleport(to="body")
           IconClose
       .picker__toolbar
         AppSearchbar.picker__search(v-model="keyword" :label="t('imagePicker.searchPlaceholder')" :placeholder="t('imagePicker.searchPlaceholder')")
-        .sources
+        .sources(v-if="mode !== 'object'")
           button.chip(v-for="s in sources" :key="s.label" :aria-pressed="activeSource === s.value" :class="{ 'isActive': activeSource === s.value }" @click="activeSource = s.value") {{ s.label }}
       .picker__grid
         button.pick(v-for="a in filtered" :key="a.id" :aria-pressed="selectedIds.includes(a.id)" :class="{ 'isSelected': selectedIds.includes(a.id) }" @click="toggle(a.id)")
@@ -41,11 +41,18 @@ import type { Asset } from '@/types/asset'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 import { useSessionStore } from '@/stores/session'
 
-const props = withDefaults(defineProps<{ title?: string; subtitle?: string; multiple?: boolean }>(), {
-  title: undefined,
-  subtitle: undefined,
-  multiple: false,
-})
+// mode：'asset'（預設）＝挑要編輯／當底圖的素材，維持既有過濾（不列內建，見 filtered 說明）；
+// 'object'＝編輯器「加入物件」挑圖，只列 GET /images?source=object（後端已含內建物件），
+// 且不過濾內建——物件圖層只拿 url 畫在畫布上、不把 id 送後端，內建素材在這裡選了不會 404。
+const props = withDefaults(
+  defineProps<{ title?: string; subtitle?: string; multiple?: boolean; mode?: 'asset' | 'object' }>(),
+  {
+    title: undefined,
+    subtitle: undefined,
+    multiple: false,
+    mode: 'asset',
+  },
+)
 const emit = defineEmits<{
   (e: 'select', asset: Asset): void
   (e: 'select-many', assets: Asset[]): void
@@ -90,7 +97,7 @@ const sourceLabel = (source: string) => t(`sources.${source}`)
 // 過濾掉不會讓使用者自己的圖變少（見 library-builtin-source design.md 決策 6）。
 const filtered = computed(() =>
   assets.value.filter((a) => {
-    if (a.source === 'builtin') return false
+    if (a.source === 'builtin' && props.mode !== 'object') return false
     const bySource = activeSource.value === 'all' || a.source === activeSource.value
     const byKeyword = !keyword.value || a.name.includes(keyword.value)
     return bySource && byKeyword
@@ -113,7 +120,7 @@ watch(open, (v) => {
     keyword.value = ''
     activeSource.value = 'all'
     brokenIds.value = new Set()
-    load({ pageSize: 100 })
+    load(props.mode === 'object' ? { pageSize: 100, source: 'object' } : { pageSize: 100 })
   }
 })
 

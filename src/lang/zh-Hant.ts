@@ -672,6 +672,8 @@ export default {
     },
     addObject: {
       title: '加入物件',
+      pickFromLibrary: '從圖庫選擇',
+      pickerSubtitle: '選到的圖會以物件圖層疊到畫布上，可拖曳、縮放',
       descriptionLabel: '物件描述',
       descriptionPlaceholder: '描述要生成的物件，例：一束粉色乾燥花，放在桌面左側…',
       presets: { bouquet: '花束', plant: '綠植', tableware: '杯盤', shadow: '陰影', card: '裝飾字卡' },

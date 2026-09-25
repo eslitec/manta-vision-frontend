@@ -738,6 +738,8 @@ export default {
     },
     addObject: {
       title: 'Add object',
+      pickFromLibrary: 'Choose from library',
+      pickerSubtitle: 'The selected image is added to the canvas as an object layer you can drag and resize',
       descriptionLabel: 'Object description',
       descriptionPlaceholder:
         'Describe the object to generate, e.g. a bunch of pink dried flowers on the left of the desk…',

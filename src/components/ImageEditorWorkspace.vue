@@ -172,14 +172,15 @@
             v-for="objectLayer in objectLayers"
             v-show="objectLayer.visible"
             :key="objectLayer.key"
-            :class="{ isSelected: tool !== 'crop' && selectedLayerKey === objectLayer.key, isDragging: objectLayer.dragging, isCropPreview: tool === 'crop' }"
+            :class="{ isSelected: tool !== 'crop' && selectedLayerKey === objectLayer.key, isDragging: objectLayer.dragging, isCropPreview: tool === 'crop', hasImage: Boolean(objectLayer.url) }"
             :style="objectLayerStyle(objectLayer)"
             :tabindex="tool === 'crop' ? -1 : 0"
             :aria-label="objectLayer.label"
             @pointerdown.stop="startObjectDrag($event, objectLayer)"
             @focus="selectLayer(objectLayer.key)"
           )
-            IconImagePlaceholder
+            img.objectObject__img(v-if="objectLayer.url" :src="objectLayer.url" :alt="objectLayer.label" draggable="false")
+            IconImagePlaceholder(v-else)
             template(v-if="tool !== 'crop' && selectedLayerKey === objectLayer.key")
               button.objectResizeHandle.objectResizeHandle--nw(type="button" :aria-label="t('editor.resizeObject')" @pointerdown.stop="startObjectResize($event, objectLayer, 'nw')" @keydown="handleObjectResizeKeydown($event, objectLayer)")
               button.objectResizeHandle.objectResizeHandle--ne(type="button" :aria-label="t('editor.resizeObject')" @pointerdown.stop="startObjectResize($event, objectLayer, 'ne')" @keydown="handleObjectResizeKeydown($event, objectLayer)")
@@ -293,6 +294,7 @@
         small.properties__settings {{ t('editor.textSettings') }}
       .objectGenerator(v-if="tool === 'object'")
         h3 {{ t('editor.addObject.title') }}
+        AppButton(variant="outline" @click="openObjectPicker") {{ t('editor.addObject.pickFromLibrary') }}
         textarea.objectGenerator__desc(
           v-model="objectDescription"
           maxlength="200"
@@ -339,7 +341,7 @@
           strong {{ p.name }}
           small(:class="{ warn: p.warn && ratio === 'custom', full: !p.warn }") {{ p.warn ? (ratio === 'custom' ? t('editor.croppedWarning') : t('editor.paddedNote')) : t('editor.fullyVisible') }}
       p.cropNote {{ t('editor.cropNote') }}
-  ImagePickerDialog(v-model:open="editorPickerOpen" :title="editorPickerTitle" :subtitle="t('editor.sourcePickerSubtitle')" @select="selectEditorAsset")
+  ImagePickerDialog(v-model:open="editorPickerOpen" :mode="editorPickerMode" :title="editorPickerTitle" :subtitle="editorPickerSubtitle" @select="selectEditorAsset")
   SaveAssetDialog(
     v-model:open="saveDialogOpen"
     :default-name="suggestedAssetName"
@@ -382,6 +384,7 @@ import {
 import { api } from '@/api'
 import { useFeedStore } from '@/stores/feed'
 import { isInsufficientFeed } from '@/utils/error'
+import { coverRect, layerRectInSource, percentPointInSource, percentRectInSource } from '@/utils/composite'
 import type { AppliedEditTool, EditorPricing, RetouchOptionKey } from '@/types/api'
 import type { Asset } from '@/types/asset'
 const props = defineProps<{ mode: string }>()
@@ -421,9 +424,16 @@ watch(tool, (value) => {
   if (value !== 'remove') toolError.value = ''
 })
 const editorPickerOpen = ref(false)
-// 「加入物件」對齊 Figma（1141:906）後改成 AI 生成流程，不再是從圖庫挑素材疊圖，
-// 所以這顆 picker 現在只服務「選擇要編輯的素材」一種用途。
-const editorPickerTitle = computed(() => t('editor.sourcePickerTitle'))
+// 同一顆 picker 服務兩種用途：'asset'＝選擇要編輯的底圖（換掉整張圖）；'object'＝從圖庫挑一張圖
+// 以物件圖層疊到畫布上（產品決策，推翻 d58051a「加入物件只走文字描述生成」）。物件模式列
+// source=object（含內建物件），選到的圖只用 url 畫在畫布上、不送後端，所以內建素材在這裡可選。
+const editorPickerMode = ref<'asset' | 'object'>('asset')
+const editorPickerTitle = computed(() =>
+  editorPickerMode.value === 'object' ? t('editor.objectPickerTitle') : t('editor.sourcePickerTitle'),
+)
+const editorPickerSubtitle = computed(() =>
+  editorPickerMode.value === 'object' ? t('editor.addObject.pickerSubtitle') : t('editor.sourcePickerSubtitle'),
+)
 // 尚未從圖庫選定素材時，名稱與網址都 SHALL 維持真的空字串，不能用示範資料頂替
 // （decision 1，fix-editor-empty-state-before-asset-selected）——畫面上是否顯示
 // 標題／圖層／工具列一律看這兩個 ref 是否有值，不是看它們「看起來像不像」有值。
@@ -434,7 +444,7 @@ const selectedAssetUrl = ref('')
 const selectedAssetId = ref('')
 // 原圖真尺寸：先用後端量好的 width／height（Asset.width／height）當初值，主畫布 <img> 載入後一律
 // 改用 naturalWidth／naturalHeight 覆蓋——瀏覽器的 naturalWidth 與 canvas 都套 EXIF 方向，後端
-// Pillow 量的是未轉正的檔頭尺寸，手機直拍的 JPEG 兩者寬高會互換；buildCroppedFile 用的是同一個
+// Pillow 量的是未轉正的檔頭尺寸，手機直拍的 JPEG 兩者寬高會互換；buildOutputFile 用的是同一個
 // 網址載入後的 natural 尺寸，顯示端跟著它才會等於實際輸出。兩者都沒有就是 null，
 // 畫布徽章／提示與側欄尺寸文字一律不顯示，不再拿 Figma 稿上寫死的尺寸頂替。
 const originalDimensions = ref<{ width: number; height: number } | null>(null)
@@ -451,6 +461,11 @@ const saveError = ref(false)
 const saveErrorMessage = ref('')
 const saveDialogOpen = ref(false)
 const openEditorPicker = () => {
+  editorPickerMode.value = 'asset'
+  editorPickerOpen.value = true
+}
+const openObjectPicker = () => {
+  editorPickerMode.value = 'object'
   editorPickerOpen.value = true
 }
 // 空狀態判斷（decision 5，fix-editor-empty-state-before-asset-selected）：
@@ -458,6 +473,10 @@ const openEditorPicker = () => {
 // selectedAssetUrl 宣告處的說明），沿用它，不重複定義語意相同的旗標。
 const hasSelectedAsset = computed(() => Boolean(selectedAssetUrl.value))
 const selectEditorAsset = (asset: Asset) => {
+  if (editorPickerMode.value === 'object') {
+    addObjectLayer(asset.name, asset.url ?? '')
+    return
+  }
   selectedAssetName.value = asset.name
   selectedAssetUrl.value = asset.url ?? ''
   selectedAssetId.value = asset.id
@@ -488,7 +507,7 @@ const openSaveDialog = () => {
   saveDialogOpen.value = true
 }
 
-type SaveAssetPayload = { name: string; folder: string; keepLayers: boolean; alsoDownload: boolean }
+type SaveAssetPayload = { name: string; folder: string; alsoDownload: boolean }
 
 // MOCK：目前編輯器沒有真實影像位元組，因此以 canvas 產生一張佔位 PNG 供實際下載；
 // 後端就緒後把這裡改成下載素材的真實 URL 即可。
@@ -518,56 +537,39 @@ function downloadEditedCopy(name: string) {
   }, 'image/png')
 }
 
-// 使用者反饋：裁切完「另存為新素材」，回圖庫選圖器（GET /images 打真後端）卻找不到
-// 剛存的那張。追下去發現 saveEdited() 呼叫的是 mock 版 editImage——realApi 沒有覆寫它，
-// 切到真後端模式時新素材只寫進瀏覽器本機的假資料，根本沒送到真後端，圖庫當然找不到。
-// 後端已經有對應的正式路徑（見 manta-vision-backend docs/api/v7.md §4 POST /upload）：
-// 帶 sourceImageId 時後端會標 source=edit、derivedFrom 指回原圖（非破壞性）。
-// 這裡先只補「裁切」這個工具：真的用 canvas 把目前的取景範圍畫成真正的圖檔，再打真的
-// 上傳 API。背景移除／加入物件／文字這三個工具還沒有真正的像素合成邏輯，暫時維持原本
-// saveEdited()（mock）的另存行為，留到之後再一起補上真後端。
+// 「另存為新素材」真的把畫布合成成圖檔、上傳到真後端（POST /upload 帶 sourceImageId → 後端標
+// source=edit、derivedFrom 指回原圖，非破壞；見 manta-vision-backend docs/api/v7.md §4）。之前只有
+// 裁切走真上傳、其他工具走 mock editImage；現在物件圖層有真圖（url）、文字圖層有字型／顏色／位置，
+// 三者都能合成，所以只要底圖有 url 就走真上傳。
 //
-// 取景範圍換算：畫布用 object-fit: cover 顯示原圖（4:3 置中裁切滿版），所以 cropRect 的
-// 百分比是相對「原圖被 cover 裁掉後、實際塞進 4:3 框的那塊範圍」，不是相對整張原圖——
-// 這裡先算出那塊 cover 範圍在原圖座標系裡的實際位置，使用者的裁切框才是這塊範圍裡的子區域。
-// buildCroppedFile（實際輸出）與 cropOutputDimensions（畫面顯示的尺寸）共用，兩邊數字才會一致。
+// 座標換算（純函式在 utils/composite.ts）：畫布用 object-fit: cover 顯示原圖（4:3 置中裁切滿版），
+// cropRect 與圖層的百分比都是相對「原圖被 cover 裁掉後實際顯示的那塊」，先算出那塊在原圖像素裡的
+// 位置（coverRect），再把百分比換進去。輸出範圍：裁切工具下＝裁切框（先裁再疊，框外的圖層自然被
+// 裁掉），其餘工具＝畫布顯示區（所見即所得）。buildOutputFile（實際輸出）與 cropOutputDimensions
+// （畫面顯示的尺寸）共用 cropSourceRect，兩邊數字才會一致。
 const ARTBOARD_ASPECT = 4 / 3
+// 圖庫選來的物件圖層在畫布上的寬度＝底圖顯示寬的 40%（scale = 1 時），畫面（objectLayerStyle）與合成共用。
+const OBJECT_LAYER_WIDTH_PERCENT = 40
+// 文字圖層在畫布上的字級（rem，見 textLayerStyle），合成時換算成原圖像素。
+const TEXT_LAYER_BASE_REM = 1.25
 function cropSourceRect(naturalWidth: number, naturalHeight: number) {
-  let coverX = 0
-  let coverY = 0
-  let coverWidth = naturalWidth
-  let coverHeight = naturalHeight
-  if (naturalWidth / naturalHeight > ARTBOARD_ASPECT) {
-    coverWidth = naturalHeight * ARTBOARD_ASPECT
-    coverX = (naturalWidth - coverWidth) / 2
-  } else {
-    coverHeight = naturalWidth / ARTBOARD_ASPECT
-    coverY = (naturalHeight - coverHeight) / 2
-  }
-  return {
-    x: coverX + (cropRect.x / 100) * coverWidth,
-    y: coverY + (cropRect.y / 100) * coverHeight,
-    width: (cropRect.width / 100) * coverWidth,
-    height: (cropRect.height / 100) * coverHeight,
-  }
+  return percentRectInSource(cropRect, coverRect({ width: naturalWidth, height: naturalHeight }, ARTBOARD_ASPECT))
 }
-async function buildCroppedFile(name: string): Promise<File> {
-  const sourceUrl = selectedAssetUrl.value
-  if (!sourceUrl) throw new Error('CROP_NO_SOURCE_IMAGE')
-  // 不能用 new Image() + crossOrigin 直接載原圖：畫布／選圖彈窗的 <img> 沒帶 crossorigin，已經用
-  // 不帶 Origin 的請求把原圖放進快取，而 R2 對這種請求不回 CORS 標頭也不回 Vary: Origin，
-  // 之後的 CORS 請求會重用那份快取而失敗（實測）。比照 utils/download.ts：跳過快取重抓成 Blob，
-  // 再用同源的 blob: 網址餵給 Image，canvas 就不會被污染。
-  let sourceBlob: Blob
+// 不能用 new Image() + crossOrigin 直接載圖：畫布／選圖彈窗的 <img> 沒帶 crossorigin，已經用
+// 不帶 Origin 的請求把圖放進快取，而 R2 對這種請求不回 CORS 標頭也不回 Vary: Origin，
+// 之後的 CORS 請求會重用那份快取而失敗（實測）。比照 utils/download.ts：跳過快取重抓成 Blob，
+// 再用同源的 blob: 網址餵給 Image，canvas 就不會被污染。底圖與物件圖層都走這條。
+async function loadImageForCanvas(url: string): Promise<HTMLImageElement> {
+  let blob: Blob
   try {
-    const response = await fetch(sourceUrl, { mode: 'cors', cache: 'reload' })
+    const response = await fetch(url, { mode: 'cors', cache: 'reload' })
     if (!response.ok) throw new Error('CROP_IMAGE_LOAD_FAILED')
-    sourceBlob = await response.blob()
+    blob = await response.blob()
   } catch {
     throw new Error('CROP_IMAGE_LOAD_FAILED')
   }
   const img = new Image()
-  const blobUrl = URL.createObjectURL(sourceBlob)
+  const blobUrl = URL.createObjectURL(blob)
   try {
     await new Promise<void>((resolve, reject) => {
       img.onload = () => resolve()
@@ -577,13 +579,64 @@ async function buildCroppedFile(name: string): Promise<File> {
   } finally {
     URL.revokeObjectURL(blobUrl)
   }
-  const { x: sx, y: sy, width: sWidth, height: sHeight } = cropSourceRect(img.naturalWidth, img.naturalHeight)
+  return img
+}
+// 字型策略：先請瀏覽器把該字型載進來（Google Fonts 走 display=swap 延遲載入，畫布上顯示過不代表
+// 已經載完），載不到就退回系統 sans-serif 並在 console 留紀錄——寧可字型不對，也不要整張存不下來。
+async function resolveCanvasFont(family: string, weight: number, sizePx: number): Promise<string> {
+  const spec = `${weight} ${sizePx}px ${family}`
+  try {
+    await document.fonts.load(spec)
+    if (document.fonts.check(spec)) return spec
+  } catch {
+    // 走下方 fallback
+  }
+  console.warn(`[editor] 字型「${family}」尚未載入，另存時改用系統字型`)
+  return `${weight} ${sizePx}px sans-serif`
+}
+async function buildOutputFile(name: string): Promise<File> {
+  const sourceUrl = selectedAssetUrl.value
+  if (!sourceUrl) throw new Error('CROP_NO_SOURCE_IMAGE')
+  const img = await loadImageForCanvas(sourceUrl)
+  const cover = coverRect({ width: img.naturalWidth, height: img.naturalHeight }, ARTBOARD_ASPECT)
+  const out = tool.value === 'crop' ? percentRectInSource(cropRect, cover) : cover
   const canvas = document.createElement('canvas')
-  canvas.width = Math.max(1, Math.round(sWidth))
-  canvas.height = Math.max(1, Math.round(sHeight))
+  canvas.width = Math.max(1, Math.round(out.width))
+  canvas.height = Math.max(1, Math.round(out.height))
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('canvas-context-unavailable')
-  ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height)
+  ctx.drawImage(img, out.x, out.y, out.width, out.height, 0, 0, canvas.width, canvas.height)
+  // 畫布上文字的字級是 rem（不隨畫布寬度縮放），換成原圖像素要拿「目前畫布顯示寬」當比例尺；
+  // offsetWidth 不受 zoom 的 transform: scale 影響，量到的就是未縮放的版面寬。
+  const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+  const artboardWidth = artboardRef.value?.offsetWidth || 520
+  const sourcePxPerArtboardPx = cover.width / artboardWidth
+  // layers[0] 在最上層（見 layerZIndex），所以從尾端往前畫；原圖已當底圖畫過、隱藏的圖層不畫。
+  for (const layer of [...layers].reverse()) {
+    if (!layer.visible || layer.type === 'original') continue
+    if (layer.type === 'object') {
+      const objectLayer = layer as ObjectEditorLayer
+      if (!objectLayer.url) continue // AI 生成（mock）的物件沒有真圖，畫不了
+      const objectImg = await loadImageForCanvas(objectLayer.url)
+      const rect = layerRectInSource(
+        objectLayer,
+        OBJECT_LAYER_WIDTH_PERCENT * objectLayer.scale,
+        objectImg.naturalWidth / objectImg.naturalHeight,
+        cover,
+      )
+      ctx.drawImage(objectImg, rect.x - out.x, rect.y - out.y, rect.width, rect.height)
+    } else {
+      const textLayer = layer as TextEditorLayer
+      const font = fontOptions.find((option) => option.id === textLayer.fontId) ?? fontOptions[0]
+      const sizePx = TEXT_LAYER_BASE_REM * textLayer.scale * rootPx * sourcePxPerArtboardPx
+      ctx.font = await resolveCanvasFont(font.family, font.weight, sizePx)
+      ctx.fillStyle = textLayer.color
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      const center = percentPointInSource(textLayer, cover)
+      ctx.fillText(textLayer.content, center.x - out.x, center.y - out.y)
+    }
+  }
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
   // canvas 被跨網域圖片「污染」時，toBlob 不一定會拋錯，很多瀏覽器只是靜靜回 null——
   // 這裡當作另一種「跨網域讀取被擋」來分類，跟上面 img.onerror 給使用者一樣的錯誤訊息。
@@ -614,15 +667,15 @@ const saveAsNewAsset = async (payload: SaveAssetPayload) => {
   saveError.value = false
   saveErrorMessage.value = ''
   try {
-    // 只有「裁切」工具、且目前載入的是圖庫裡的真實素材（有 url）時，才有真的像素可以裁切、
-    // 上傳到真後端；demo 素材沒有真實圖檔來源，或其他三個工具，維持原本 mock 的另存行為。
-    if (tool.value === 'crop' && selectedAssetUrl.value) {
-      const file = await buildCroppedFile(payload.name)
+    // 底圖是圖庫裡的真實素材（有 url）就把畫布（底圖＋物件圖層＋文字圖層；裁切工具下先裁）合成
+    // 一張 PNG 上傳到真後端；沒有真實圖檔來源的 demo 素材才維持原本 mock 的另存行為。
+    if (selectedAssetUrl.value) {
+      const file = await buildOutputFile(payload.name)
       const saved = await upload(file, payload.folder || undefined, selectedAssetId.value || undefined, payload.name)
       savedAssetId.value = saved.id
       if (payload.alsoDownload) downloadRealFile(file)
     } else {
-      const saved = await saveEdited(payload.name, { folder: payload.folder, keepLayers: payload.keepLayers })
+      const saved = await saveEdited(payload.name, { folder: payload.folder })
       savedAssetId.value = saved.id
       if (payload.alsoDownload) downloadEditedCopy(payload.name)
     }
@@ -839,6 +892,8 @@ type ObjectEditorLayer = EditorLayer & {
   y: number
   scale: number
   dragging: boolean
+  // 圖庫選來的圖；AI 生成（mock）沒有真圖時為空字串，畫布顯示佔位圖示、另存合成時略過
+  url: string
 }
 // 文字圖層是多實例架構（比照 ObjectEditorLayer）：內容／位置／字級／字型／顏色都是
 // 圖層自己的欄位，layers 陣列可以同時存在多筆，彼此獨立。
@@ -971,7 +1026,8 @@ const objectPresets = computed(() =>
 const applyObjectPreset = (label: string) => {
   objectDescription.value = objectDescription.value.trim() ? `${objectDescription.value}、${label}` : label
 }
-function addObjectLayer(description: string) {
+// 圖庫選來的圖（有 url）置中放；AI 生成（mock）沿用畫布上框選範圍的位置。
+function addObjectLayer(description: string, url = '') {
   const key = `object-${crypto.randomUUID()}`
   const layer: ObjectEditorLayer = {
     key,
@@ -979,10 +1035,11 @@ function addObjectLayer(description: string) {
     visible: true,
     locked: false,
     label: t('editor.objectLayerDynamic', { name: description }),
-    x: objectSelection.x,
-    y: objectSelection.y,
+    x: url ? 50 : objectSelection.x,
+    y: url ? 50 : objectSelection.y,
     scale: 1,
     dragging: false,
+    url,
   }
   layers.unshift(layer)
   selectedLayerKey.value = key
@@ -1143,7 +1200,7 @@ const startTextDrag = (event: PointerEvent, layer: TextEditorLayer) => {
 const objectLayerStyle = (layer: ObjectEditorLayer) => ({
   left: `${layer.x}%`,
   top: `${layer.y}%`,
-  width: `${24 * layer.scale}%`,
+  width: `${(layer.url ? OBJECT_LAYER_WIDTH_PERCENT : 24) * layer.scale}%`,
   zIndex: layerZIndex(layer.key),
 })
 const startObjectDrag = (event: PointerEvent, layer: ObjectEditorLayer) => {
@@ -1248,17 +1305,27 @@ const startTextResize = (event: PointerEvent, layer: TextEditorLayer, corner: Cr
   })
 }
 const cropRect = reactive({ x: 12.5, y: 0, width: 75, height: 100 })
-// 文字圖層改成多實例後，用字串化所有文字圖層目前欄位的 fingerprint 取代原本盯著
-// 五個全域 ref 的寫法，任何一筆文字圖層的內容／位置／字級／字型／顏色改變都要
-// 重新標記「有未儲存的變更」。
-const textLayersFingerprint = computed(() =>
-  textLayers.value
-    .map((layer) => `${layer.key}:${layer.content}:${layer.color}:${layer.scale}:${layer.fontId}:${layer.x}:${layer.y}`)
+// 另存會把所有圖層合成進去，所以任何圖層的內容／位置／縮放／顯示與否／順序改變都要重新標記
+// 「有未儲存的變更」，不只文字圖層；用字串化目前欄位的 fingerprint 取代逐欄位 watch。
+const layersFingerprint = computed(() =>
+  layers
+    .map((layer) => {
+      const base = `${layer.key}:${layer.visible}`
+      if (layer.type === 'text') {
+        const { content, color, scale, fontId, x, y } = layer as TextEditorLayer
+        return `${base}:${content}:${color}:${scale}:${fontId}:${x}:${y}`
+      }
+      if (layer.type === 'object') {
+        const { x, y, scale, url } = layer as ObjectEditorLayer
+        return `${base}:${x}:${y}:${scale}:${url}`
+      }
+      return base
+    })
     .join('|'),
 )
 watch(
   [
-    textLayersFingerprint,
+    layersFingerprint,
     tool,
     retouchInstruction,
     () => retouchOptions.value.map((option) => `${option.key}:${option.on}`).join('|'),
@@ -1284,7 +1351,7 @@ const cropFrameStyle = computed(() => ({
   height: `${cropRect.height}%`,
 }))
 // 畫面上的裁切尺寸（畫布徽章／提示／側欄「已裁切為 … （原圖 …）」）一律從所選素材的真尺寸
-// 換算，跟 buildCroppedFile 走同一套 cropSourceRect，顯示的數字就是實際另存出來的像素；
+// 換算，跟 buildOutputFile 走同一套 cropSourceRect，顯示的數字就是實際另存出來的像素；
 // 原圖尺寸還不知道（見 originalDimensions）時回 null，各處不顯示那行。
 const cropOutputDimensions = computed(() => {
   const orig = originalDimensions.value
@@ -1982,6 +2049,19 @@ const previews = computed(() =>
   &:focus-visible {
     outline: 2px solid #f2bb00;
     outline-offset: 2px;
+  }
+
+  // 圖庫選來的物件：高度跟著圖片等比，不再是佔位用的正方形灰底
+  &.hasImage {
+    aspect-ratio: auto;
+    background: transparent;
+  }
+
+  &__img {
+    display: block;
+    width: 100%;
+    height: auto;
+    pointer-events: none;
   }
 }
 .objectResizeHandle {
