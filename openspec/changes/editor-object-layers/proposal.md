@@ -6,7 +6,7 @@
 
 ## What Changes
 
-- 「加入物件」面板新增「從圖庫選擇」：開啟 `ImagePickerDialog` 的物件模式（列 `GET /images?source=object`，後端已含內建物件；內建在此模式可選，因為物件圖層只用 `url`、不把 id 送後端），選了就以 `addObjectLayer(name, url)` 建立物件圖層。物件圖層真的顯示 `<img>`：置中、寬度＝底圖顯示寬的 40%、等比，可拖曳、縮放、複製、刪除（沿用文字圖層的 composables 與圖層清單）。AI 生成物件按鈕維持 mock。
+- 「加入物件」面板新增「從圖庫選擇」：開啟 `ImagePickerDialog` 的物件模式（列 `GET /images?source=object`，後端已含內建物件；內建在此模式可選，因為物件圖層只用 `url`、不把 id 送後端），選了就以 `addObjectLayer(name, url)` 建立物件圖層。物件圖層真的顯示 `<img>`：置中、寬度＝底圖顯示寬的 40%、等比，可拖曳、縮放、複製（沿用文字圖層的 composables 與圖層清單）。AI 生成物件按鈕維持 mock。
 - 「另存為新素材」把裁切用的輸出函式擴成 `buildOutputFile`：畫布以原圖像素為準，底圖後依 z-index 依序畫物件圖層與文字圖層（相對位置與縮放換算成原圖像素；文字先 `document.fonts.load()` 等字型，載不到退回系統字並 `console.warn`），輸出 PNG 走既有 `upload(file, folderId, sourceImageId, imageName)`。只要底圖有真圖 `url`（任何工具）就走真上傳，沒有 `url` 才落 mock。裁切＋圖層並存時先裁再疊。
 - `SaveAssetDialog` 的「保留圖層」選項移除（真上傳沒有圖層概念；mock 路徑也不再需要）。
 - `ImagePickerDialog` 新增 `mode` prop（預設 `'asset'` 維持既有過濾內建；`'object'` 送 `source=object` 且不過濾內建、隱藏來源篩選列），其他呼叫端不變。
