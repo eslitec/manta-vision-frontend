@@ -4,6 +4,7 @@ import { api } from '@/api'
 import { clearAuth, setAuth } from '@/api/http'
 import { i18n } from '@/lang'
 import { useBrandStore } from './brand'
+import { useConsentStore } from './consent'
 import type { Bot, Session } from '@/types/api'
 
 const STORAGE_KEY = 'mv_session'
@@ -15,6 +16,7 @@ export const useSessionStore = defineStore('session', () => {
   const bots = ref<Bot[]>([])
   const namesLoaded = ref(false)
   const brand = useBrandStore()
+  const consent = useConsentStore()
 
   const isAuthenticated = computed(() => session.value !== null)
 
@@ -58,6 +60,7 @@ export const useSessionStore = defineStore('session', () => {
     bots.value = []
     namesLoaded.value = false
     brand.reset()
+    consent.reset() // 同意綁使用者：不清的話下一個帳號在同一分頁會沿用上一個人的同意狀態
     localStorage.removeItem(STORAGE_KEY)
     clearAuth()
 

@@ -508,6 +508,14 @@ describe('用量與指標', () => {
     expect((await api.getMetrics({ period: '30d' })).adoptionRate!).toBe(before)
   })
 
+  it('試穿結果的存入／下載不算採用（採用率只算 type=generate，同後端 metrics_calc）', async () => {
+    const r = await api.tryOn({ modelSource: 'material', modelRefId: 'm1', clothImageId: 'a1' })
+    const before = (await api.getMetrics({ period: '30d' })).adoptionRate!
+    await api.saveGenerated('試穿', r)
+    await api.recordAdoption(r)
+    expect((await api.getMetrics({ period: '30d' })).adoptionRate!).toBe(before)
+  })
+
   it('getMetrics 的成功率不超過 100%', async () => {
     const m = await api.getMetrics({ period: '30d' })
     expect(m.successRate).toBeLessThanOrEqual(100)

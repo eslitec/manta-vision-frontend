@@ -681,7 +681,8 @@ export const mockApi = {
     return { id, status, progress, cost: j.cost }
   },
 
-  // POST /tryon（同真後端：固定檔位 tryonStandard、回一張結果；結果圖用 picsum 依模特 id 取一張假圖）
+  // POST /tryon（同真後端：固定檔位 tryonStandard、回一張結果；結果圖用 picsum 依模特 id 取一張假圖）。
+  // 不登記進 imageGenerations：採用率只算 type='generate'（後端 metrics_calc），試穿的存入／下載不計
   async tryOn(req: TryOnReq): Promise<GeneratedImage> {
     deduct(priceOf('tryonStandard') ?? 0)
     db.totalGen += 1
@@ -689,7 +690,6 @@ export const mockApi = {
     db.successGen += 1
     await delay(1000)
     const generationId = uid('g')
-    db.imageGenerations.add(generationId)
     return { id: uid('r'), generationId, url: `https://picsum.photos/seed/${req.modelRefId}/400/500`, adopted: false }
   },
 

@@ -5,7 +5,7 @@ import { mockApi } from './mock'
 import { realApi } from './real'
 import { i18n } from '@/lang'
 import type { GenerateImageReq, GeneratePostReq, TryOnReq } from '@/types/api'
-import { API_ERROR_CODES, hasErrorCode } from './errors'
+import { API_ERROR_CODES, CLIENT_ERROR_CODES, hasErrorCode } from './errors'
 
 // 跟 http.spec.ts 一樣用假 adapter 取代網路，但這裡關心的是**上一層**：
 // 送出去的 URL 與 body 對不對、後端的回應有沒有被正確翻成 Session。
@@ -1229,6 +1229,14 @@ describe('POST /tryon 與肖像同意', () => {
     expect(calls[0].headers?.['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/)
     expect(calls[0].timeout).toBe(100000)
     expect(res).toEqual(GENERATED[0])
+  })
+
+  it('200 但 results[] 是空的：丟 UNEXPECTED_RESPONSE，不讓畫面拿到 undefined 當成功', async () => {
+    stubRoutes({ '/tryon': { data: { ...GEN_OK.data, results: [] } } })
+
+    const err = await realApi.tryOn(TRYON_REQ).catch((e: unknown) => e)
+
+    expect(hasErrorCode(err, CLIENT_ERROR_CODES.UNEXPECTED_RESPONSE)).toBe(true)
   })
 
   it('202 → 輪詢 GET /generations/{id} 到 done 才回，不會再送 /tryon', async () => {

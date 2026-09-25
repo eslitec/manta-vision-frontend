@@ -147,6 +147,39 @@ describe('consent store', () => {
     expect(giveConsent).toHaveBeenCalledTimes(1)
     expect(consent.consented).toBe(true)
   })
+
+  it('已同意時 give 不重打 PUT（從「查看條款」開視窗再按「我知道了」）', async () => {
+    getConsent.mockResolvedValue({ consented: true })
+    const consent = useConsentStore()
+    await consent.load()
+    await consent.give()
+    expect(giveConsent).not.toHaveBeenCalled()
+  })
+
+  it('並行的 load 共用同一發請求（掛載時與搶在回應前的上傳會同時呼叫），loaded 才為 true', async () => {
+    getConsent.mockResolvedValue({ consented: true })
+    const consent = useConsentStore()
+    expect(consent.loaded).toBe(false)
+    await Promise.all([consent.load(), consent.load()])
+    expect(getConsent).toHaveBeenCalledTimes(1)
+    expect(consent.loaded).toBe(true)
+  })
+
+  it('reset 之後才回來的舊回應不採用，之後重新載入', async () => {
+    let resolve!: (v: { consented: boolean }) => void
+    getConsent.mockReturnValueOnce(new Promise((r) => (resolve = r)))
+    const consent = useConsentStore()
+    const p = consent.load()
+    consent.reset()
+    resolve({ consented: true })
+    await p
+    expect(consent.consented).toBe(false)
+    expect(consent.loaded).toBe(false)
+    getConsent.mockResolvedValue({ consented: false })
+    await consent.load()
+    expect(getConsent).toHaveBeenCalledTimes(2)
+    expect(consent.loaded).toBe(true)
+  })
 })
 
 describe('models store', () => {
@@ -266,6 +299,20 @@ describe('session store', () => {
   })
 
   // 側欄／麵包屑／圖庫提示共用的機器人名稱：登入時各打一次 GET /bots 與 GET /brand
+  it('登出清掉肖像同意狀態：同意綁使用者，下一個帳號在同一分頁不能沿用', async () => {
+    login.mockResolvedValue(fakeSession())
+    logout.mockResolvedValue(undefined)
+    getConsent.mockResolvedValue({ consented: true })
+    const session = useSessionStore()
+    const consent = useConsentStore()
+    await session.login('mavis', 'mavis123')
+    await consent.load()
+    expect(consent.consented).toBe(true)
+    await session.logout()
+    expect(consent.consented).toBe(false)
+    expect(consent.loaded).toBe(false)
+  })
+
   describe('botName', () => {
     const ownBot = { botId: 'bot-123', botName: '我的機器人' }
 

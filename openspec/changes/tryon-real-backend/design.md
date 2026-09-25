@@ -35,7 +35,7 @@
 
 ### 同意：後端為真相，403 時本機狀態回退
 
-掛載時 `consentStore.load()`（`GET /users/me/consent`，`loaded` 後不重打）；視窗「我知道了」→ `PUT`。`POST /tryon` 回 403 `CONSENT_REQUIRED` 時把 `consented` 設回 `false` 並開視窗，不當成生成失敗——本機快取可能過期（換帳號、後端資料被改）。前端的同意檢查仍對兩種來源都做（沿用既有要求「生成前需完成肖像同意」），後端只對 `upload` 來源守門，內建模特多一道前端檢查無害。
+掛載時 `consentStore.load()`（`GET /users/me/consent`，`loaded` 後不重打；進行中的請求共用同一發，同 brand store）；視窗「我知道了」→ `PUT`（store 的 `give()` 在已同意時不重打——從「查看條款」開的視窗按「我知道了」不會覆寫後端 `updatedAt`；PUT 失敗視窗留著、錯誤顯示在視窗內 `p.err`）。頂部同意提示只在 `loaded && !consented` 顯示，上傳／生成前先 `await load()`，避免已同意的人在 GET 回來前被當成未同意（提示閃一下、選的檔案白選）；GET 失敗時 `loaded` 留 `false`，提示不顯示，動作時再問一次。同意綁使用者不綁機器人，session store `discard()` 一併 `consent.reset()`（`consented=false`、`loaded=false`、丟掉進行中的請求），否則同一分頁換帳號會沿用上一個人的同意狀態、`POST /upload` 又沒有同意閘門。`POST /tryon` 回 403 `CONSENT_REQUIRED` 時把 `consented` 設回 `false` 並開視窗，不當成生成失敗——本機快取可能過期（換帳號、後端資料被改）。前端的同意檢查仍對兩種來源都做（沿用既有要求「生成前需完成肖像同意」），後端只對 `upload` 來源守門，內建模特多一道前端檢查無害。
 
 視窗內容改顯示品牌設定的 `portraitConsent`（brand store `load()` 已在空值時補 i18n 預設文案；store 還沒載入前 computed 也 fallback 同一段），`white-space: pre-line` 保留換行；拿掉寫死的四條條款與「下載條款 PDF」。
 
@@ -47,7 +47,15 @@
 
 ### 價格與採用事件
 
-估價讀 `GET /ai-models?modelType=tryon` 的第一列 `costFeeds`（後端只回啟用的檔位），載入前顯示「…」且停用生成鈕（同圖生圖頁 `perImage === undefined`）。下載後送 `recordAdoption`：後端 `record_adoption_event` 不看生成類型，MV-07 的採用率才算得到試穿的下載。
+估價讀 `GET /ai-models?modelType=tryon` 的第一列 `costFeeds`（後端只回啟用的檔位），載入前顯示「…」且停用生成鈕（同圖生圖頁 `perImage === undefined`）；回空清單（試穿檔位全部停用，例如切換供應商期間）比照載入失敗顯示 `errors.loadFailed`，不讓按鈕無聲停用。下載後送 `recordAdoption`：後端 `record_adoption_event` 不看生成類型所以照收，但 MV-07 採用率（`metrics_calc`）分子分母都只算 `type='generate'`，這一發目前只記在結果列上、**不進採用率**（mock 的 `tryOn` 也不登記進 `imageGenerations`，兩邊一致）；留著是為了後端日後納入時前端不必改。
+
+### 服飾選擇不列模特照
+
+「選擇服飾素材」的 `ImagePickerDialog` 帶 `excludeSources=['tryonModel']`：後端 `resolve_reference_image` 對 `clothImageId` 只查屬不屬於本 bot，模特照選成服飾會扣 12 顆生出無意義的結果。用 prop 而不是改元件預設：其他頁（生成、影片、行銷、編輯器）挑底圖時模特照仍可選。
+
+### 「重新生成」用目前選取的模特與服飾
+
+與圖生圖頁 `regen()`「用當下的參考圖」一致：不快照上一次送出的組合，切分頁或改選就是換來源；選取不完整時按鈕本來就停用（`canGenerate`）。
 
 ## Risks / Trade-offs
 
