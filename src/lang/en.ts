@@ -791,6 +791,10 @@ export default {
       commandApplied: 'Completed from retouch instructions',
       commandAppliedDynamic: 'Prompt retouch completed · Additional: {items}',
       again: 'Retouch again ({count} feed)',
+      priceLoadFailed:
+        'Could not load the retouch price, so retouching is unavailable for now. Please refresh the page and try again.',
+      staleResult:
+        'The image was changed before the retouch finished: this result belongs to the earlier “{name}” and was not applied to the current image ({count} feed charged).',
       options: {
         removeObjects: { name: 'Remove objects', hint: 'Remove people, wires, and clutter' },
         repair: { name: 'Repair blemishes', hint: 'Remove scratches and spots' },

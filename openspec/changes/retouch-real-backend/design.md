@@ -20,11 +20,15 @@
 
 ### 單一價格讀 GET /ai-models?modelType=edit
 
-取 `modelKey === 'imageEdit'` 的 `costFeeds`；載入前預估顯示「…」、送出與重新修圖停用；清單裡沒有（被停用）或請求失敗時顯示 `errors.loadFailed`／後端訊息。拿掉各選項的加價標籤與 `EditorPricing` 的修圖欄位（背景移除仍用 `getEditorPricing().tools`）。實際扣點顯示後端回的 `costFeeds`。
+取 `modelKey === 'imageEdit'` 的 `costFeeds`；載入前預估顯示「…」、送出與重新修圖停用；清單裡沒有（被停用）或請求失敗時顯示固定說明 `editor.retouch.priceLoadFailed`（價格載入失敗、暫時無法修圖、請重新整理）。價格失敗記在獨立旗標 `retouchPriceFailed`，送出／下載的錯誤記在 `retouchError`，選素材與下載只清後者，價格說明不會被蓋掉。拿掉各選項的加價標籤與 `EditorPricing` 的修圖欄位（背景移除仍用 `getEditorPricing().tools`）。實際扣點顯示後端回的 `costFeeds`。
 
 ### 結果與等待狀態
 
 `RetouchResult` 繼承 `GeneratedImage`（`id/generationId/url/adopted`），可直接給 `saveGenerated`／`recordAdoption`／`downloadFile`。進度改不定進度（後端同步最長約 80 秒、202 後最長輪詢 11 分鐘，猜秒數沒有意義）；修圖中停用開始／重新修圖／下載／另存／從圖庫選擇（換素材會讓結果對不上原圖），離開確認同圖生圖頁（`onBeforeRouteLeave`＋`beforeunload`），另外 `LibraryView` 切回「素材庫」分頁會卸載編輯器，透過 `defineExpose({ retouching })` 先確認。
+
+「編輯圖片」與「AI 修圖」是同一個元件實例、共用所選素材，所以修圖中「編輯圖片」分頁的換底圖按鈕也停用。結果回來時若 `req.imageId` 已不是目前的素材（目前沒有入口做得到，防將來新增的入口），結果不寫進畫面，改顯示 `editor.retouch.staleResult`（說明結果屬於先前哪張圖、扣了幾顆）。不選「把原圖切回送出時那張」：那會改掉使用者剛在編輯分頁選的底圖，畫布上的圖層會跟著換底，比一句提示更容易誤會。
+
+錯誤訊息在修圖設定面板裡，手機版面板預設收起；`retouchError` 一有內容就展開面板並 `scrollIntoView({ block: 'nearest' })`，下載失敗、從結果區按「重新修圖」遇到 402 都看得到。
 
 ### 重新修圖＝上一次條件再送一次
 
@@ -32,12 +36,12 @@
 
 ### 另存與下載用真結果
 
-另存走 `saveGenerated(name, 結果, 資料夾)`；`ALREADY_SAVED` 當已存入（同圖生圖頁）；另存本身就算採用。下載走 `downloadFile(tempUrl)`，未採用過才送 `recordAdoption`（後端 `record_adoption_event` 不看生成類型；採用率只算 `type='generate'`，所以 edit 的事件只記錄不影響指標）。新結果出來時重設「已存入」狀態；改勾選或指令不再重設（「已存入」屬於結果，不屬於設定）。
+另存走 `saveGenerated(name, 結果, 資料夾)`；`ALREADY_SAVED` 當已存入（同圖生圖頁）；另存本身就算採用。下載走 `downloadFile(tempUrl)`，未採用過才送 `recordAdoption`（後端 `record_adoption_event` 不看生成類型；採用率只算 `type='generate'`，所以 edit 的事件只記錄不影響指標）。新結果出來時重設「已存入」狀態；改勾選或指令不再重設（「已存入」屬於結果，不屬於設定）。修圖結果的「已存入」用獨立的 `retouchSaved`，不共用編輯畫布的 `savedAssetId`：同一個元件實例服務兩個分頁，共用的話一邊存入會讓另一邊顯示「已存入」而無法另存（付費結果存不進圖庫）。
 
 ## Risks / Trade-offs
 
 - `upscale2x` 後端只是多一句提示詞，不真的放大；只改說明文字，選項名「放大 2 倍」維持設計稿。
-- 修圖中在「編輯圖片」分頁換底圖（同一個元件實例）會讓結果顯示在新原圖旁；修圖頁自己的「從圖庫選擇」已停用，跨分頁的情況不另外處理。
+- 內容被擋（`CONTENT_BLOCKED` 400）後前端照樣放掉冪等鍵，一字不改重送會再扣點。後端對它保留的是**佔位**不是回應快照（`app/idempotency.py:81`、`:389-392`；非 2xx 不寫快照），同 key 重送在佔位 300 秒內回 409 `IDEMPOTENCY_IN_PROGRESS`（`:284`、`:335-348`），不是同樣的 400；佔位過期後整支端點重跑、再扣一次。前端若沿用 key，`postPaid` 會把 409 當「還在跑」重送到 120 秒期限，使用者等兩分鐘後看到「前一次相同的請求還在處理中」，300 秒後照樣再扣——所以不改。要真正擋住，需要後端為 `CONTENT_BLOCKED` 存 400 快照（或前端在同一份內容被擋後停用原樣重送），另案處理。
 - `editor-object-layers` 未歸檔，其 delta 寫「AI 修圖頁另存維持 mock」；本 change 的同名 MODIFIED 以它的版本為底改寫，歸檔順序先它後本 change。
 
 ## Implementation Contract

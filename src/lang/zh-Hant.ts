@@ -730,6 +730,8 @@ export default {
       commandApplied: '已依修圖指令完成',
       commandAppliedDynamic: '已依指令修圖・額外套用：{items}',
       again: '重新修圖（{count} 顆）',
+      priceLoadFailed: '修圖價格載入失敗，暫時無法開始修圖。請重新整理頁面再試。',
+      staleResult: '修圖完成前已換成別張圖：這次結果屬於先前的「{name}」，沒有套用到目前這張（已扣 {count} 顆飼料）。',
       options: {
         removeObjects: { name: '去除雜物', hint: '移除路人、電線、雜物' },
         repair: { name: '修復瑕疵', hint: '去除刮痕、髒點' },

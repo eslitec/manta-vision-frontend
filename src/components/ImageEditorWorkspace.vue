@@ -46,7 +46,8 @@
           :placeholder="t('editor.retouch.placeholder')"
         )
         small.charCounter {{ retouchInstruction.length }} / 200
-      p.editorError(v-if="retouchError" role="alert") {{ retouchError }}
+      p.editorError(v-if="retouchPriceFailed" role="alert") {{ t('editor.retouch.priceLoadFailed') }}
+      p.editorError(v-if="retouchError" ref="retouchErrorEl" role="alert") {{ retouchError }}
       footer.panelAction
         span {{ t('common.estimatedCost') }} #[b {{ t('units.feed', { count: retouchPrice ?? '…' }) }}]
         AppButton(:disabled="!canStartRetouch || retouching" :loading="retouching" @click="startRetouch") {{ t('editor.retouch.start') }}
@@ -74,8 +75,8 @@
         span {{ t('editor.saveHint') }}
         AppButton(variant="outline" :disabled="retouching || retouchPrice === undefined" @click="retouchAgain") {{ t('editor.retouch.again', { count: retouchPrice ?? '…' }) }}
         AppButton(variant="outline" :disabled="retouching" @click="downloadRetouch") {{ t('common.download') }}
-        AppButton(:disabled="Boolean(savedAssetId) || retouching" @click="openSaveDialog") {{ savedAssetId ? t('common.saved') : t('editor.saveAsNew') }}
-        span.visuallyHidden(v-if="savedAssetId" role="status" aria-live="polite") {{ t('common.saved') }}
+        AppButton(:disabled="retouchSaved || retouching" @click="openSaveDialog") {{ retouchSaved ? t('common.saved') : t('editor.saveAsNew') }}
+        span.visuallyHidden(v-if="retouchSaved" role="status" aria-live="polite") {{ t('common.saved') }}
         span.visuallyHidden(v-if="saveError" role="alert") {{ t('editor.saveFailed') }}
 
   template(v-else)
@@ -99,7 +100,7 @@
         strong(v-if="hasSelectedAsset") #[IconImagePlaceholder] {{ selectedAssetName }}
         strong(v-else) {{ t('editor.emptyState.title') }}
         span(v-if="hasSelectedAsset") {{ t('editor.status', { status: tool === 'crop' ? t('editor.cropping') : t('editor.edited') }) }}
-        AppButton.canvasHead__libraryButton(variant="outline" @click="openEditorPicker") {{ tool === 'object' ? t('editor.replaceBaseImage') : t('common.selectFromLibrary') }}
+        AppButton.canvasHead__libraryButton(variant="outline" :disabled="retouching" @click="openEditorPicker") {{ tool === 'object' ? t('editor.replaceBaseImage') : t('common.selectFromLibrary') }}
         .canvasActions(v-if="hasSelectedAsset")
           button.canvasActions__zoom(type="button" :disabled="!canZoomOut" :aria-label="t('editor.zoomOut')" @click="zoomOut")
             IconBack
@@ -408,7 +409,9 @@ const topUpOpen = ref(false)
 const applyingTool = ref('')
 const toolError = ref('')
 const retouching = ref(false)
+// 修圖操作（送出、下載）的錯誤；價格載入失敗另外記在 retouchPriceFailed，換素材、下載時不會被清掉
 const retouchError = ref('')
+const retouchPriceFailed = ref(false)
 // AI 修圖單價：後端 /edit 固定用 imageEdit、每次一個價，勾幾項都一樣（GET /ai-models?modelType=edit）。
 // 載入前是 undefined：預估顯示「…」、開始修圖停用
 const retouchPrice = ref<number>()
@@ -424,9 +427,9 @@ onMounted(async () => {
     .listModels('edit')
     .then((models) => {
       retouchPrice.value = models.find((m) => m.modelKey === 'imageEdit')?.costFeeds
-      if (retouchPrice.value === undefined) retouchError.value = t('errors.loadFailed')
+      retouchPriceFailed.value = retouchPrice.value === undefined
     })
-    .catch((e: unknown) => (retouchError.value = displayMessage(e, t('errors.loadFailed'))))
+    .catch(() => (retouchPriceFailed.value = true))
   try {
     pricing.value = await api.getEditorPricing()
   } catch {
@@ -472,7 +475,10 @@ const onSourceImgLoad = (event: Event) => {
   if (naturalWidth && naturalHeight) originalDimensions.value = { width: naturalWidth, height: naturalHeight }
 }
 const savingAsset = ref(false)
+// 編輯畫布另存後的素材 id；修圖結果另存與否記在 retouchSaved（兩個分頁共用同一個元件，狀態不能混用）
 const savedAssetId = ref('')
+const retouchSaved = ref(false)
+const alreadySaved = () => (props.mode === 'retouch' ? retouchSaved.value : Boolean(savedAssetId.value))
 const saveError = ref(false)
 // 使用者反饋：另存失敗時畫面完全沒有反應——SaveAssetDialog 之前沒有任何顯示失敗原因的地方，
 // 只有一個 visuallyHidden 的 aria-live alert（螢幕報讀器聽得到，肉眼看不到）。這裡補一個
@@ -533,7 +539,7 @@ const suggestedAssetName = computed(() => {
   return `${selectedAssetName.value}_${t(`editor.saveDialog.suffixes.${suffixKey}`)}`
 })
 const openSaveDialog = () => {
-  if (savingAsset.value || savedAssetId.value) return
+  if (savingAsset.value || alreadySaved()) return
   saveError.value = false
   saveErrorMessage.value = ''
   loadFolders() // 讓「存放位置」下拉能列出使用者資料夾
@@ -712,25 +718,25 @@ function downloadRealFile(file: File) {
   URL.revokeObjectURL(url)
 }
 const saveAsNewAsset = async (payload: SaveAssetPayload) => {
-  if (savingAsset.value || savedAssetId.value) return
+  if (savingAsset.value || alreadySaved()) return
   savingAsset.value = true
   saveError.value = false
   saveErrorMessage.value = ''
   try {
     // AI 修圖頁存的是 /edit 的結果圖（不是畫布合成）：走 /generations/{id}/save，後端標 source=edit、
     // derivedFrom 指回原圖；存入本身就算採用。ALREADY_SAVED＝前一發其實存進去了、回應在路上丟了，當成已存入
-    // （ponytail: 這時拿不到素材 id，畫面只看 savedAssetId 有沒有值，同圖生圖頁）。
+    // （畫面只需要知道存過沒，所以用 retouchSaved 布林，不記素材 id）。
     // 其餘：底圖是圖庫裡的真實素材（有 url）就把畫布（底圖＋物件圖層＋文字圖層；裁切工具下先裁）合成
     // 一張 PNG 上傳到真後端；沒有真實圖檔來源的 demo 素材才維持原本 mock 的另存行為。
     if (props.mode === 'retouch') {
       const result = retouchResult.value
       if (!result) return
       try {
-        savedAssetId.value = (await saveGenerated(payload.name, result, payload.folder || undefined)).id
+        await saveGenerated(payload.name, result, payload.folder || undefined)
       } catch (err) {
         if (!hasErrorCode(err, API_ERROR_CODES.ALREADY_SAVED)) throw err
-        savedAssetId.value = 'unknown'
       }
+      retouchSaved.value = true
       result.adopted = true
       if (payload.alsoDownload) await downloadRetouch()
     } else if (selectedAssetUrl.value) {
@@ -815,6 +821,14 @@ const textLayerStyle = (layer: TextEditorLayer) => {
   }
 }
 const retouchSetupOpen = ref(false)
+// 手機版設定面板預設收起，錯誤訊息在面板裡：出錯就展開並捲到眼前，不然使用者看不到
+const retouchErrorEl = ref<HTMLElement | null>(null)
+watch(retouchError, async (message) => {
+  if (!message) return
+  retouchSetupOpen.value = true
+  await nextTick()
+  retouchErrorEl.value?.scrollIntoView({ block: 'nearest' })
+})
 const retouchMethod = ref<'quick' | 'command'>('quick')
 const retouchInstruction = ref('')
 // 對齊 Figma（1140:768 row_presets）：點選常用指令快速帶入文字，仍可自行編輯／接續輸入。
@@ -867,10 +881,18 @@ async function runRetouch(req: RetouchReq) {
   if (retouching.value) return
   retouching.value = true
   retouchError.value = ''
+  const sourceName = selectedAssetName.value
   try {
-    retouchResult.value = await api.retouchImage(req)
+    const result = await api.retouchImage(req)
+    // 修圖中兩個分頁的換圖按鈕都停用，照理不會發生；萬一換了圖，結果不能配到新圖上，
+    // 也不能默默丟掉（已扣點）——明講結果屬於哪張圖
+    if (req.imageId !== selectedAssetId.value) {
+      retouchError.value = t('editor.retouch.staleResult', { name: sourceName, count: result.cost })
+      return
+    }
+    retouchResult.value = result
     lastRetouchReq = req
-    savedAssetId.value = ''
+    retouchSaved.value = false
     retouchSetupOpen.value = false
   } catch (error) {
     retouchError.value = isInsufficientFeed(error)

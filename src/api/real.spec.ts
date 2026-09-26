@@ -1228,8 +1228,9 @@ describe('生成結果：存入圖庫／下載事件／靈感', () => {
 })
 
 describe('POST /edit（AI 修圖）', () => {
-  const EDIT_OK = { data: { ...GEN_OK.data, costFeeds: 8 } }
-  const EDIT_PROCESSING = { data: { ...PROCESSING.data, type: 'edit', costFeeds: 8 } }
+  // costFeeds 刻意不用 8（mock 的 imageEdit 單價）：寫死 8 的實作也會過，驗不到「扣點數取後端回的值」
+  const EDIT_OK = { data: { ...GEN_OK.data, costFeeds: 9 } }
+  const EDIT_PROCESSING = { data: { ...PROCESSING.data, type: 'edit', costFeeds: 11 } }
   const EDIT_DONE = { data: { ...EDIT_PROCESSING.data, status: 'done', results: [WIRE_RESULT] } }
   const formOf = (c: Recorded) => c.body as FormData
 
@@ -1257,7 +1258,7 @@ describe('POST /edit（AI 修圖）', () => {
       ...GENERATED[0],
       method: 'quick',
       options: ['removeObjects', 'repair', 'lighting', 'upscale'],
-      cost: 8,
+      cost: 9,
     })
   })
 
@@ -1282,7 +1283,7 @@ describe('POST /edit（AI 修圖）', () => {
 
     expect(calls.filter((c) => c.url === '/edit')).toHaveLength(1)
     expect(calls.filter((c) => c.url === '/generations/gen_1')).toHaveLength(2)
-    expect(res).toMatchObject({ ...GENERATED[0], cost: 8 })
+    expect(res).toMatchObject({ ...GENERATED[0], cost: 11 })
   })
 
   it('冪等鍵認的是修圖內容而不是 FormData：結果不確定後同一張圖同條件沿用 key，換一張圖是新 key', async () => {
