@@ -42,3 +42,7 @@
 - [x] 7.3 對齊 Requirement「編輯圖片的鍵盤快捷鍵」：文字圖層 `span` 加 `@focus="selectLayer"`（比照物件圖層），焦點與選取不再分家（原本選物件後 Tab 到文字按 Delete 會刪掉物件）
 - [x] 7.4 對齊 Requirement「編輯圖片的鍵盤快捷鍵」、依設計決策「快捷鍵守衛交給原生的情境」：macOS ⌃點按（`button 0`＋`ctrlKey`）不開指標閘門。探針實測 headless Chrome 的 ⌃按下只送 `pointerdown`＋`contextmenu`、沒有 `pointerup`；原生下拉選單按下時 Chrome 自己補發 `pointerup`，不必排除
 - [x] 7.5 驗證：mock 矩陣第 1–47 條全部 PASS（新增第 43–47 條對應 7.1–7.4）；新條目在修正前的 `c38cf4a` 非 git 複本上 5 條全部 FAIL；只拿掉 7.1 的 `blur` 時第 43、44 條 FAIL，`cp` 還原後 PASS；真後端子集第 1、3、10、24、36、43 條，以及第 20、36 條（`--disable-web-security`）PASS；`npx vitest run` 269 passed，兩個故意改壞檢查照舊變紅；`npx vue-tsc --noEmit`、`npm run lint`、`npx prettier --check` 皆 exit 0
+
+## 8. 第 3 輪審查修正
+
+- [x] 8.1 對齊 Requirement「編輯圖片提供上一步／下一步」：macOS ⌃點按（button 0＋ctrlKey）在畫布內一律於 window capture 的 pointerdown `stopPropagation` 並 return，畫布上 7 個拖曳起點都收不到，右鍵選單吞掉放開事件時不會留下跟著游標走的拖曳、也不會把每次移動記成一步。驗證：審查者探針 `probe_ctrl.cjs`（Mac UA、⌃按下後不放開再移動 20 次）改前物件被拖走、要按 20 次 ⌘Z 才回原位，改後物件不動、1 次 ⌘Z 就退掉前一個真正的步驟；mock 矩陣 47/47 PASS；`vitest` 269 passed、`vue-tsc`／`lint` exit 0、prettier 通過

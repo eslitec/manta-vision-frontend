@@ -1550,6 +1550,12 @@ useEventListener(
   window,
   'pointerdown',
   (event: PointerEvent) => {
+    // macOS ⌃點按＝右鍵：放開事件會被右鍵選單吞掉，畫布上的拖曳會卡著跟游標走、每次移動記成一步。
+    // 在這裡攔下，畫布上 7 個拖曳起點（圖層、把手、框選範圍、裁切框）都收不到，不必各自判斷
+    if (isMac && event.ctrlKey && event.button === 0 && artboardRef.value?.contains(event.target as Node)) {
+      event.stopPropagation()
+      return
+    }
     // 編輯文字時按到畫布上別的東西：對方的 pointerdown 會 preventDefault，焦點不會離開文字框，
     // 文字會停在編輯狀態、之後的拖曳被併進文字那一步 → 先結束編輯並記成獨立一步。
     const editingKey = editingTextKey.value
