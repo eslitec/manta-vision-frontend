@@ -248,11 +248,12 @@ describe('圖生影非同步任務', () => {
 })
 
 describe('素材（圖庫）', () => {
-  it('uploadImage 以 File 建立「上傳」來源並置頂', async () => {
+  it('uploadImage 以 File 建立「上傳」來源並置頂，並像真後端一樣帶可顯示的 url', async () => {
     const file = new File(['x'], '新圖.png', { type: 'image/png' })
     const a = await api.uploadImage(file)
     expect(a.source).toBe('upload')
     expect(a.name).toBe('新圖.png')
+    expect(a.url).toMatch(/^blob:/) // 選圖彈窗上傳後要能直接當編輯器底圖（picker-direct-upload 決策 6）
     expect((await api.listImages()).items[0].id).toBe(a.id)
   })
 

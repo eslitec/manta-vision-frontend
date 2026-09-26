@@ -130,6 +130,9 @@ export default {
     selectedCount: '已選 {count} 項',
     addSelected: '加入所選（{count}）',
     selectOne: '選擇這張',
+    upload: '上傳圖片',
+    uploading: '上傳中…',
+    uploadLabel: '上傳圖片（jpg／png／webp，10MB 以內），也可以把檔案拖放到這裡',
   },
   taskCenter: {
     title: '生成任務',

@@ -127,6 +127,9 @@ export default {
     selectedCount: '{count} selected',
     addSelected: 'Add selected ({count})',
     selectOne: 'Select this image',
+    upload: 'Upload image',
+    uploading: 'Uploading…',
+    uploadLabel: 'Upload an image (jpg, png, or webp, up to 10MB), or drop a file here',
   },
   taskCenter: {
     title: 'Generation tasks',

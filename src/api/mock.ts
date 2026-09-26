@@ -262,7 +262,8 @@ const FEED_TOPUP_AMOUNTS: Record<string, number> = {
 // 圖庫／資料夾常數，對齊後端 app/services/images.py、app/services/folders.py
 const MAX_UPLOAD_MB = 10
 const MAX_FOLDERS_PER_BOT = 200
-const SUPPORTED_UPLOAD_FORMATS = ['jpg', 'jpeg', 'png', 'webp']
+// 選圖彈窗的檔案選擇 accept 也用這一份（picker-direct-upload design.md 決策 5）
+export const SUPPORTED_UPLOAD_FORMATS = ['jpg', 'jpeg', 'png', 'webp']
 
 // 內建素材（GET /materials；不分機器人，全平台共用）
 // model 類別：真後端目前仍是空的（見 proposal.md Non-Goals），這裡先補上 mock 資料
@@ -492,9 +493,9 @@ export const mockApi = {
 
   // POST /upload（上傳；落到指定資料夾，未指定則進「未分類」）
   // sourceImageId：編輯器「另存為新素材」帶原圖 id 時才有值——跟真後端一樣，來源改標
-  // source=edit，且用 object URL 讓假資料模式下縮圖也看得到真的裁切結果，不是永遠佔位圖示；
-  // 一般上傳（不帶 sourceImageId）維持原本行為不變。source：同真後端，'tryonModel' 標成模特照、
-  // 有 sourceImageId 時被 edit 蓋過。
+  // source=edit。一律用 object URL 當 url（真後端一律回網址）：假資料模式下縮圖看得到真的圖，
+  // 選圖彈窗裡剛上傳的圖也能直接當編輯器底圖／物件（picker-direct-upload design.md 決策 6）。
+  // source：同真後端，'tryonModel'／'object' 照標，有 sourceImageId 時被 edit 蓋過。
   async uploadImage(
     file: File,
     folderId?: string,
@@ -516,7 +517,7 @@ export const mockApi = {
       height: 768,
       type: 'image',
       folderId,
-      ...(sourceImageId ? { url: URL.createObjectURL(file) } : {}),
+      url: URL.createObjectURL(file),
     }
     db.assets.unshift(a)
     return a
