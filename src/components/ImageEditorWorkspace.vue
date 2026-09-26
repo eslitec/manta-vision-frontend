@@ -809,11 +809,13 @@ const textLayerStyle = (layer: TextEditorLayer) => {
 const retouchSetupOpen = ref(false)
 // 手機版設定面板預設收起，錯誤訊息在面板裡：出錯就展開並捲到眼前，不然使用者看不到
 const retouchErrorEl = ref<HTMLElement | null>(null)
-watch(retouchError, async (message) => {
-  if (!message) return
+async function revealRetouchError() {
   retouchSetupOpen.value = true
   await nextTick()
   retouchErrorEl.value?.scrollIntoView({ block: 'nearest' })
+}
+watch(retouchError, (message) => {
+  if (message) revealRetouchError()
 })
 const retouchMethod = ref<'quick' | 'command'>('quick')
 const retouchInstruction = ref('')
@@ -841,9 +843,11 @@ const retouchSelections: Record<'quick' | 'command', string[]> = {
 }
 watch(
   () => props.mode,
-  () => {
+  (mode) => {
     tool.value = 'remove'
     retouchSetupOpen.value = false
+    // 修圖等待中切到別的分頁、錯誤在那時回來（402、內容被擋已扣點）：切回來仍要看得到
+    if (mode === 'retouch' && retouchError.value) revealRetouchError()
   },
 )
 // 修圖結果＝POST /edit 的 results[0]（tempUrl 只暫存 24 小時）；換素材就清掉
