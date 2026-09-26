@@ -1,7 +1,18 @@
 <template lang="pug">
 Teleport(to="body")
   .picker(v-if="open" @click.self="close")
-    .picker__modal(ref="dialogRef" role="dialog" aria-modal="true" :aria-labelledby="titleId" :aria-describedby="descriptionId" tabindex="-1")
+    //- 拖放掛在整個彈窗（涵蓋格線）：檔案放偏一點也會上傳，不會讓瀏覽器直接開啟那個檔案
+    .picker__modal(
+      ref="dialogRef"
+      role="dialog"
+      aria-modal="true"
+      :aria-labelledby="titleId"
+      :aria-describedby="descriptionId"
+      tabindex="-1"
+      @dragover.prevent="dragging = true"
+      @dragleave="dragging = false"
+      @drop.prevent="onDrop"
+    )
       header.picker__head
         div
           .picker__title(:id="titleId") {{ resolvedTitle }}
@@ -12,7 +23,22 @@ Teleport(to="body")
         AppSearchbar.picker__search(v-model="keyword" :label="t('imagePicker.searchPlaceholder')" :placeholder="t('imagePicker.searchPlaceholder')")
         .sources(v-if="mode !== 'object'")
           button.chip(v-for="s in sources" :key="s.label" :aria-pressed="activeSource === s.value" :class="{ 'isActive': activeSource === s.value }" @click="activeSource = s.value") {{ s.label }}
+      p.picker__error(v-if="uploadError" role="alert") {{ uploadError }}
+      input(ref="fileInput" type="file" :accept="uploadAccept" hidden @change="onFileChange")
       .picker__grid
+        //- 格線第一格固定是上傳卡片；上傳中用 aria-disabled 不用 disabled，免得已聚焦的按鈕失焦、焦點掉出彈窗
+        button.pick.pick--upload(
+          type="button"
+          :class="{ isDragging: dragging }"
+          :aria-label="t('imagePicker.uploadLabel')"
+          :aria-busy="uploading"
+          :aria-disabled="uploadBlocked"
+          @click="openFilePicker"
+        )
+          .pick__thumb
+            IconLoader.pick__spinner(v-if="uploading")
+            IconAddObject(v-else)
+            span.pick__uploadText {{ uploading ? t('imagePicker.uploading') : t('imagePicker.upload') }}
         button.pick(v-for="a in filtered" :key="a.id" :aria-pressed="selectedIds.includes(a.id)" :class="{ 'isSelected': selectedIds.includes(a.id) }" @click="toggle(a.id)")
           .pick__thumb
             span.pick__check(:class="{ isOn: selectedIds.includes(a.id) }" aria-hidden="true")
@@ -27,19 +53,21 @@ Teleport(to="body")
         span.picker__count {{ t('imagePicker.selectedCount', { count }) }}
         .picker__actions
           AppButton(variant="outline" @click="close") {{ t('common.cancel') }}
-          AppButton(variant="primary" :disabled="!count" @click="confirm") {{ multiple ? t('imagePicker.addSelected', { count }) : t('imagePicker.selectOne') }}
+          AppButton(variant="primary" :disabled="!count || uploading" @click="confirm") {{ multiple ? t('imagePicker.addSelected', { count }) : t('imagePicker.selectOne') }}
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAssets } from '@/composables/useAssets'
+import { SUPPORTED_UPLOAD_FORMATS } from '@/api/mock'
 import AppButton from '@/components/AppButton.vue'
 import AppSearchbar from '@/components/AppSearchbar.vue'
-import { IconCheck, IconClose, IconImagePlaceholder, IconMovie } from '@/components/icons'
+import { IconAddObject, IconCheck, IconClose, IconImagePlaceholder, IconLoader, IconMovie } from '@/components/icons'
 import type { Asset, AssetSource } from '@/types/asset'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 import { useSessionStore } from '@/stores/session'
+import { isListedInPicker, uploadErrorMessage } from '@/utils/imagePicker'
 
 // mode：'asset'（預設）＝挑要編輯／當底圖的素材，維持既有過濾（不列內建，見 filtered 說明）；
 // 'object'＝編輯器「加入物件」挑圖，只列 GET /images?source=object（後端已含內建物件），
@@ -70,7 +98,7 @@ const dialogRef = ref<HTMLElement | null>(null)
 const titleId = `image-picker-title-${crypto.randomUUID()}`
 const descriptionId = `image-picker-description-${crypto.randomUUID()}`
 
-const { assets, load } = useAssets()
+const { assets, load, loading, upload } = useAssets()
 const { t } = useI18n()
 const session = useSessionStore()
 
@@ -99,19 +127,17 @@ const sourceLabel = (source: string) => t(`sources.${source}`)
 // （pageSize 帶到後端上限 100），資料量不大，本地篩選比每次點 pill／打字都重打一次後端划算；
 // 真的超過 100 筆時目前沒有翻頁 UI，會看不到後面的素材——量體大到那個程度前，這裡先不做分頁。
 //
-// 內建素材（source='builtin'）一律不列：後端 GET /images 不帶 source 時會把它們合併進來，
+// 內建素材（source='builtin'）除物件模式外一律不列：後端 GET /images 不帶 source 時會把它們合併進來，
 // 但生成／編輯／試穿的底圖、參考圖、商品圖端點只查 images 表，選了 materialId 會 404。
 // 後端沒有「排除內建」的參數，所以在前端過濾；內建素材 createdAt 最舊、排在這一頁的尾端，
-// 過濾掉不會讓使用者自己的圖變少（見 library-builtin-source design.md 決策 6）。
-const filtered = computed(() =>
-  assets.value.filter((a) => {
-    if (a.source === 'builtin' && props.mode !== 'object') return false
-    if (props.excludeSources.includes(a.source)) return false
-    const bySource = activeSource.value === 'all' || a.source === activeSource.value
-    const byKeyword = !keyword.value || a.name.includes(keyword.value)
-    return bySource && byKeyword
-  }),
-)
+// 過濾掉不會讓使用者自己的圖變少（見 library-builtin-source design.md 決策 6）。規則在 isListedInPicker。
+const filterState = computed(() => ({
+  mode: props.mode,
+  excludeSources: props.excludeSources,
+  source: activeSource.value,
+  keyword: keyword.value,
+}))
+const filtered = computed(() => assets.value.filter((a) => isListedInPicker(a, filterState.value)))
 
 function toggle(id: string) {
   if (props.multiple) {
@@ -123,12 +149,62 @@ function toggle(id: string) {
   }
 }
 
+// ── 直接上傳（picker-direct-upload）：六個使用處共用這一份，各 view 不必改 ──
+// 大小／格式交給 API 層（mock 與真後端）判斷，這裡的 accept 只是檔案選擇視窗的預設過濾
+const uploadAccept = SUPPORTED_UPLOAD_FORMATS.map((ext) => `.${ext}`).join(',')
+const fileInput = ref<HTMLInputElement | null>(null)
+const uploading = ref(false)
+const uploadError = ref('')
+const dragging = ref(false)
+// 清單還在 load() 時也不收：GET /images 晚一步回來會把剛插入的新圖蓋掉
+const uploadBlocked = computed(() => uploading.value || loading.value)
+
+function openFilePicker() {
+  if (!uploadBlocked.value) fileInput.value?.click()
+}
+function onFileChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // 清空，同一個檔案失敗後再選一次也會觸發 change
+  if (file) uploadFile(file)
+}
+// ponytail: 拖放與檔案選擇都只取第一個檔案——六個使用處都是單選；要多檔再改成逐一上傳
+function onDrop(e: DragEvent) {
+  dragging.value = false
+  const file = e.dataTransfer?.files[0]
+  if (file) uploadFile(file)
+}
+async function uploadFile(file: File) {
+  if (uploadBlocked.value) return
+  uploading.value = true
+  uploadError.value = ''
+  try {
+    // 物件模式的清單是 GET /images?source=object，新圖要標 object 下次才列得到；其他模式是一般上傳
+    const asset = await upload(file, undefined, undefined, undefined, props.mode === 'object' ? 'object' : undefined)
+    // 本地插到最上方，不重打 GET /images：回應就是完整的素材，後端也是 createdAt 倒序
+    assets.value.unshift(asset)
+    // 目前的篩選／搜尋會藏住新圖才切回全部並清空搜尋；看得見就不動使用者的篩選
+    if (!isListedInPicker(asset, filterState.value)) {
+      activeSource.value = 'all'
+      keyword.value = ''
+    }
+    // 沿用 toggle 的選取語意：單選取代、多選加入
+    selectedIds.value = props.multiple ? [...selectedIds.value, asset.id] : [asset.id]
+  } catch (e) {
+    uploadError.value = uploadErrorMessage(e, t)
+  } finally {
+    uploading.value = false
+  }
+}
+
 watch(open, (v) => {
   if (v) {
     selectedIds.value = []
     keyword.value = ''
     activeSource.value = 'all'
     brokenIds.value = new Set()
+    uploadError.value = ''
+    dragging.value = false
     load(props.mode === 'object' ? { pageSize: 100, source: 'object' } : { pageSize: 100 })
   }
 })
@@ -310,6 +386,48 @@ const confirm = () => {
   line-height: 1.25rem;
   background: #f6eac1;
   color: $dark-blue-gray;
+}
+// 上傳失敗訊息（role="alert"）
+.picker__error {
+  font-size: 0.8125rem;
+  line-height: 1.54;
+  color: $danger;
+}
+// 上傳卡片：沿用 .pick__thumb 的尺寸與底色，改成虛線框＋加號＋文字
+.pick--upload {
+  cursor: pointer;
+
+  .pick__thumb {
+    flex-direction: column;
+    gap: 0.375rem;
+    border: 2px dashed $gray-100;
+    color: #606692;
+
+    svg {
+      width: 1.375rem;
+      height: 1.375rem;
+    }
+  }
+  &:hover .pick__thumb,
+  &.isDragging .pick__thumb {
+    border-color: $blue-dark-500;
+    color: $blue-dark-500;
+  }
+  &[aria-disabled='true'] {
+    cursor: progress;
+  }
+}
+.pick__uploadText {
+  font-size: 0.8125rem;
+  line-height: 1.54;
+}
+.pick__spinner {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .picker__foot {
   @include flex(space-between, center);
