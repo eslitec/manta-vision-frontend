@@ -29,6 +29,9 @@ import type {
   Inspiration,
   Metrics,
   PeriodParams,
+  RetouchOptionKey,
+  RetouchReq,
+  RetouchResult,
   Session,
   TryOnReq,
   UsageQuery,
@@ -447,6 +450,7 @@ interface WireOutput {
   results?: WireResult[]
   caption?: string | null
   hashtags?: string[] | null
+  costFeeds?: number
 }
 interface WirePending {
   generationId: string
@@ -494,9 +498,9 @@ const openKeys = new Map<string, string>()
  * 重送沿用同一把 key 與**同一個 body 物件**——後端比對 body 的 bytes，物件換了就會被當成新請求再扣一次點。
  * 只重送「不確定有沒有送到」的錯誤（isTransient，最多 PAID_MAX_ATTEMPTS 次），以及同 key 還在跑的 409
  * （重送到 PAID_IN_PROGRESS_MS 期限）；其他錯誤（402、400、CONTENT_BLOCKED、後端的 5xx…）直接往上丟。
+ * op：辨識「同一份輸入」的字串。FormData 經 JSON.stringify 一律是 "{}"，multipart 端點要自己給。
  */
-async function postPaid<T>(url: string, body: object) {
-  const op = url + JSON.stringify(body)
+async function postPaid<T>(url: string, body: object, op = url + JSON.stringify(body)) {
   const key = openKeys.get(op) ?? crypto.randomUUID()
   openKeys.set(op, key)
   let deadline = Date.now() + PAID_IN_PROGRESS_MS
@@ -545,8 +549,8 @@ async function pollGeneration(generationId: string, pollAfterMs = 5000): Promise
 }
 
 /** 送出付費生成：200 直接回，202 改走輪詢。輪詢放在 postPaid 的重送迴圈外面，輪詢失敗不會重送 POST。 */
-async function runGeneration(url: string, body: object): Promise<WireOutput> {
-  const res = await postPaid<WireOutput | WirePending>(url, body)
+async function runGeneration(url: string, body: object, op?: string): Promise<WireOutput> {
+  const res = await postPaid<WireOutput | WirePending>(url, body, op)
   if (res.status !== 202) return res.data as WireOutput
   const pending = res.data as WirePending
   return pollGeneration(pending.generationId, pending.pollAfterMs)
@@ -554,6 +558,17 @@ async function runGeneration(url: string, body: object): Promise<WireOutput> {
 
 function toGeneratedImage(generationId: string, r: WireResult): GeneratedImage {
   return { id: r.resultId, generationId, url: r.tempUrl, adopted: false }
+}
+
+/** 單張結果的端點（/tryon、/edit）：後端 results[] 固定一張；沒有就是回應形狀不對，不能讓畫面拿到 undefined 當成功 */
+function firstImage(out: WireOutput): GeneratedImage {
+  const r = out.results?.[0]
+  if (!r)
+    throw new ApiError({
+      code: CLIENT_ERROR_CODES.UNEXPECTED_RESPONSE,
+      message: i18n.global.t('errors.generationFailed'),
+    })
+  return toGeneratedImage(out.generationId, r)
 }
 
 async function generateImages(req: GenerateImageReq): Promise<GeneratedImage[]> {
@@ -595,15 +610,28 @@ async function generatePost(req: GeneratePostReq): Promise<GeneratedPost> {
 // 契約：docs/api/v14.md #17。模型固定（後端取 modelType=tryon 且啟用的那一列）、無 prompt、無 useBrand。
 // 403 CONSENT_REQUIRED（upload 來源且未同意）與 404（模特／衣服不存在或非本 bot）都是 4xx，postPaid 不重送。
 async function tryOn(req: TryOnReq): Promise<GeneratedImage> {
-  const out = await runGeneration('/tryon', req)
-  const r = out.results?.[0]
-  // 後端 results[] 固定一張；沒有就是回應形狀不對，不能讓畫面拿到 undefined 當成功
-  if (!r)
-    throw new ApiError({
-      code: CLIENT_ERROR_CODES.UNEXPECTED_RESPONSE,
-      message: i18n.global.t('errors.generationFailed'),
-    })
-  return toGeneratedImage(out.generationId, r)
+  return firstImage(await runGeneration('/tryon', req))
+}
+
+// ── AI 修圖（POST /edit）：multipart，與 /generate 同一條付費管線（冪等鍵、100 秒逾時、202 輪詢）──
+// 契約以後端為準：app/schemas/edit.py。模型固定 imageEdit、每次一個單價，勾幾項都一樣；
+// options 用同一個 key 重複 append（逗號串／JSON 字串會 400）；mask 不送（目前模型不支援，帶了一律 400）。
+const RETOUCH_OPTION_WIRE: Record<RetouchOptionKey, string> = {
+  removeObjects: 'removeObject',
+  repair: 'fixFlaw',
+  lighting: 'lightFix',
+  upscale: 'upscale2x', // 後端只是多一句提示詞，不保證輸出尺寸
+}
+async function retouchImage(req: RetouchReq): Promise<RetouchResult> {
+  const prompt = req.instruction?.trim() || undefined
+  const options = req.options.map((key) => RETOUCH_OPTION_WIRE[key])
+  const form = new FormData()
+  form.append('imageId', req.imageId)
+  if (prompt) form.append('prompt', prompt)
+  options.forEach((option) => form.append('options', option))
+  const op = '/edit' + JSON.stringify({ imageId: req.imageId, prompt, options })
+  const out = await runGeneration('/edit', form, op)
+  return { ...firstImage(out), method: req.method, options: req.options, cost: out.costFeeds ?? 0 }
 }
 
 // ── 肖像同意（GET／PUT /users/me/consent；user-scoped，不看 X-Bot-Id）──
@@ -619,10 +647,12 @@ async function giveConsent(): Promise<void> {
 
 // ── 生成結果：存入圖庫、採用事件（不扣點，不帶 Idempotency-Key）──
 
-async function saveGenerated(name: string, from: GenerationRef): Promise<Asset> {
+// folderId：存放位置（修圖頁的另存對話框可選資料夾）；不帶＝未分類
+async function saveGenerated(name: string, from: GenerationRef, folderId?: string): Promise<Asset> {
   const { data } = await http.post<WireImage>(`/generations/${from.generationId}/save`, {
     resultId: from.id,
     imageName: name,
+    folderId: folderId || undefined,
   })
   return toAsset(data)
 }
@@ -660,6 +690,7 @@ export const realApi = {
   recordAdoption,
   listInspirations,
   tryOn,
+  retouchImage,
   getConsent,
   giveConsent,
   // 儲值明確停用：`...mockApi` 會把假儲值帶進來，按下去會把 mock 的假餘額寫進 feed store，

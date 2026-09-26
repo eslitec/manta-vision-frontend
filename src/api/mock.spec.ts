@@ -121,9 +121,7 @@ describe('計費與扣點', () => {
 describe('圖片編輯與 AI 修圖的扣款（MV-09 / MV-09b）', () => {
   it('價目表由後端提供，且回傳的是複本、改不到內部狀態', async () => {
     const pricing = await api.getEditorPricing()
-    expect(pricing.tools.remove).toBe(8)
-    expect(pricing.retouchOptions).toEqual({ removeObjects: 8, repair: 8, lighting: 0, upscale: 5 })
-    expect(pricing.commandBase).toBe(16)
+    expect(pricing).toEqual({ tools: { remove: 8, object: 0, fade: 0, text: 0, crop: 0 } })
     pricing.tools.remove = 999
     expect((await api.getEditorPricing()).tools.remove).toBe(8)
   })
@@ -140,29 +138,45 @@ describe('圖片編輯與 AI 修圖的扣款（MV-09 / MV-09b）', () => {
     }
   })
 
-  it('retouchImage 依價目表加總後扣款，成本不採信前端', async () => {
-    const before = (await api.getFeed()).balance
-    const res = await api.retouchImage({ method: 'quick', options: ['removeObjects', 'repair', 'lighting'] })
-    expect(res.cost).toBe(16) // 8 + 8 + 0
-    expect((await api.getFeed()).balance).toBe(before - 16)
-  })
-
-  it('指令式修圖含基本費，且只認光線校正與放大兩個加購項', async () => {
+  it('retouchImage 同真後端：一次扣 imageEdit 單價（勾幾項都一樣），回一張帶圖的結果', async () => {
+    const [edit] = await api.listModels('edit')
+    expect(edit).toMatchObject({ modelKey: 'imageEdit', costFeeds: 8 })
     const before = (await api.getFeed()).balance
     const res = await api.retouchImage({
-      method: 'command',
-      options: ['removeObjects', 'repair', 'upscale'],
-      instruction: '把背景換成純白',
+      imageId: 'img_1',
+      method: 'quick',
+      options: ['removeObjects', 'repair', 'lighting'],
     })
-    expect(res.options).toEqual(['upscale']) // 快速項目被濾掉
-    expect(res.cost).toBe(21) // 基本費 16 + 放大 5
-    expect((await api.getFeed()).balance).toBe(before - 21)
+    expect(res).toMatchObject({ method: 'quick', options: ['removeObjects', 'repair', 'lighting'], cost: 8 })
+    expect(res.url).toMatch(/^https:\/\//)
+    expect(res.generationId).toBeTruthy()
+    expect((await api.getFeed()).balance).toBe(before - 8)
   })
 
-  it('全部選免費項目時不扣款', async () => {
+  it('指令修圖同樣一個價', async () => {
     const before = (await api.getFeed()).balance
-    expect((await api.retouchImage({ method: 'quick', options: ['lighting'] })).cost).toBe(0)
+    const res = await api.retouchImage({
+      imageId: 'img_1',
+      method: 'command',
+      options: [],
+      instruction: '把背景換成純白',
+    })
+    expect(res.cost).toBe(8)
+    expect((await api.getFeed()).balance).toBe(before - 8)
+  })
+
+  it('指令與項目都空 → NOTHING_TO_DO，不扣款（同後端擋在扣點前）', async () => {
+    const before = (await api.getFeed()).balance
+    await expect(
+      api.retouchImage({ imageId: 'img_1', method: 'command', options: [], instruction: '  ' }),
+    ).rejects.toThrow('NOTHING_TO_DO')
     expect((await api.getFeed()).balance).toBe(before)
+  })
+
+  it('修圖結果存入圖庫標成編輯產物、放進所選資料夾', async () => {
+    const res = await api.retouchImage({ imageId: 'img_1', method: 'quick', options: ['repair'] })
+    const saved = await api.saveGenerated('修圖版', res, 'folder_1')
+    expect(saved).toMatchObject({ name: '修圖版', source: 'edit', folderId: 'folder_1' })
   })
 
   it('另存編輯產物不扣飼料，且不覆寫原素材', async () => {
@@ -187,7 +201,9 @@ describe('圖片編輯與 AI 修圖的扣款（MV-09 / MV-09b）', () => {
     }
     await api.generateImages(req)
     const left = (await api.getFeed()).balance
-    await expect(api.retouchImage({ method: 'command', options: ['upscale'] })).rejects.toThrow('INSUFFICIENT_FEEDS')
+    await expect(api.retouchImage({ imageId: 'img_1', method: 'quick', options: ['upscale'] })).rejects.toThrow(
+      'INSUFFICIENT_FEEDS',
+    )
     expect((await api.getFeed()).balance).toBe(left)
   })
 })

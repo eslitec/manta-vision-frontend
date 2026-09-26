@@ -110,8 +110,8 @@ export function useAssets() {
   }
 
   // 生成結果「存入圖庫」（選用）→ 落地成 AI 生成素材
-  async function saveGenerated(name: string, from: GenerationRef) {
-    return api.saveGenerated(name, from)
+  async function saveGenerated(name: string, from: GenerationRef, folderId?: string) {
+    return api.saveGenerated(name, from, folderId)
   }
 
   // 編輯器採非破壞式儲存：後端建立新的「編輯產物」，原素材不會被覆寫。
