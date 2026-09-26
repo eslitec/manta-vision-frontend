@@ -1063,7 +1063,7 @@ const objectPresets = computed(() =>
 const applyObjectPreset = (label: string) => {
   objectDescription.value = objectDescription.value.trim() ? `${objectDescription.value}、${label}` : label
 }
-// 圖庫選來的圖（有 url）以原始比例 aspect contain 進框選範圍、中心對齊框中心；AI 生成（mock）沿用框選範圍的位置。
+// 圖庫選來的圖（有 url）以原始比例 aspect contain 進框選範圍、中心對齊框中心；AI 生成（mock）的佔位維持原尺寸、中心對齊框中心。
 function addObjectLayer(description: string, url = '', aspect = 1) {
   const placed = url ? containLayerInBox(objectSelection, aspect, ARTBOARD_ASPECT) : null
   const key = `object-${crypto.randomUUID()}`
@@ -1073,8 +1073,8 @@ function addObjectLayer(description: string, url = '', aspect = 1) {
     visible: true,
     locked: false,
     label: t('editor.objectLayerDynamic', { name: description }),
-    x: placed ? placed.x : objectSelection.x,
-    y: placed ? placed.y : objectSelection.y,
+    x: placed ? placed.x : objectSelection.x + objectSelection.width / 2,
+    y: placed ? placed.y : objectSelection.y + objectSelection.height / 2,
     scale: placed ? placed.widthPercent / OBJECT_LAYER_WIDTH_PERCENT : 1,
     dragging: false,
     url,
@@ -1216,11 +1216,12 @@ const startObjectSelectionDrag = (event: PointerEvent) => {
     containerBounds: artboardBounds,
     elementBounds: selectionBounds,
     startEvent: event,
-    startX: objectSelection.x,
-    startY: objectSelection.y,
+    // usePercentDrag 以中心點夾在畫布內，框選範圍存的是左上角：進出時換算中心點。
+    startX: objectSelection.x + objectSelection.width / 2,
+    startY: objectSelection.y + objectSelection.height / 2,
     onDrag: (x, y) => {
-      objectSelection.x = x
-      objectSelection.y = y
+      objectSelection.x = x - objectSelection.width / 2
+      objectSelection.y = y - objectSelection.height / 2
     },
     onEnd: () => {
       objectSelectionDragging.value = false
@@ -1417,7 +1418,11 @@ const cropOutputDimensions = computed(() => {
   }
 })
 const canvasHint = computed(() => {
-  if (tool.value !== 'crop') return t('editor.selectionInstruction')
+  if (tool.value !== 'crop') {
+    const type = selectedLayer.value?.type
+    if (type === 'text') return t('editor.selectionInstruction')
+    return type === 'object' ? t('editor.selectionInstructionObject') : ''
+  }
   return cropOutputDimensions.value ? t('editor.cropInstructionDynamic', cropOutputDimensions.value) : ''
 })
 const applyCropRatio = (id: Exclude<CropRatioId, 'custom'>) => {

@@ -625,6 +625,7 @@ export default {
     resizeText: 'Resize text',
     resetCrop: 'Reset crop area',
     selectionInstruction: 'Selected: text layer · Drag to move · Resize from corners',
+    selectionInstructionObject: 'Selected: object layer · Drag to move · Resize from corners',
     nonDestructive: 'Editing does not alter the original. Saving creates a new library asset.',
     layers: 'Layers',
     duplicateLayer: 'Duplicate layer',
