@@ -116,7 +116,7 @@
 
 ### Requirement: 編輯圖片的鍵盤快捷鍵
 
-編輯圖片分頁 SHALL 支援：⌘Z／Ctrl+Z 上一步；⇧⌘Z、⌘Y、Ctrl+Y、Ctrl+Shift+Z 下一步；⌘C／⌘X／⌘V（Ctrl 亦同）複製、剪下、貼上圖層；⌘D／Ctrl+D 原地複製；Delete／Backspace 刪除圖層；方向鍵微調位置 1%、加按 Shift 10%。⌘ 與 Ctrl SHALL 皆可使用。焦點在文字輸入（文字類 input、textarea、select、contenteditable）時這些按鍵 SHALL 交給瀏覽器原生行為，SHALL NOT 觸發編輯器動作；焦點在勾選框、色盤或按鈕時快捷鍵 SHALL 作用。任何對話框開著時、AI 修圖頁與素材庫分頁、注音選字中 SHALL NOT 作用。裁切工具下 SHALL 只有上一步／下一步作用。字型選單或快捷鍵一覽開著時，方向鍵與 Delete／Backspace SHALL NOT 改動圖層。拖曳中按 ⌘Z SHALL 被吃掉且 SHALL NOT 觸發瀏覽器原生撤銷。⌘⇧C、⌘⇧D SHALL 保留給瀏覽器。
+編輯圖片分頁 SHALL 支援：⌘Z／Ctrl+Z 上一步；⇧⌘Z、⌘Y、Ctrl+Y、Ctrl+Shift+Z 下一步；⌘C／⌘X／⌘V（Ctrl 亦同）複製、剪下、貼上圖層；⌘D／Ctrl+D 原地複製；Delete／Backspace 刪除圖層；方向鍵微調位置 1%、加按 Shift 10%。⌘ 與 Ctrl SHALL 皆可使用。焦點在文字輸入（文字類 input、textarea、select、contenteditable）時這些按鍵 SHALL 交給瀏覽器原生行為，SHALL NOT 觸發編輯器動作；焦點在勾選框、色盤或按鈕時快捷鍵 SHALL 作用。任何對話框開著時、AI 修圖頁與素材庫分頁、注音選字中 SHALL NOT 作用。裁切工具下 SHALL 只有上一步／下一步作用。字型選單或快捷鍵一覽開著時，方向鍵與 Delete／Backspace SHALL NOT 改動圖層。拖曳中按 ⌘Z SHALL 被吃掉且 SHALL NOT 觸發瀏覽器原生撤銷。⌘⇧C、⌘⇧D SHALL 保留給瀏覽器。使用者在畫布上按下（點選或拖曳圖層、把手）後，焦點 SHALL 離開畫布以外的元素（屬性面板文字框、物件描述、面板按鈕），之後的快捷鍵 SHALL 作用在編輯器。選取可見的文字圖層且焦點不在任何控制項上時，按 Enter SHALL 進入該文字的編輯；文字圖層取得鍵盤焦點時 SHALL 成為選取的圖層。macOS 的 ⌃點按 SHALL NOT 讓之後的快捷鍵失效。
 
 #### Scenario: ⌘Z 與 Ctrl+Z 皆可上一步
 
@@ -205,6 +205,50 @@
 - **GIVEN** 屬性面板輸入「q」後點畫布空白處
 - **WHEN** 按住文字圖層拖到一半按 ⌘Z、繼續拖、放開、按 ⌘Z
 - **THEN** 拖曳中內容仍含「q」；最後文字回到拖曳前位置且內容仍含「q」
+
+#### Scenario: 屬性面板輸入後直接拖畫布文字，⌘Z 退回拖曳
+
+- **WHEN** 使用者在屬性面板文字框輸入後，不點空白處、直接在畫布拖曳同一個文字圖層，再按 ⌘Z
+- **THEN** 第一次 ⌘Z 文字回到拖曳前位置且保留剛才的輸入，第二次 ⌘Z 才撤銷輸入；之後點畫布上的文字再按方向鍵、⌘D、Backspace，作用在圖層而不是文字框
+
+##### Example: 輸入「!」後直接拖曳
+
+- **GIVEN** 文字圖層內容「輸入文字」，在屬性面板文字框輸入「!」
+- **WHEN** 直接拖曳畫布上的該文字，按 ⌘Z、⌘Z
+- **THEN** 第一次後位置回到拖曳前、內容「輸入文字!」；第二次後內容「輸入文字」
+
+#### Scenario: 點選文字後按 Enter 進入編輯
+
+- **WHEN** 使用者用滑鼠點選畫布上的文字圖層後按 Enter
+- **THEN** 該文字進入編輯；焦點原本在工具列按鈕上時，Enter SHALL NOT 按下那顆按鈕
+
+##### Example: 先按過放大鈕
+
+- **GIVEN** 按過一次「+」放大，縮放 90%
+- **WHEN** 點畫布上的文字、按 Enter
+- **THEN** 文字進入編輯，縮放仍為 90%
+
+#### Scenario: 文字取得焦點即被選取
+
+- **WHEN** 選取物件圖層後，把焦點移到文字圖層（Tab）並按 Delete
+- **THEN** 被刪除的是文字圖層，物件圖層仍在
+
+##### Example: 焦點移到文字後 Delete
+
+- **GIVEN** 一個物件圖層、一個文字圖層，物件圖層被選取
+- **WHEN** 焦點移到文字圖層、按 Delete
+- **THEN** 文字圖層 0 個、物件圖層 1 個
+
+#### Scenario: macOS ⌃點按後快捷鍵仍作用
+
+- **WHEN** macOS 使用者按住 Control 點畫布（叫出右鍵選單）後按 ⌘Z
+- **THEN** ⌘Z 照常上一步
+
+##### Example: ⌃點按後 ⌘Z
+
+- **GIVEN** 新增一個文字圖層
+- **WHEN** 按住 Control 按下畫布（放開事件被選單吞掉）、按 ⌘Z
+- **THEN** 文字圖層消失
 
 ### Requirement: 圖層可複製、剪下、貼上、原地複製與刪除
 

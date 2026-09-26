@@ -34,3 +34,11 @@
 - [x] 6.4 真後端子集（worktree 以 vite :5199 proxy 到 :8000，新註冊 `e2e_hist_0927_*` 帳號、`POST /upload` 上傳底圖）第 1、3、10、20、24、36 條 PASS；非 GET 請求只有 `POST /auth/login` 與第 20 條的 `POST /upload`，沒有任何扣飼料端點。偏離：R2 的 CORS 只允許 `http://localhost:5173`，從 :5199 另存會被擋（與本 change 無關的環境限制），第 20 條以 `--disable-web-security` 重跑 PASS
 - [x] 6.5 對齊 Requirement「編輯圖片提供上一步／下一步」（扣款紀錄不被上一步回滾）：依任務限制不點「背景移除」，此 Scenario 以程式碼確認（快照不含 `usedTools`，`applyHistoryEntry` 只寫 `layers`／`cropRect`／`ratio`／選取／字型選單／工具），未做瀏覽器實測
 - [ ] 6.6 PR 合併並確認畫面驗收無誤後執行 `spectra archive editor-history-shortcuts`
+
+## 7. 第 2 輪審查修正
+
+- [x] 7.1 對齊 Requirement「編輯圖片的鍵盤快捷鍵」、依設計決策「快捷鍵守衛交給原生的情境」：capture `pointerdown` 在按下位置位於畫布內、且不在目前焦點元素裡時 `blur()` 焦點元素。審查重現：屬性面板打字後直接拖畫布文字，⌘Z 退掉的是打的字而不是拖曳，⌘D 變成瀏覽器加書籤；物件描述 textarea 同樣會吃掉 ⌘C／⌘V／⌘Z
+- [x] 7.2 對齊 Requirement「編輯圖片的鍵盤快捷鍵」、依設計決策「快捷鍵守衛交給原生的情境」：全域處理器在焦點為 `body`、選取可見文字圖層時由 Enter 進入編輯（一覽列的「編輯選取的文字 Enter」原本只在 Tab 到文字上才有效）；焦點在按鈕上時不攔，Enter 仍是按下按鈕
+- [x] 7.3 對齊 Requirement「編輯圖片的鍵盤快捷鍵」：文字圖層 `span` 加 `@focus="selectLayer"`（比照物件圖層），焦點與選取不再分家（原本選物件後 Tab 到文字按 Delete 會刪掉物件）
+- [x] 7.4 對齊 Requirement「編輯圖片的鍵盤快捷鍵」、依設計決策「快捷鍵守衛交給原生的情境」：macOS ⌃點按（`button 0`＋`ctrlKey`）不開指標閘門。探針實測 headless Chrome 的 ⌃按下只送 `pointerdown`＋`contextmenu`、沒有 `pointerup`；原生下拉選單按下時 Chrome 自己補發 `pointerup`，不必排除
+- [x] 7.5 驗證：mock 矩陣第 1–47 條全部 PASS（新增第 43–47 條對應 7.1–7.4）；新條目在修正前的 `c38cf4a` 非 git 複本上 5 條全部 FAIL；只拿掉 7.1 的 `blur` 時第 43、44 條 FAIL，`cp` 還原後 PASS；真後端子集第 1、3、10、24、36、43 條，以及第 20、36 條（`--disable-web-security`）PASS；`npx vitest run` 269 passed，兩個故意改壞檢查照舊變紅；`npx vue-tsc --noEmit`、`npm run lint`、`npx prettier --check` 皆 exit 0
