@@ -5,7 +5,7 @@
     span.library__noteDot
     span {{ noteText }}
   .tabs(role="tablist" :aria-label="t('routeTitles.library')")
-    button.tabs__item(v-for="item in tabs" :key="item.value" role="tab" :aria-selected="activeTab === item.value" :class="{ 'isActive': activeTab === item.value }" @click="activeTab = item.value") {{ item.label }}
+    button.tabs__item(v-for="item in tabs" :key="item.value" role="tab" :aria-selected="activeTab === item.value" :class="{ 'isActive': activeTab === item.value }" @click="selectTab(item.value)") {{ item.label }}
   .library__body(v-if="activeTab === 'library'")
     button.mobileFolderToggle(
       type="button"
@@ -125,7 +125,7 @@
             button.pagination__page(v-else :aria-current="p === page ? 'page' : undefined" :aria-label="t('library.pageNumber', { page: p })" :class="{ 'isActive': p === page }" :disabled="showLoadingSkeleton || p === page" @click="page = p") {{ p }}
           button.pagination__nav(:aria-label="t('library.nextPage')" :disabled="showLoadingSkeleton || page === totalPages" @click="page = page + 1") ›
 
-  ImageEditorWorkspace(v-else :mode="activeTab")
+  ImageEditorWorkspace(v-else ref="workspace" :mode="activeTab")
 
   Teleport(to="body")
     .modal(v-if="moveDialogOpen" @click.self="moveDialogOpen = false")
@@ -354,6 +354,12 @@ const tabs = computed(() =>
   ['library', 'edit', 'retouch'].map((value) => ({ value, label: t(`library.tabs.${value}`) })),
 )
 const activeTab = ref('library')
+// 切回素材庫會卸載編輯器（v-if／v-else），修圖中的結果就拿不到了，後端照樣扣點——同換頁要先確認
+const workspace = ref<InstanceType<typeof ImageEditorWorkspace>>()
+function selectTab(value: string) {
+  if (value === 'library' && workspace.value?.retouching && !window.confirm(t('common.leaveWhileGenerating'))) return
+  activeTab.value = value
+}
 const sources = computed(() =>
   ['all', 'upload', 'aiGenerate', 'edit', 'builtin'].map((value) => ({ label: t(`sources.${value}`), value })),
 )

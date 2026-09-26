@@ -193,14 +193,10 @@ export type EditorToolKey = 'remove' | 'object' | 'fade' | 'text' | 'crop'
 export type RetouchOptionKey = 'removeObjects' | 'repair' | 'lighting' | 'upscale'
 export type RetouchMethod = 'quick' | 'command'
 
-/** 編輯器價目表。前端不得自行寫死金額，一律以這份為準 */
+/** 編輯畫布價目表。前端不得自行寫死金額，一律以這份為準（AI 修圖單價改讀 GET /ai-models?modelType=edit） */
 export interface EditorPricing {
   /** 編輯畫布各工具的單次成本；0 代表不扣飼料 */
   tools: Record<EditorToolKey, number>
-  /** AI 修圖各修飾項目的成本 */
-  retouchOptions: Record<RetouchOptionKey, number>
-  /** 指令式修圖的基本費 */
-  commandBase: number
 }
 
 /** 編輯畫布套用一次 AI 工具的結果（成本由後端算，不信任前端傳來的金額） */
@@ -209,17 +205,19 @@ export interface AppliedEditTool {
   cost: number
 }
 
+// POST /edit（multipart）：快速修飾只送 options、指令修圖只送 instruction（→ 後端 prompt），兩者至少一個
 export interface RetouchReq {
+  imageId: string // 要修的圖庫素材（後端只收本 bot 的 images，內建素材會 404）
   method: RetouchMethod
   options: RetouchOptionKey[]
   instruction?: string
 }
 
-export interface RetouchResult {
+/** 修圖結果＝results[0]（後端固定一張，tempUrl 只暫存 24 小時），可直接拿去存入圖庫／下載 */
+export interface RetouchResult extends GeneratedImage {
   method: RetouchMethod
-  /** 後端實際採用的項目（會濾掉與該修圖方式不相符的選項） */
   options: RetouchOptionKey[]
-  cost: number
+  cost: number // 後端實際扣的顆數（costFeeds）
 }
 
 export type AdoptionKind = 'download' | 'save'

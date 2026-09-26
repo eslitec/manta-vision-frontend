@@ -215,6 +215,7 @@ describe('尚未接上的方法', () => {
     expect(realApi.recordAdoption).not.toBe(mockApi.recordAdoption)
     expect(realApi.listInspirations).not.toBe(mockApi.listInspirations)
     expect(realApi.tryOn).not.toBe(mockApi.tryOn)
+    expect(realApi.retouchImage).not.toBe(mockApi.retouchImage)
     expect(realApi.getConsent).not.toBe(mockApi.getConsent)
     expect(realApi.giveConsent).not.toBe(mockApi.giveConsent)
   })
@@ -1182,6 +1183,18 @@ describe('生成結果：存入圖庫／下載事件／靈感', () => {
     expect(asset.source).toBe('tryon')
   })
 
+  it('saveGenerated 存修圖結果：打該次生成的 /save、帶 resultId 與所選資料夾（來源由後端標 edit）', async () => {
+    const calls = stubRoutes({
+      '/generations/gen_e/save': { status: 201, data: { ...WIRE_IMAGE, source: 'edit', folderId: 'folder_1' } },
+    })
+
+    const asset = await realApi.saveGenerated('春季主視覺_修圖', { generationId: 'gen_e', id: 'res_e' }, 'folder_1')
+
+    expect(calls[0].url).toBe('/generations/gen_e/save')
+    expect(calls[0].body).toStrictEqual({ resultId: 'res_e', imageName: '春季主視覺_修圖', folderId: 'folder_1' })
+    expect(asset.source).toBe('edit')
+  })
+
   it('recordAdoption 只送 downloaded 與 resultId', async () => {
     const calls = stubRoutes({ '/generations/gen_1/events': { data: { recorded: true } } })
 
@@ -1211,6 +1224,91 @@ describe('生成結果：存入圖庫／下載事件／靈感', () => {
     const items = await realApi.listInspirations()
 
     expect(items).toEqual([{ id: 'insp_1', name: '極簡白底', url: 'https://cdn.example.com/insp_1.png' }])
+  })
+})
+
+describe('POST /edit（AI 修圖）', () => {
+  const EDIT_OK = { data: { ...GEN_OK.data, costFeeds: 8 } }
+  const EDIT_PROCESSING = { data: { ...PROCESSING.data, type: 'edit', costFeeds: 8 } }
+  const EDIT_DONE = { data: { ...EDIT_PROCESSING.data, status: 'done', results: [WIRE_RESULT] } }
+  const formOf = (c: Recorded) => c.body as FormData
+
+  it('快速修飾：multipart 帶 imageId、options 逐個 append 成後端允許值，不帶 prompt／mask；Idempotency-Key＋100 秒逾時', async () => {
+    const calls = stubRoutes({ '/edit': EDIT_OK })
+
+    const res = await realApi.retouchImage({
+      imageId: 'img_q',
+      method: 'quick',
+      options: ['removeObjects', 'repair', 'lighting', 'upscale'],
+      instruction: undefined,
+    })
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0].method).toBe('post')
+    const form = formOf(calls[0])
+    expect(form).toBeInstanceOf(FormData)
+    expect(form.get('imageId')).toBe('img_q')
+    expect(form.getAll('options')).toEqual(['removeObject', 'fixFlaw', 'lightFix', 'upscale2x'])
+    expect(form.has('prompt')).toBe(false)
+    expect(form.has('mask')).toBe(false)
+    expect(calls[0].headers?.['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/)
+    expect(calls[0].timeout).toBe(100000)
+    expect(res).toEqual({
+      ...GENERATED[0],
+      method: 'quick',
+      options: ['removeObjects', 'repair', 'lighting', 'upscale'],
+      cost: 8,
+    })
+  })
+
+  it('指令修圖：只帶 trim 過的 prompt，沒有 options', async () => {
+    const calls = stubRoutes({ '/edit': EDIT_OK })
+
+    await realApi.retouchImage({ imageId: 'img_c', method: 'command', options: [], instruction: '  把背景換成純白 ' })
+
+    const form = formOf(calls[0])
+    expect(form.get('imageId')).toBe('img_c')
+    expect(form.get('prompt')).toBe('把背景換成純白')
+    expect(form.getAll('options')).toEqual([])
+  })
+
+  it('202 → 輪詢 GET /generations/{id} 到 done 才回，不會再送 /edit；扣點數取輪詢回來的 costFeeds', async () => {
+    const calls = stubRoutes({ '/edit': PENDING, '/generations/gen_1': [EDIT_PROCESSING, EDIT_DONE] })
+
+    const p = realApi.retouchImage({ imageId: 'img_p', method: 'quick', options: ['repair'] })
+    await vi.advanceTimersByTimeAsync(5000)
+    await vi.advanceTimersByTimeAsync(5000)
+    const res = await p
+
+    expect(calls.filter((c) => c.url === '/edit')).toHaveLength(1)
+    expect(calls.filter((c) => c.url === '/generations/gen_1')).toHaveLength(2)
+    expect(res).toMatchObject({ ...GENERATED[0], cost: 8 })
+  })
+
+  it('冪等鍵認的是修圖內容而不是 FormData：結果不確定後同一張圖同條件沿用 key，換一張圖是新 key', async () => {
+    const calls = stubRoutes({ '/edit': [{ error: 'timeout' }, { error: 'timeout' }, { error: 'timeout' }, EDIT_OK] })
+    const req = { imageId: 'img_k1', method: 'quick' as const, options: ['repair' as const] }
+
+    const p = realApi.retouchImage(req).catch(() => undefined)
+    await vi.advanceTimersByTimeAsync(2 * 5000)
+    await p
+    await realApi.retouchImage({ ...req, imageId: 'img_k2' })
+    await realApi.retouchImage(req)
+
+    const keys = keysOf(calls)
+    expect(keys).toHaveLength(5)
+    expect(keys[3]).not.toBe(keys[0]) // 換一張圖：新的操作
+    expect(keys[4]).toBe(keys[0]) // 同一份輸入再按一次：後端若已扣點會回放，不會再扣
+  })
+
+  it('results[] 是空的：丟 UNEXPECTED_RESPONSE', async () => {
+    stubRoutes({ '/edit': { data: { ...EDIT_OK.data, results: [] } } })
+
+    const err = await realApi
+      .retouchImage({ imageId: 'img_e', method: 'quick', options: ['repair'] })
+      .catch((e: unknown) => e)
+
+    expect(hasErrorCode(err, CLIENT_ERROR_CODES.UNEXPECTED_RESPONSE)).toBe(true)
   })
 })
 

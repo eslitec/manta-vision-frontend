@@ -211,19 +211,18 @@ const db = {
   adoptedResults: new Set<string>(),
   // 圖生圖的 generationId：採用率只算 type='generate'（後端 metrics_calc），行銷海報的下載不計
   imageGenerations: new Set<string>(),
+  // 修圖的 generationId：存入圖庫時同後端標 source=edit
+  editGenerations: new Set<string>(),
   jobs: new Map<
     string,
     { req: VideoJobReq; created: number; cost: number; failed?: boolean; failedChecked?: boolean }
   >(),
 }
 
-// 編輯器價目表（對齊 MV-09 工具列與 MV-09b 修飾項目的設計稿標價）
+// 編輯畫布價目表（對齊 MV-09 工具列的設計稿標價）；AI 修圖改讀 MOCK_MODELS 的 imageEdit
 const EDITOR_PRICING: EditorPricing = {
   tools: { remove: 8, object: 0, fade: 0, text: 0, crop: 0 },
-  retouchOptions: { removeObjects: 8, repair: 8, lighting: 0, upscale: 5 },
-  commandBase: 16,
 }
-const COMMAND_RETOUCH_OPTIONS = ['lighting', 'upscale']
 
 // 價格對齊後端 ai_models（migration 20260910b／20260910c）；真後端一律讀 GET /ai-models
 const MOCK_MODELS: AiModel[] = [
@@ -233,6 +232,7 @@ const MOCK_MODELS: AiModel[] = [
   { modelKey: 'marketingImage', name: '行銷海報圖', modelType: 'marketing', costFeeds: 5 },
   { modelKey: 'marketingText', name: '行銷文案', modelType: 'marketing', costFeeds: 0 },
   { modelKey: 'tryonStandard', name: '標準', modelType: 'tryon', costFeeds: 12 },
+  { modelKey: 'imageEdit', name: '修圖', modelType: 'edit', costFeeds: 8 },
 ]
 const priceOf = (modelKey: string) => MOCK_MODELS.find((m) => m.modelKey === modelKey)?.costFeeds
 
@@ -535,14 +535,10 @@ export const mockApi = {
     return [{ botId: 'bot_demo', botName: '日安選物' }]
   },
 
-  // GET /editor/pricing — 編輯器價目表（MV-09 工具列與 MV-09b 修飾項目共用同一份）
+  // GET /editor/pricing — 編輯畫布工具列的價目表
   async getEditorPricing(): Promise<EditorPricing> {
     await delay(120)
-    return {
-      tools: { ...EDITOR_PRICING.tools },
-      retouchOptions: { ...EDITOR_PRICING.retouchOptions },
-      commandBase: EDITOR_PRICING.commandBase,
-    }
+    return { tools: { ...EDITOR_PRICING.tools } }
   },
 
   // POST /images/edit/tool — 編輯畫布套用一次 AI 工具，在執行當下就扣款。
@@ -554,17 +550,20 @@ export const mockApi = {
     return { tool, cost }
   },
 
-  // POST /images/retouch — AI 修圖。成本一律由這裡依價目表計算，不採用前端傳來的金額。
+  // POST /edit — AI 修圖（同真後端：固定 imageEdit 單價、勾幾項都一樣；指令與選項都空 → NOTHING_TO_DO 不扣點；
+  // 回一張結果，圖用 picsum 依素材 id 取一張假圖）
   async retouchImage(req: RetouchReq): Promise<RetouchResult> {
+    if (!req.options.length && !req.instruction?.trim()) throw new Error('NOTHING_TO_DO')
+    const cost = priceOf('imageEdit') ?? 0
+    deduct(cost)
+    db.totalGen += 1
+    db.generatedThisMonth += 1
+    db.successGen += 1
     await delay(900)
-    // 指令式修圖只開放光線校正與放大兩個加購項，其餘一律忽略
-    const allowed = req.method === 'command' ? COMMAND_RETOUCH_OPTIONS : Object.keys(EDITOR_PRICING.retouchOptions)
-    const options = req.options.filter((key) => allowed.includes(key))
-    const cost =
-      (req.method === 'command' ? EDITOR_PRICING.commandBase : 0) +
-      options.reduce((total, key) => total + (EDITOR_PRICING.retouchOptions[key] ?? 0), 0)
-    if (cost > 0) deduct(cost)
-    return { method: req.method, options, cost }
+    const generationId = uid('gen')
+    db.editGenerations.add(generationId)
+    const url = `https://picsum.photos/seed/${req.imageId}-${generationId}/400/300`
+    return { id: uid('r'), generationId, url, adopted: false, method: req.method, options: req.options, cost }
   },
 
   // POST /images/edit（另存編輯產物，非破壞→新素材）
@@ -695,12 +694,13 @@ export const mockApi = {
   },
 
   // POST /generations/{id}/save → 生成結果落地成 AI 生成素材；同後端，存入圖庫本身就算採用。
-  async saveGenerated(name: string, from: GenerationRef): Promise<Asset> {
+  async saveGenerated(name: string, from: GenerationRef, folderId?: string): Promise<Asset> {
     await delay(300)
     const a: Asset = {
       id: uid('a'),
       name,
-      source: 'aiGenerate',
+      source: db.editGenerations.has(from.generationId) ? 'edit' : 'aiGenerate',
+      folderId: folderId || undefined,
       dim: '1024×768',
       width: 1024,
       height: 768,

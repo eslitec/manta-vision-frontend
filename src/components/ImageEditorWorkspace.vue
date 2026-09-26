@@ -15,7 +15,7 @@
         img.editorSourceImg(v-if="selectedAssetUrl" :src="selectedAssetUrl" :alt="selectedAssetName")
         IconImagePlaceholder(v-else)
       .sourceActions
-        AppButton(variant="outline" @click="openEditorPicker") {{ t('common.selectFromLibrary') }}
+        AppButton(variant="outline" :disabled="retouching" @click="openEditorPicker") {{ t('common.selectFromLibrary') }}
         span.uploadTip {{ t('common.orDragUpload') }}
       h3 {{ t('editor.retouch.steps.method') }}
       .methodRow
@@ -28,9 +28,6 @@
           label.option(v-for="o in retouchOptionsForMethod" :key="o.key" :class="{ isSelected: o.on }")
             AppCheckbox(v-model="o.on" :label="t(`editor.retouch.options.${o.key}.name`)")
             span.option__copy #[strong {{ t(`editor.retouch.options.${o.key}.name`) }}] #[small {{ t(`editor.retouch.options.${o.key}.hint`) }}]
-            span.option__cost(:class="{ free: o.free }")
-              IconFeedBottleSmall(v-if="!o.free")
-              b {{ o.free ? t('editor.free') : t('editor.feedShort', { count: o.cost }) }}
       template(v-else)
         h3 {{ t('editor.retouch.steps.requiredInstruction') }}
         small.optionalOptionsHint {{ t('editor.retouch.presetsHint') }}
@@ -51,10 +48,10 @@
         small.charCounter {{ retouchInstruction.length }} / 200
       p.editorError(v-if="retouchError" role="alert") {{ retouchError }}
       footer.panelAction
-        span {{ t('common.estimatedCost') }} #[b {{ t('units.feed', { count: estimatedRetouchCost }) }}]
+        span {{ t('common.estimatedCost') }} #[b {{ t('units.feed', { count: retouchPrice ?? '…' }) }}]
         AppButton(:disabled="!canStartRetouch || retouching" :loading="retouching" @click="startRetouch") {{ t('editor.retouch.start') }}
     section.resultPanel
-      header.resultHead #[strong {{ t('editor.retouch.result') }}] #[span {{ retouchAppliedLabel }}]
+      header.resultHead #[strong {{ t('editor.retouch.result') }}] #[span(v-if="retouchResult") {{ retouchAppliedLabel }}]
       .compare
         .compare__item
           span {{ t('editor.original') }}
@@ -68,17 +65,16 @@
             .retouchProgress(v-if="retouching")
               IconSpinnerRing.retouchProgress__spinner
               strong {{ t('editor.retouch.inProgress') }}
-              small {{ retouchStepLabel }}
               .retouchProgress__bar
-                .retouchProgress__fill(:style="{ width: `${retouchProgressPercent}%` }")
-              small.retouchProgress__eta {{ retouchTimeRemainingLabel }}
+                .retouchProgress__fill
+            img.editorSourceImg(v-else-if="retouchResult?.url" :src="retouchResult.url" :alt="t('editor.afterRetouch')")
             IconImagePlaceholder(v-else)
-          small(v-if="!retouching") {{ t('editor.consumed', { count: lastRetouchCost }) }}
-      footer.resultActions(v-if="hasSelectedAsset")
+          small(v-if="retouchResult && !retouching") {{ t('editor.consumed', { count: retouchResult.cost }) }}
+      footer.resultActions(v-if="retouchResult")
         span {{ t('editor.saveHint') }}
-        AppButton(variant="outline" @click="retouchSetupOpen = true") {{ t('editor.retouch.again') }}
-        AppButton(variant="outline") {{ t('common.download') }}
-        AppButton(:disabled="Boolean(savedAssetId)" @click="openSaveDialog") {{ savedAssetId ? t('common.saved') : t('editor.saveAsNew') }}
+        AppButton(variant="outline" :disabled="retouching || retouchPrice === undefined" @click="retouchAgain") {{ t('editor.retouch.again', { count: retouchPrice ?? '…' }) }}
+        AppButton(variant="outline" :disabled="retouching" @click="downloadRetouch") {{ t('common.download') }}
+        AppButton(:disabled="Boolean(savedAssetId) || retouching" @click="openSaveDialog") {{ savedAssetId ? t('common.saved') : t('editor.saveAsNew') }}
         span.visuallyHidden(v-if="savedAssetId" role="status" aria-live="polite") {{ t('common.saved') }}
         span.visuallyHidden(v-if="saveError" role="alert") {{ t('editor.saveFailed') }}
 
@@ -357,6 +353,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { onBeforeRouteLeave } from 'vue-router'
+import { useEventListener } from '@vueuse/core'
 import AppButton from '@/components/AppButton.vue'
 import AppCheckbox from '@/components/AppCheckbox.vue'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
@@ -382,8 +380,10 @@ import {
   IconRefresh,
 } from '@/components/icons'
 import { api } from '@/api'
+import { API_ERROR_CODES, hasErrorCode } from '@/api/errors'
 import { useFeedStore } from '@/stores/feed'
-import { isInsufficientFeed } from '@/utils/error'
+import { downloadFile } from '@/utils/download'
+import { displayMessage, isInsufficientFeed } from '@/utils/error'
 import {
   containLayerInBox,
   coverRect,
@@ -391,11 +391,11 @@ import {
   percentPointInSource,
   percentRectInSource,
 } from '@/utils/composite'
-import type { AppliedEditTool, EditorPricing, RetouchOptionKey } from '@/types/api'
+import type { AppliedEditTool, EditorPricing, RetouchOptionKey, RetouchReq, RetouchResult } from '@/types/api'
 import type { Asset } from '@/types/asset'
 const props = defineProps<{ mode: string }>()
 const { t } = useI18n()
-const { saveEdited, folders, loadFolders, upload } = useAssets()
+const { saveEdited, saveGenerated, folders, loadFolders, upload } = useAssets()
 const feed = useFeedStore()
 
 // 價目表一律問後端，前端不寫死金額（CLAUDE.md：前端不得硬寫範例數字）
@@ -409,15 +409,26 @@ const applyingTool = ref('')
 const toolError = ref('')
 const retouching = ref(false)
 const retouchError = ref('')
+// AI 修圖單價：後端 /edit 固定用 imageEdit、每次一個價，勾幾項都一樣（GET /ai-models?modelType=edit）。
+// 載入前是 undefined：預估顯示「…」、開始修圖停用
+const retouchPrice = ref<number>()
+// 修圖結果只活在這個元件裡；修圖中離開（換頁、重新整理、LibraryView 切回素材庫分頁）後端照樣扣點
+onBeforeRouteLeave(() => !retouching.value || window.confirm(t('common.leaveWhileGenerating')))
+useEventListener(window, 'beforeunload', (e) => {
+  if (retouching.value) e.preventDefault()
+})
+defineExpose({ retouching })
 onMounted(async () => {
   if (!feed.loaded) feed.refresh()
-  try {
-    const next = await api.getEditorPricing()
-    pricing.value = next
-    retouchOptions.value.forEach((option) => {
-      option.cost = next.retouchOptions[option.key] ?? 0
-      option.free = option.cost === 0
+  api
+    .listModels('edit')
+    .then((models) => {
+      retouchPrice.value = models.find((m) => m.modelKey === 'imageEdit')?.costFeeds
+      if (retouchPrice.value === undefined) retouchError.value = t('errors.loadFailed')
     })
+    .catch((e: unknown) => (retouchError.value = displayMessage(e, t('errors.loadFailed'))))
+  try {
+    pricing.value = await api.getEditorPricing()
   } catch {
     // 價目表載不到時維持 0，畫面不顯示金額，但不擋住其他操作
   }
@@ -501,8 +512,11 @@ const selectEditorAsset = async (asset: Asset) => {
   selectedAssetId.value = asset.id
   originalDimensions.value = asset.width && asset.height ? { width: asset.width, height: asset.height } : null
   savedAssetId.value = ''
-  // 換了來源素材＝重新開始，先前的扣款紀錄不再屬於這張圖
+  // 換了來源素材＝重新開始，先前的扣款紀錄與修圖結果不再屬於這張圖
   usedTools.value = []
+  retouchResult.value = null
+  lastRetouchReq = undefined
+  retouchError.value = ''
   toolError.value = ''
   // 原圖圖層只在真的選定素材後才存在（decision 2）：第一次選定時新增一筆，
   // 之後在同一次編輯工作階段重新選擇別的素材，就地更新這一筆而不是疊加新的。
@@ -689,12 +703,23 @@ const saveAsNewAsset = async (payload: SaveAssetPayload) => {
   saveError.value = false
   saveErrorMessage.value = ''
   try {
-    // 底圖是圖庫裡的真實素材（有 url）就把畫布（底圖＋物件圖層＋文字圖層；裁切工具下先裁）合成
+    // AI 修圖頁存的是 /edit 的結果圖（不是畫布合成）：走 /generations/{id}/save，後端標 source=edit、
+    // derivedFrom 指回原圖；存入本身就算採用。ALREADY_SAVED＝前一發其實存進去了、回應在路上丟了，當成已存入
+    // （ponytail: 這時拿不到素材 id，畫面只看 savedAssetId 有沒有值，同圖生圖頁）。
+    // 其餘：底圖是圖庫裡的真實素材（有 url）就把畫布（底圖＋物件圖層＋文字圖層；裁切工具下先裁）合成
     // 一張 PNG 上傳到真後端；沒有真實圖檔來源的 demo 素材才維持原本 mock 的另存行為。
-    // AI 修圖頁（mode === 'retouch'）例外：那一頁沒有畫布也沒有裁切 UI，修圖結果目前仍是 mock
-    // （沒有真的結果圖），走 buildOutputFile 只會把「未修圖的原圖」4:3 置中裁掉一截當修圖版上傳，
-    // 所以維持 mock 另存，等 retouch 接上真實結果圖再改。
-    if (selectedAssetUrl.value && props.mode !== 'retouch') {
+    if (props.mode === 'retouch') {
+      const result = retouchResult.value
+      if (!result) return
+      try {
+        savedAssetId.value = (await saveGenerated(payload.name, result, payload.folder || undefined)).id
+      } catch (err) {
+        if (!hasErrorCode(err, API_ERROR_CODES.ALREADY_SAVED)) throw err
+        savedAssetId.value = 'unknown'
+      }
+      result.adopted = true
+      if (payload.alsoDownload) await downloadRetouch()
+    } else if (selectedAssetUrl.value) {
       const file = await buildOutputFile(payload.name)
       const saved = await upload(file, payload.folder || undefined, selectedAssetId.value || undefined, payload.name)
       savedAssetId.value = saved.id
@@ -707,7 +732,8 @@ const saveAsNewAsset = async (payload: SaveAssetPayload) => {
     saveDialogOpen.value = false
   } catch (err) {
     saveError.value = true
-    saveErrorMessage.value = classifySaveError(err)
+    saveErrorMessage.value =
+      props.mode === 'retouch' ? displayMessage(err, t('editor.saveDialog.errorGeneric')) : classifySaveError(err)
   } finally {
     savingAsset.value = false
   }
@@ -776,7 +802,6 @@ const textLayerStyle = (layer: TextEditorLayer) => {
 }
 const retouchSetupOpen = ref(false)
 const retouchMethod = ref<'quick' | 'command'>('quick')
-const commandRetouchBaseCost = computed(() => pricing.value?.commandBase ?? 0)
 const retouchInstruction = ref('')
 // 對齊 Figma（1140:768 row_presets）：點選常用指令快速帶入文字，仍可自行編輯／接續輸入。
 const COMMAND_PRESET_KEYS = [
@@ -796,9 +821,6 @@ const applyCommandPreset = (label: string) => {
     ? `${retouchInstruction.value}、${label}`.slice(0, 200)
     : label
 }
-const lastRetouchCost = ref(16)
-const lastRetouchKeys = ref(['removeObjects', 'repair'])
-const lastRetouchMethod = ref<'quick' | 'command'>('quick')
 const retouchSelections: Record<'quick' | 'command', string[]> = {
   quick: ['removeObjects', 'repair'],
   command: [],
@@ -810,77 +832,54 @@ watch(
     retouchSetupOpen.value = false
   },
 )
-// 對齊 Figma（1311:580／1311:814／1311:820）修圖結果面板的 loading_box。
-// 步驟文字（stepLabel）仍用實際選取的項目模擬逐步進度；但進度條與「約剩 X 秒」
-// 兩者要對得上同一份時間軸，所以改成共用同一個估計總秒數：每步驟抓 9 秒，
-// 對齊 Figma 範例「步驟 2/3・約剩 18 秒」（還剩 2 步 × 9 秒）。進度條寬度＝
-// 已過秒數 ÷ 估計總秒數，從 0% 開始隨秒數真的慢慢變滿，不是原本那種只依
-// 步驟數跳格子（例如只選 2 個項目時，進度條會直接從 50% 起跳，看起來像是
-// 「已經做了一半」而非「才剛開始」）。
-// mock 本身 900ms 就回來，這組秒數只是先把畫面感覺做出來——等後端 /edit
-// 真的接上、有實際生成耗時後，要換成後端回傳（或至少量測過）的秒數，不能
-// 一直用這個猜的常數。
-const RETOUCH_SECONDS_PER_STEP = 9
-const retouchStepIndex = ref(0)
-const retouchTotalSeconds = ref(1)
-const retouchSecondsRemaining = ref(0)
-const retouchStepNames = computed(() =>
-  retouchMethod.value === 'quick'
-    ? retouchOptionsForMethod.value
-        .filter((option) => option.on)
-        .map((option) => t(`editor.retouch.options.${option.key}.name`))
-    : [t('editor.retouch.command')],
-)
-const retouchStepLabel = computed(() => {
-  const names = retouchStepNames.value
-  if (!names.length) return ''
-  const current = Math.min(retouchStepIndex.value, names.length - 1)
-  return t('editor.retouch.stepLabel', { current: current + 1, total: names.length, name: names[current] })
-})
-const retouchProgressPercent = computed(() => {
-  const total = retouchTotalSeconds.value || 1
-  const elapsed = total - retouchSecondsRemaining.value
-  return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)))
-})
-const retouchTimeRemainingLabel = computed(() =>
-  t('editor.retouch.timeRemaining', { seconds: retouchSecondsRemaining.value }),
-)
-// 送出修圖：扣款與最終金額都以後端為準，畫面上的預估只是預估。
-// 送出的項目取 retouchOptionsForMethod（而非全部），否則指令式修圖會把沒收費的快速項目也列進結果。
-async function startRetouch() {
-  if (!canStartRetouch.value || retouching.value) return
+// 修圖結果＝POST /edit 的 results[0]（tempUrl 只暫存 24 小時）；換素材就清掉
+const retouchResult = ref<RetouchResult | null>(null)
+let lastRetouchReq: RetouchReq | undefined
+// 送出修圖：分頁二選一——快速修飾只送勾選項目、指令修圖只送指令（後端兩者都收，至少要有一個）。
+// 等待時間由後端決定（同步最長 80 秒，逾時 202 後再輪詢），畫面只顯示不定進度，不猜秒數。
+function startRetouch() {
+  if (!canStartRetouch.value) return
+  const quick = retouchMethod.value === 'quick'
+  return runRetouch({
+    imageId: selectedAssetId.value,
+    method: retouchMethod.value,
+    options: quick ? retouchOptions.value.filter((option) => option.on).map((option) => option.key) : [],
+    instruction: quick ? undefined : retouchInstruction.value.trim(),
+  })
+}
+// 重新修圖＝同樣條件再送一次：上一發已有結果、冪等鍵已放掉，後端當新請求再扣一次（按鈕上標價）
+const retouchAgain = () => lastRetouchReq && runRetouch(lastRetouchReq)
+async function runRetouch(req: RetouchReq) {
+  if (retouching.value) return
   retouching.value = true
   retouchError.value = ''
-  retouchStepIndex.value = 0
-  const totalSteps = retouchStepNames.value.length || 1
-  retouchTotalSeconds.value = totalSteps * RETOUCH_SECONDS_PER_STEP
-  retouchSecondsRemaining.value = retouchTotalSeconds.value
-  const stepTimer = setInterval(
-    () => {
-      if (retouchStepIndex.value < totalSteps - 1) retouchStepIndex.value += 1
-    },
-    Math.max(200, 900 / totalSteps),
-  )
-  const secondsTimer = setInterval(() => {
-    if (retouchSecondsRemaining.value > 1) retouchSecondsRemaining.value -= 1
-  }, 1000)
   try {
-    const result = await api.retouchImage({
-      method: retouchMethod.value,
-      options: retouchOptionsForMethod.value.filter((option) => option.on).map((option) => option.key),
-      instruction: retouchInstruction.value.trim() || undefined,
-    })
-    lastRetouchCost.value = result.cost
-    lastRetouchKeys.value = result.options
-    lastRetouchMethod.value = result.method
+    retouchResult.value = await api.retouchImage(req)
+    lastRetouchReq = req
+    savedAssetId.value = ''
     retouchSetupOpen.value = false
-    await feed.refresh()
   } catch (error) {
-    retouchError.value = isInsufficientFeed(error) ? t('errors.insufficientFeed') : t('errors.generationFailed')
+    retouchError.value = isInsufficientFeed(error)
+      ? t('errors.insufficientFeed')
+      : displayMessage(error, t('errors.generationFailed'))
   } finally {
-    clearInterval(stepTimer)
-    clearInterval(secondsTimer)
     retouching.value = false
+    // 成功或失敗都刷新：內容被擋會扣點、失敗會退點。刷新本身失敗不蓋掉修圖的錯誤訊息
+    await feed.refresh().catch(() => undefined)
+  }
+}
+async function downloadRetouch() {
+  const result = retouchResult.value
+  if (!result) return
+  retouchError.value = ''
+  try {
+    if (result.url) await downloadFile(result.url) // mock 的結果若沒有檔案就跳過
+    if (!result.adopted) {
+      await api.recordAdoption(result)
+      result.adopted = true
+    }
+  } catch (error) {
+    retouchError.value = displayMessage(error, t('errors.downloadFailed'))
   }
 }
 
@@ -1131,10 +1130,9 @@ const toggleOriginalLock = () => {
   if (layer.locked) layer.visible = true
 }
 const RETOUCH_OPTION_KEYS: RetouchOptionKey[] = ['removeObjects', 'repair', 'lighting', 'upscale']
-// cost／free 由 getEditorPricing 填入，這裡只保留預設勾選狀態
-const retouchOptions = ref(RETOUCH_OPTION_KEYS.map((key, index) => ({ key, on: index < 2, free: true, cost: 0 })))
-// 對齊 Figma（1140:714 指令修圖）：指令修圖沒有可勾選的加購項目，只有一口價的基本費，
-// 所以這裡回傳空陣列——estimatedRetouchCost／送出時就只會計入 commandRetouchBaseCost。
+// 預設勾前兩項；各項不另外加價（後端 /edit 一次一個價）
+const retouchOptions = ref(RETOUCH_OPTION_KEYS.map((key, index) => ({ key, on: index < 2 })))
+// 對齊 Figma（1140:714 指令修圖）：指令修圖沒有可勾選的項目，這裡回傳空陣列。
 const retouchOptionsForMethod = computed(() => (retouchMethod.value === 'command' ? [] : retouchOptions.value))
 function setRetouchMethod(method: 'quick' | 'command') {
   if (retouchMethod.value === method) return
@@ -1147,24 +1145,22 @@ function setRetouchMethod(method: 'quick' | 'command') {
     option.on = retouchSelections[method].includes(option.key)
   })
 }
-const estimatedRetouchCost = computed(
-  () =>
-    (retouchMethod.value === 'command' ? commandRetouchBaseCost.value : 0) +
-    retouchOptionsForMethod.value.reduce((total, option) => total + (option.on ? option.cost : 0), 0),
-)
+// 兩者都空後端回 400 NOTHING_TO_DO：快速修飾至少勾一項、指令修圖要有字；價格載入前不能送
 const canStartRetouch = computed(
-  () => hasSelectedAsset.value && (retouchMethod.value === 'quick' || retouchInstruction.value.trim().length > 0),
+  () =>
+    hasSelectedAsset.value &&
+    retouchPrice.value !== undefined &&
+    (retouchMethod.value === 'quick'
+      ? retouchOptions.value.some((option) => option.on)
+      : retouchInstruction.value.trim().length > 0),
 )
 const retouchAppliedLabel = computed(() => {
-  if (lastRetouchMethod.value === 'command') {
-    if (lastRetouchKeys.value.length === 0) return t('editor.retouch.commandApplied')
-    return t('editor.retouch.commandAppliedDynamic', {
-      items: lastRetouchKeys.value.map((key) => t(`editor.retouch.options.${key}.name`)).join('・'),
-    })
-  }
-  return t('editor.retouch.appliedDynamic', {
-    items: lastRetouchKeys.value.map((key) => t(`editor.retouch.options.${key}.name`)).join('・'),
-  })
+  const result = retouchResult.value
+  if (!result) return ''
+  const items = result.options.map((key) => t(`editor.retouch.options.${key}.name`)).join('・')
+  if (result.method === 'command')
+    return items ? t('editor.retouch.commandAppliedDynamic', { items }) : t('editor.retouch.commandApplied')
+  return t('editor.retouch.appliedDynamic', { items })
 })
 type CropRatioId = 'original' | 'square' | 'fourFive' | 'story' | 'wide' | 'custom'
 type CropCorner = 'nw' | 'ne' | 'sw' | 'se'
@@ -1376,20 +1372,11 @@ const layersFingerprint = computed(() =>
     })
     .join('|'),
 )
-watch(
-  [
-    layersFingerprint,
-    tool,
-    retouchInstruction,
-    () => retouchOptions.value.map((option) => `${option.key}:${option.on}`).join('|'),
-    () => `${cropRect.x}:${cropRect.y}:${cropRect.width}:${cropRect.height}`,
-  ],
-  () => {
-    savedAssetId.value = ''
-    saveError.value = false
-    saveErrorMessage.value = ''
-  },
-)
+watch([layersFingerprint, tool, () => `${cropRect.x}:${cropRect.y}:${cropRect.width}:${cropRect.height}`], () => {
+  savedAssetId.value = ''
+  saveError.value = false
+  saveErrorMessage.value = ''
+})
 const ratioOptions = computed<Array<{ id: Exclude<CropRatioId, 'custom'>; label: string; aspect: number }>>(() => [
   { id: 'original', label: t('editor.originalRatio'), aspect: 4 / 3 },
   { id: 'square', label: '1:1', aspect: 1 },
@@ -1977,11 +1964,21 @@ const previews = computed(() =>
   background: #eff2fa; // 對齊 Figma node 1311:820 的軌道色，不是既有的 #d2d5dd
   overflow: hidden;
 }
+// 不定進度：修圖耗時由後端決定（同步最長 80 秒、逾時再輪詢），不顯示百分比與剩餘秒數
 .retouchProgress__fill {
+  width: 40%;
   height: 100%;
   border-radius: inherit;
   background: $blue-dark-500;
-  transition: width 0.2s ease;
+  animation: retouchIndeterminate 1.2s ease-in-out infinite;
+}
+@keyframes retouchIndeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
 }
 .compare__thumb.isLoading {
   background: #fff;
@@ -3028,28 +3025,6 @@ const previews = computed(() =>
 .option__copy strong {
   color: #2e3567;
   font-weight: 500;
-}
-.option__cost {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 0.25rem;
-  color: #ea903a;
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: normal;
-
-  svg {
-    width: 0.875rem;
-    height: 0.875rem;
-  }
-
-  b {
-    font-weight: inherit;
-  }
-}
-.option__cost.free {
-  color: #54c14f;
 }
 .retouchPanel textarea {
   height: 4.75rem;
