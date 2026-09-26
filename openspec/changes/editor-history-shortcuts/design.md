@@ -46,6 +46,8 @@ Figma `566:4973` canvas_topbar 的 `ic_back`／`ic_next` 就是上一步／下�
 
 處理器掛 `document` 的 `keydown`（bubble，才看得到元素層級處理器的 `defaultPrevented`），依序在以下情況直接 return：AI 修圖頁、還沒選底圖、元素層級處理器已處理（縮放把手方向鍵、圖層排序、文字 Enter／F2）、注音選字中、`#app` 為 `inert`（任何對話框）、焦點在文字輸入（`isContentEditable`、`textarea`、`select`、文字類 `input`；勾選框、色盤等非文字 `input` 不算）、指標按住中或文字編輯中（此時 ⌘Z／⌘Y 仍 `preventDefault`，否則 macOS Chrome 會執行原生 undo、撤銷先前在 input 打的字）、⌘／Ctrl 搭配 Alt（Windows AltGr）、非 ⌘ 鍵且字型選單或快捷鍵一覽開著（看狀態不看焦點：Safari 點按鈕不給焦點）。⌘⇧C、⌘⇧D 讓給瀏覽器。⌘C 只在「畫布以外」有反白文字時讓給原生複製：開始編輯文字時的全選在結束編輯後仍殘留在畫布內。畫布文字編輯改 `contenteditable="plaintext-only"`，原生 ⌘V 貼富文字時只留純文字，畫面與另存（只取 `textContent`）一致。
 
+畫布上的圖層與把手 `pointerdown` 都 `preventDefault`，焦點不會跟著移動。因此同一個 capture `pointerdown` 監聽在按下位置位於畫布內、且不在目前焦點元素裡時，先 `blur()` 焦點元素：留在屬性面板文字框／物件描述的焦點會讓之後的 ⌘Z／Delete／⌘D 被當成文字輸入交給原生，留在按鈕上的焦點會讓 Enter 按下那顆按鈕。滑鼠點選後焦點在 `body`，文字圖層自己的 Enter 收不到，所以全域處理器在焦點為 `body`、選取可見文字圖層時由 Enter 進入編輯；文字圖層取得焦點時比照物件圖層選取該圖層。macOS ⌃點按是 `button 0`＋`ctrlKey`，放開事件被右鍵選單吞掉，所以不開指標閘門。原生下拉選單不必排除，Chrome 開選單時會自己補發 `pointerup`。
+
 ### 提示採常駐入口，不做一次性提示
 
 工具列與圖層面板按鈕的 `title`／`aria-label` 含快捷鍵（Mac 用 ⌘、其他用 Ctrl；兩種修飾鍵都收）；畫布底部常駐「鍵盤快捷鍵」disclosure 按鈕（`aria-expanded`＋`aria-controls`）開一覽浮層，點外面／Esc 關（沿用 `useDismissableMenu`，非 modal，不用 `useAccessibleDialog` 以免 `#app` 被設 inert）；⌘C／⌘X 後常駐的 `output` 換上 2 秒「圖層已放入剪貼簿，按 ⌘V 貼上」。一次性提示看過就沒了，還要 localStorage 與關閉邏輯，不做。
