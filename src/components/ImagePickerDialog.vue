@@ -181,8 +181,9 @@ async function uploadFile(file: File) {
   try {
     // 物件模式的清單是 GET /images?source=object，新圖要標 object 下次才列得到；其他模式是一般上傳
     const asset = await upload(file, undefined, undefined, undefined, props.mode === 'object' ? 'object' : undefined)
-    // 本地插到最上方，不重打 GET /images：回應就是完整的素材，後端也是 createdAt 倒序
-    assets.value.unshift(asset)
+    // 本地插到最上方，不重打 GET /images：回應就是完整的素材，後端也是 createdAt 倒序。
+    // 上傳中關掉又重開時，重開的 GET /images 可能已經帶到這張，不再插一次
+    if (!assets.value.some((a) => a.id === asset.id)) assets.value.unshift(asset)
     // 目前的篩選／搜尋會藏住新圖才切回全部並清空搜尋；看得見就不動使用者的篩選
     if (!isListedInPicker(asset, filterState.value)) {
       activeSource.value = 'all'
