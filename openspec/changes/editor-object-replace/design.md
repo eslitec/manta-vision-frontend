@@ -20,7 +20,7 @@
 
 在物件模式的選圖彈窗選定素材時，依序判斷：
 
-1. **有選取的物件圖層**（`selectedObjectLayer`：`selectedLayer.type === 'object'`，圖庫物件與 AI 佔位物件都算）→ 更換：`target.url = asset.url`、`target.label = editor.objectLayerDynamic(name)`，其餘欄位（`x/y/scale`、在 `layers` 裡的位置、`visible/locked`）不動，不新增圖層。原圖或文字圖層被選取時不算，走第 2 條。「已儲存」狀態由既有的 `layersFingerprint`（含 `url`）自動重置，不另外處理。
+1. **有選取的物件圖層**（`selectedObjectLayer`：`selectedLayer.type === 'object'`，圖庫物件與 AI 佔位物件都算）→ 更換：`target.url = asset.url`、`target.label = editor.objectLayerDynamic(name)`，其餘欄位（`x/y/scale`、在 `layers` 裡的位置、`visible/locked`）不動，不新增圖層。唯一例外：AI 佔位（無 `url`）換成圖片時 `scale × PLACEHOLDER_WIDTH_PERCENT(24) ÷ OBJECT_LAYER_WIDTH_PERCENT(40)`——兩種圖層的寬度基準不同（`(url ? 40 : 24) × scale`），不換算的話畫面上會突然放大 1.67 倍。原圖或文字圖層被選取時不算，走第 2 條。「已儲存」狀態由既有的 `layersFingerprint`（含 `url`）自動重置，不另外處理。
 2. **沒有選取物件圖層** → 新增圖層並放進框選範圍：`containLayerInBox(objectSelection, aspect, ARTBOARD_ASPECT)` 回傳中心點（框中心）與寬度百分比 `min(box.width, box.height × aspect ÷ (4/3))`，`scale = widthPercent ÷ 40`，沿用 `OBJECT_LAYER_WIDTH_PERCENT` 與 `layerRectInSource` 同一套座標語意，所以另存合成不必改。
 3. **取消選取**：物件工具下 `.canvas` 的 `pointerdown`（畫布空白處、畫布外圍灰底）與框選範圍的 `pointerdown`（它有 `.stop`，所以在 `startObjectSelectionDrag` 開頭呼叫）都走 `deselectObjectLayer`，只在目前選取的是物件圖層時把 `selectedLayerKey` 清成 `''`。物件與文字圖層的 `pointerdown` 都有 `.stop`，點到圖層本身不會取消；框選範圍的拖曳照常進行。
 
