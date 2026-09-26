@@ -153,6 +153,7 @@
               :aria-multiline="false"
               :contenteditable="tool !== 'crop' && editingTextKey === textLayer.key ? 'plaintext-only' : 'false'"
               @dblclick.stop="beginTextEdit(textLayer.key)"
+              @focus="selectLayer(textLayer.key)"
               @keydown="handleTextKeydown($event, textLayer.key)"
               @blur="finishTextEdit(textLayer.key)"
             ) {{ textLayer.content }}
@@ -1558,8 +1559,13 @@ useEventListener(
       editingEl.blur() // 隨後的 @blur → finishTextEdit 因 editingTextKey 已清而直接 return
       commitHistory()
     }
-    // 只收主鍵：macOS 右鍵／⌃點按由選單吞掉 pointerup，閘門會卡住
-    if (event.button === 0) pointerActive.value = true
+    // 同理，焦點也不會離開屬性面板文字框／物件描述／面板按鈕：之後的 ⌘Z／Delete／⌘D 會被守衛 6 交給那個
+    // 輸入框、Enter 會按下那顆按鈕 → 按在畫布內（且不在焦點元素裡）就先把焦點放掉
+    const target = event.target as Node
+    const active = document.activeElement
+    if (active instanceof HTMLElement && !active.contains(target) && artboardRef.value?.contains(target)) active.blur()
+    // 只收主鍵；macOS ⌃點按是 button 0＋ctrlKey，pointerup 被右鍵選單吞掉，閘門會卡住
+    if (event.button === 0 && !(isMac && event.ctrlKey)) pointerActive.value = true
     pendingMergeKey = ''
   },
   { capture: true },
@@ -1703,6 +1709,9 @@ function onEditorKeydown(event: KeyboardEvent) {
     else if (key === 'v' && layerClipboard && tool.value !== 'crop') pasteLayer()
     else handled = false
   } else if ((key === 'Delete' || key === 'Backspace') && layer) deleteSelectedLayer()
+  // 只在焦點是 body 時：焦點在按鈕上的 Enter 是按下按鈕；焦點在文字圖層上時由 handleTextKeydown 處理
+  else if (key === 'Enter' && event.target === document.body && layer?.type === 'text' && layer.visible)
+    void beginTextEdit(layer.key)
   else if (Object.hasOwn(NUDGE_DIRECTIONS, key) && layer) {
     const [dx, dy] = NUDGE_DIRECTIONS[key]
     const step = event.shiftKey ? 10 : 1
