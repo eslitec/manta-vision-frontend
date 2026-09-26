@@ -607,6 +607,7 @@ export default {
     sourcePickerTitle: 'Select an asset to edit from the library',
     sourcePickerSubtitle: "Selecting one loads it onto the canvas; you'll be asked to save any unsaved edits first.",
     objectPickerTitle: 'Select an object to add',
+    objectReplacePickerTitle: 'Select a replacement image',
     newTextPlaceholder: 'Enter text',
     objectLayerDynamic: 'Object: {name}',
     resizeObject: 'Resize object',
@@ -723,7 +724,10 @@ export default {
     addObject: {
       title: 'Add object',
       pickFromLibrary: 'Choose from library',
+      replaceImage: 'Replace image',
       pickerSubtitle: 'The selected image is added to the canvas as an object layer you can drag and resize',
+      replacePickerSubtitle:
+        "The selected image replaces the selected object layer's image, keeping its position and scale",
       descriptionLabel: 'Object description',
       descriptionPlaceholder:
         'Describe the object to generate, e.g. a bunch of pink dried flowers on the left of the desk…',

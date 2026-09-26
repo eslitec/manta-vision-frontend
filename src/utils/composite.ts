@@ -51,3 +51,16 @@ export function layerRectInSource(
   const height = width / aspect
   return { x: center.x - width / 2, y: center.y - height / 2, width, height }
 }
+
+/**
+ * 寬高比 aspect（寬／高）的圖層以 contain 放進畫布百分比框 box（寬高都不超出、中心對齊框中心）→
+ * 圖層中心點 x/y 與寬度 widthPercent（皆為畫布百分比，語意同 layerRectInSource）。
+ * 畫布百分比的寬相對畫布寬、高相對畫布高，所以比較框的高與圖層寬時要換上畫布寬高比 artboardAspect。
+ */
+export function containLayerInBox(box: Rect, aspect: number, artboardAspect: number) {
+  return {
+    x: box.x + box.width / 2,
+    y: box.y + box.height / 2,
+    widthPercent: Math.min(box.width, (box.height * aspect) / artboardAspect),
+  }
+}
