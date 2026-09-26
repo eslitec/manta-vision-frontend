@@ -487,6 +487,8 @@ const selectEditorAsset = async (asset: Asset) => {
     // （「已儲存」狀態由 layersFingerprint 看 url 變化自動重置）
     const target = selectedObjectLayer.value
     if (target) {
+      // 佔位換成圖片時把 scale 換算成同樣的畫面寬度，不讓圖層突然變大
+      if (!target.url) target.scale *= PLACEHOLDER_WIDTH_PERCENT / OBJECT_LAYER_WIDTH_PERCENT
       target.url = url
       target.label = t('editor.objectLayerDynamic', { name: asset.name })
       return
@@ -560,6 +562,8 @@ function downloadEditedCopy(name: string) {
 const ARTBOARD_ASPECT = 4 / 3
 // 圖庫選來的物件圖層在畫布上的寬度＝底圖顯示寬的 40%（scale = 1 時），畫面（objectLayerStyle）與合成共用。
 const OBJECT_LAYER_WIDTH_PERCENT = 40
+// AI 生成佔位物件（沒有 url）在 scale = 1 時的畫面寬度百分比。
+const PLACEHOLDER_WIDTH_PERCENT = 24
 // 文字圖層在畫布上的字級（rem，見 textLayerStyle），合成時換算成原圖像素。
 const TEXT_LAYER_BASE_REM = 1.25
 function cropSourceRect(naturalWidth: number, naturalHeight: number) {
@@ -1248,7 +1252,7 @@ const startTextDrag = (event: PointerEvent, layer: TextEditorLayer) => {
 const objectLayerStyle = (layer: ObjectEditorLayer) => ({
   left: `${layer.x}%`,
   top: `${layer.y}%`,
-  width: `${(layer.url ? OBJECT_LAYER_WIDTH_PERCENT : 24) * layer.scale}%`,
+  width: `${(layer.url ? OBJECT_LAYER_WIDTH_PERCENT : PLACEHOLDER_WIDTH_PERCENT) * layer.scale}%`,
   zIndex: layerZIndex(layer.key),
 })
 const startObjectDrag = (event: PointerEvent, layer: ObjectEditorLayer) => {
