@@ -102,11 +102,30 @@
         span(v-if="hasSelectedAsset") {{ t('editor.status', { status: tool === 'crop' ? t('editor.cropping') : t('editor.edited') }) }}
         AppButton.canvasHead__libraryButton(variant="outline" :disabled="retouching" @click="openEditorPicker") {{ tool === 'object' ? t('editor.replaceBaseImage') : t('common.selectFromLibrary') }}
         .canvasActions(v-if="hasSelectedAsset")
-          button.canvasActions__zoom(type="button" :disabled="!canZoomOut" :aria-label="t('editor.zoomOut')" @click="zoomOut")
+          button.canvasActions__btn.canvasActions__undo(
+            type="button"
+            :disabled="!editorHistory.canUndo.value"
+            :aria-label="undoLabel"
+            :title="undoLabel"
+            aria-keyshortcuts="Meta+Z Control+Z"
+            @click="undoEdit"
+          )
             IconBack
-          button.canvasActions__zoom(type="button" :disabled="!canZoomIn" :aria-label="t('editor.zoomIn')" @click="zoomIn")
+          button.canvasActions__btn.canvasActions__redo(
+            type="button"
+            :disabled="!editorHistory.canRedo.value"
+            :aria-label="redoLabel"
+            :title="redoLabel"
+            aria-keyshortcuts="Meta+Shift+Z Control+Shift+Z Control+Y Meta+Y"
+            @click="redoEdit"
+          )
             IconNext
+          span.canvasActions__divider(aria-hidden="true")
+          button.canvasActions__btn(type="button" :disabled="!canZoomOut" :aria-label="t('editor.zoomOut')" :title="t('editor.zoomOut')" @click="zoomOut")
+            span(aria-hidden="true") −
           output.canvasActions__value(aria-live="polite") {{ zoomPercent }}%
+          button.canvasActions__btn(type="button" :disabled="!canZoomIn" :aria-label="t('editor.zoomIn')" :title="t('editor.zoomIn')" @click="zoomIn")
+            span(aria-hidden="true") +
         AppButton(v-if="hasSelectedAsset" :disabled="Boolean(savedAssetId)" @click="openSaveDialog") {{ savedAssetId ? t('common.saved') : t('editor.saveAsNew') }}
         span.visuallyHidden(v-if="savedAssetId" role="status" aria-live="polite") {{ t('common.saved') }}
         span.visuallyHidden(v-if="saveError" role="alert") {{ t('editor.saveFailed') }}
@@ -132,7 +151,7 @@
               :tabindex="tool === 'crop' ? -1 : 0"
               :aria-label="t('editor.textContent')"
               :aria-multiline="false"
-              :contenteditable="tool !== 'crop' && editingTextKey === textLayer.key ? 'true' : 'false'"
+              :contenteditable="tool !== 'crop' && editingTextKey === textLayer.key ? 'plaintext-only' : 'false'"
               @dblclick.stop="beginTextEdit(textLayer.key)"
               @keydown="handleTextKeydown($event, textLayer.key)"
               @blur="finishTextEdit(textLayer.key)"
@@ -210,9 +229,38 @@
           AppButton(variant="outline" size="compact" @click="recropCustom") {{ t('editor.cropApplied.recrop') }}
           AppButton(size="compact" :disabled="Boolean(savedAssetId)" @click="openSaveDialog") {{ savedAssetId ? t('common.saved') : t('editor.saveAsNew') }}
         p(v-if="canvasHint" :style="canvasHintStyle") {{ canvasHint }}
-      footer.canvasFoot {{ t('editor.nonDestructive') }}
+      footer.canvasFoot
+        span {{ t('editor.nonDestructive') }}
+        .shortcutHelp(v-if="hasSelectedAsset" ref="shortcutHelpEl")
+          output.shortcutHelp__status {{ clipboardHintVisible ? t('editor.shortcuts.clipboardReady', { keys: keysLabel('V') }) : '' }}
+          button.shortcutHelp__trigger(type="button" :aria-expanded="shortcutsOpen" aria-controls="editorShortcuts" @click="shortcutsOpen = !shortcutsOpen")
+            kbd {{ isMac ? '⌘' : 'Ctrl' }}
+            span {{ t('editor.shortcuts.trigger') }}
+          .shortcutHelp__panel#editorShortcuts(v-if="shortcutsOpen")
+            strong {{ t('editor.shortcuts.title') }}
+            dl
+              template(v-for="row in shortcutRows" :key="row.id")
+                dt {{ t(`editor.shortcuts.actions.${row.id}`) }}
+                dd: kbd(v-for="k in row.keys" :key="k") {{ k }}
+            small {{ t('editor.shortcuts.note') }}
     aside.layers(v-if="tool!=='crop'")
-      h3 {{ t('editor.layers') }} #[button(:aria-label="t('editor.duplicateLayer')" :disabled="!canDuplicateSelectedLayer" @click="duplicateSelectedLayer"): IconAddObject]
+      h3 {{ t('editor.layers') }}
+        button(
+          type="button"
+          :aria-label="t('editor.duplicateLayer')"
+          :title="t('editor.withShortcut', { action: t('editor.duplicateLayer'), keys: keysLabel('D') })"
+          :disabled="!canDuplicateSelectedLayer"
+          @click="duplicateSelectedLayer"
+        )
+          IconAddObject
+        button.layers__delete(
+          type="button"
+          :aria-label="t('editor.deleteLayer')"
+          :title="t('editor.withShortcut', { action: t('editor.deleteLayer'), keys: 'Delete' })"
+          :disabled="!canDuplicateSelectedLayer"
+          @click="deleteSelectedLayer"
+        )
+          IconDelete
       .layer(
         v-for="layer in layers"
         :key="layer.key"
@@ -251,7 +299,11 @@
           IconLayerSort.layer__sort
       .properties(v-if="selectedTextLayer")
         h3 {{ t('editor.textProperties') }}
-        input.properties__text(v-model="selectedTextLayer.content" :aria-label="t('editor.textContent')")
+        input.properties__text(
+          v-model="selectedTextLayer.content"
+          :aria-label="t('editor.textContent')"
+          @input.capture="markMerge('text:' + selectedTextLayer.key)"
+        )
         .fontRow
           .fontSelect(ref="fontSelectEl")
             button.fontSelect__trigger(
@@ -287,7 +339,12 @@
                 span.fontMenu__noteMain {{ t('editor.fontNoteLicense') }}
                 span.fontMenu__noteSub {{ t('editor.fontNoteUpload') }}
           label.colorPicker(:aria-label="t('editor.textColor')" :style="{ '--selected-color': selectedTextLayer.color }")
-            input(v-model="selectedTextLayer.color" type="color" :title="t('editor.textColor')")
+            input(
+              v-model="selectedTextLayer.color"
+              type="color"
+              :title="t('editor.textColor')"
+              @input.capture="markMerge('color:' + selectedTextLayer.key)"
+            )
         small.properties__settings {{ t('editor.textSettings') }}
       .objectGenerator(v-if="tool === 'object'")
         h3 {{ t('editor.addObject.title') }}
@@ -365,6 +422,7 @@ import { useAssets } from '@/composables/useAssets'
 import { usePointerDrag } from '@/composables/usePointerDrag'
 import { usePercentDrag } from '@/composables/usePercentDrag'
 import { useDismissableMenu } from '@/composables/useDismissableMenu'
+import { pickSelection, useEditorHistory, type HistoryEntry } from '@/composables/useEditorHistory'
 import {
   IconAiSparkle,
   IconSpinnerRing,
@@ -377,6 +435,7 @@ import {
   IconBack,
   IconCheckCircle,
   IconChevronDown,
+  IconDelete,
   IconNext,
   IconRefresh,
 } from '@/components/icons'
@@ -532,6 +591,8 @@ const selectEditorAsset = async (asset: Asset) => {
     layers.push({ key: 'original', type: 'original', visible: true, locked: true })
   }
   selectedLayerKey.value = 'original'
+  // 換底圖＝清空上一步／下一步（D5）：舊圖的扣款紀錄已清掉，不能讓人 undo 回舊底圖再扣一次
+  editorHistory.reset(docJson.value, 'original')
 }
 const suggestedAssetName = computed(() => {
   if (props.mode === 'retouch') return `${selectedAssetName.value}_${t('editor.saveDialog.suffixes.retouch')}`
@@ -754,6 +815,14 @@ const setTextObjectRef = (key: string, el: Element | ComponentPublicInstance | n
 }
 const draggingTextKey = ref('')
 const editingTextKey = ref('')
+// 上一步／下一步的記錄閘門（editor-history-shortcuts）：指標按住中（拖曳／縮放／裁切框）不記，放開才記一步；
+// pendingMergeKey＝這一個事件的改值要不要跟上一步合併（連續打字、色盤、方向鍵），只活在設定它的那個事件裡。
+const pointerActive = ref(false)
+let pendingMergeKey = ''
+// 模板 @input.capture 用：必須在 v-model 寫值之前設好，否則 watch 先記完（v-model 的 listener 先於 @input）
+const markMerge = (key: string) => {
+  pendingMergeKey = key
+}
 const zoomPercent = ref(80)
 const zoomMin = 40
 const zoomMax = 160
@@ -1108,17 +1177,55 @@ function addObjectLayer(description: string, url = '', aspect = 1) {
   selectedLayerKey.value = key
   savedAssetId.value = ''
 }
-function duplicateSelectedLayer() {
-  const source = selectedLayer.value
-  if (!source || (source.type !== 'object' && source.type !== 'text')) return
+// 圖層的複製／剪下／貼上／原地複製／刪除／微調（editor-history-shortcuts）。剪貼簿是元件內部變數，
+// 不寫系統剪貼簿（圖層是畫布內物件，別的 App 貼不出東西）；切回素材庫卸載元件即消失。
+const PASTE_OFFSET = 3 // %
+type MovableLayer = TextEditorLayer | ObjectEditorLayer
+let layerClipboard: MovableLayer | null = null
+let nextPasteOffset = PASTE_OFFSET
+const clampPercent = (value: number) => Math.min(100, Math.max(0, value))
+// 「+」、⌘D、⌘V 共用：新 key、放到最上層、選取、清已儲存
+function insertLayerCopy(source: MovableLayer, offset = 0) {
   const key = `${source.type}-${crypto.randomUUID()}`
-  const duplicated =
-    source.type === 'object'
-      ? ({ ...(source as ObjectEditorLayer), key, dragging: false } as ObjectEditorLayer)
-      : ({ ...(source as TextEditorLayer), key } as TextEditorLayer)
-  layers.unshift(duplicated)
+  const copy = { ...source, key, x: clampPercent(source.x + offset), y: clampPercent(source.y + offset) }
+  if (copy.type === 'object') copy.dragging = false
+  layers.unshift(copy)
   selectedLayerKey.value = key
   savedAssetId.value = ''
+  return copy
+}
+function duplicateSelectedLayer() {
+  if (canDuplicateSelectedLayer.value) insertLayerCopy(selectedLayer.value as MovableLayer)
+}
+function deleteSelectedLayer() {
+  const index = layers.findIndex((layer) => layer.key === selectedLayerKey.value)
+  if (index < 0 || layers[index].type === 'original') return
+  layers.splice(index, 1)
+  selectedLayerKey.value = layers[index]?.key ?? layers[index - 1]?.key ?? ''
+  savedAssetId.value = ''
+}
+function copySelectedLayer(cut = false) {
+  if (!canDuplicateSelectedLayer.value) return
+  layerClipboard = { ...(selectedLayer.value as MovableLayer) }
+  // 剪下＝移動：剪下後第一次貼上回原位；複製後貼上錯開，否則疊在原圖層上看不出貼上成功
+  nextPasteOffset = cut ? 0 : PASTE_OFFSET
+  if (cut) deleteSelectedLayer()
+  flashClipboardHint()
+}
+function pasteLayer() {
+  if (!layerClipboard) return
+  const pasted = insertLayerCopy(layerClipboard, nextPasteOffset)
+  layerClipboard = { ...layerClipboard, x: pasted.x, y: pasted.y } // 連續貼上逐次再錯開
+  nextPasteOffset = PASTE_OFFSET
+}
+function nudgeLayer(layer: MovableLayer, dx: number, dy: number) {
+  // ponytail: 以中心點夾 0–100，物件可能半露出畫布；要跟拖曳一致就改用 usePercentDrag 的半寬高夾限
+  const x = clampPercent(layer.x + dx)
+  const y = clampPercent(layer.y + dy)
+  if (x === layer.x && y === layer.y) return
+  pendingMergeKey = `nudge:${layer.key}`
+  layer.x = x
+  layer.y = y
 }
 // 圖片寬高比以瀏覽器載入後的 naturalWidth／Height 為準——畫布上的 <img> 顯示的就是它（套 EXIF 方向；
 // mock 的 Asset.width／height 也跟實圖不符），載不到才退回後端量的尺寸，再不行當正方形。
@@ -1319,7 +1426,10 @@ const handleObjectResizeKeydown = (event: KeyboardEvent, layer: ObjectEditorLaye
   event.preventDefault()
   const increase = event.key === 'ArrowUp' || event.key === 'ArrowRight'
   const step = event.shiftKey ? 0.1 : 0.05
-  layer.scale = Math.max(0.35, Math.min(2.5, layer.scale + (increase ? step : -step)))
+  const next = Math.max(0.35, Math.min(2.5, layer.scale + (increase ? step : -step)))
+  if (next === layer.scale) return
+  pendingMergeKey = `scale:${layer.key}`
+  layer.scale = next
 }
 const beginTextEdit = async (key: string) => {
   editingTextKey.value = key
@@ -1360,7 +1470,10 @@ const handleTextKeydown = (event: KeyboardEvent, key: string) => {
   }
 }
 const resizeTextBy = (layer: TextEditorLayer, amount: number) => {
-  layer.scale = Math.max(0.5, Math.min(3, layer.scale + amount))
+  const next = Math.max(0.5, Math.min(3, layer.scale + amount))
+  if (next === layer.scale) return
+  pendingMergeKey = `scale:${layer.key}`
+  layer.scale = next
 }
 const handleTextResizeKeydown = (event: KeyboardEvent, layer: TextEditorLayer) => {
   if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
@@ -1403,6 +1516,188 @@ watch([layersFingerprint, tool, () => `${cropRect.x}:${cropRect.y}:${cropRect.wi
   saveError.value = false
   saveErrorMessage.value = ''
 })
+// ── 上一步／下一步（editor-history-shortcuts）──────────────────────────────────────────────
+// 快照＝可編輯文件（圖層含順序、裁切框、比例）的 JSON 字串；dragging 是 UI 旗標，序列化時剔除。
+// 必須宣告在 cropRect／layers／editingTextKey 之後（TDZ：提早宣告會讓頁面白屏）。
+const editorHistory = useEditorHistory() // 不叫 history，避免遮蔽 window.history
+const docJson = computed(() =>
+  JSON.stringify({ layers, cropRect, ratio: ratio.value }, (key, value) => (key === 'dragging' ? undefined : value)),
+)
+// 唯一的記錄點：文件字串變了、且沒有指標按住、沒有在編輯畫布文字時記一步。逐處呼叫必漏（變更路徑十幾條）。
+function commitHistory() {
+  const mergeKey = pendingMergeKey
+  pendingMergeKey = ''
+  if (pointerActive.value || editingTextKey.value) return
+  editorHistory.record(docJson.value, selectedLayerKey.value, mergeKey)
+}
+// 畫布上的 pointerdown 都有 .stop，一律在 capture 階段收。
+useEventListener(
+  window,
+  'pointerdown',
+  (event: PointerEvent) => {
+    // 編輯文字時按到畫布上別的東西：對方的 pointerdown 會 preventDefault，焦點不會離開文字框，
+    // 文字會停在編輯狀態、之後的拖曳被併進文字那一步 → 先結束編輯並記成獨立一步。
+    const editingKey = editingTextKey.value
+    const editingEl = editingKey ? textObjectRefs.get(editingKey) : undefined
+    if (editingEl && !editingEl.contains(event.target as Node)) {
+      finishTextEdit(editingKey)
+      editingEl.blur() // 隨後的 @blur → finishTextEdit 因 editingTextKey 已清而直接 return
+      commitHistory()
+    }
+    // 只收主鍵：macOS 右鍵／⌃點按由選單吞掉 pointerup，閘門會卡住
+    if (event.button === 0) pointerActive.value = true
+    pendingMergeKey = ''
+  },
+  { capture: true },
+)
+for (const type of ['pointerup', 'pointercancel', 'dragend'] as const) {
+  useEventListener(
+    window,
+    type,
+    () => {
+      pointerActive.value = false
+    },
+    { capture: true },
+  )
+}
+useEventListener(
+  document,
+  'keydown',
+  () => {
+    pendingMergeKey = ''
+  },
+  { capture: true },
+)
+watch([docJson, pointerActive, editingTextKey], commitHistory)
+
+function applyHistoryEntry(entry: HistoryEntry) {
+  const prevKeys = layers.map((layer) => layer.key)
+  const prevCrop = JSON.stringify([cropRect, ratio.value])
+  const doc = JSON.parse(entry.doc) as { layers: EditorLayer[]; cropRect: typeof cropRect; ratio: string }
+  layers.splice(
+    0,
+    layers.length,
+    ...doc.layers.map((layer) => (layer.type === 'object' ? { ...layer, dragging: false } : layer)),
+  )
+  Object.assign(cropRect, doc.cropRect)
+  ratio.value = doc.ratio
+  selectedLayerKey.value = pickSelection(
+    prevKeys,
+    layers.map((layer) => layer.key),
+    selectedLayerKey.value,
+    entry.selected,
+  )
+  // 被還原掉的文字圖層若正開著字型選單，別讓它下次選到文字圖層時自己彈開
+  fontMenuOpen.value = false
+  // 裁切框只在裁切工具下看得到；還原到裁切步驟卻停在別的工具，畫面會毫無變化
+  if (tool.value !== 'crop' && JSON.stringify([cropRect, ratio.value]) !== prevCrop) tool.value = 'crop'
+}
+// 拖曳 closure 直接寫圖層物件本身，還原會替換物件 → 拖曳中／文字編輯中不執行
+const undoEdit = () => {
+  if (pointerActive.value || editingTextKey.value) return
+  const entry = editorHistory.undo()
+  if (entry) applyHistoryEntry(entry)
+}
+const redoEdit = () => {
+  if (pointerActive.value || editingTextKey.value) return
+  const entry = editorHistory.redo()
+  if (entry) applyHistoryEntry(entry)
+}
+
+// ── 鍵盤快捷鍵與提示 ───────────────────────────────────────────────────────────────────────
+const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
+const keysLabel = (key: string, shift = false) =>
+  isMac ? `${shift ? '⇧' : ''}⌘${key}` : `Ctrl+${shift ? 'Shift+' : ''}${key}`
+const undoLabel = computed(() => t('editor.withShortcut', { action: t('editor.undo'), keys: keysLabel('Z') }))
+const redoLabel = computed(() =>
+  t('editor.withShortcut', { action: t('editor.redo'), keys: isMac ? keysLabel('Z', true) : keysLabel('Y') }),
+)
+const shortcutRows = [
+  { id: 'undo', keys: [keysLabel('Z')] },
+  { id: 'redo', keys: isMac ? [keysLabel('Z', true), keysLabel('Y')] : [keysLabel('Y'), keysLabel('Z', true)] },
+  { id: 'copy', keys: [keysLabel('C')] },
+  { id: 'paste', keys: [keysLabel('V')] },
+  { id: 'cut', keys: [keysLabel('X')] },
+  { id: 'duplicate', keys: [keysLabel('D')] },
+  { id: 'delete', keys: ['Delete', isMac ? '⌫' : 'Backspace'] },
+  { id: 'nudge', keys: ['← ↑ → ↓'] },
+  { id: 'editText', keys: ['Enter'] },
+]
+// 一覽是不搬焦點的非 modal 清單（點外面／Esc 關），不用 useAccessibleDialog：它會把 #app 設 inert、連帶停用快捷鍵
+const shortcutsOpen = ref(false)
+const shortcutHelpEl = ref<HTMLElement | null>(null)
+useDismissableMenu(shortcutsOpen, shortcutHelpEl)
+const CLIPBOARD_HINT_MS = 2000
+const clipboardHintVisible = ref(false)
+let clipboardHintTimer: ReturnType<typeof setTimeout> | undefined
+function flashClipboardHint() {
+  clipboardHintVisible.value = true
+  clearTimeout(clipboardHintTimer)
+  clipboardHintTimer = setTimeout(() => {
+    clipboardHintVisible.value = false
+  }, CLIPBOARD_HINT_MS)
+}
+// 焦點在這些元素上時快捷鍵交給瀏覽器原生（文字框內的 ⌘Z／⌘C／⌘V）。不能「是 input 就跳過」：
+// 圖層顯示勾選是 input[type=checkbox]，點完焦點停在上面；也不能看 role：未編輯的文字圖層是 role=textbox。
+const NON_TEXT_INPUT_TYPES = ['checkbox', 'radio', 'color', 'range', 'button', 'submit', 'reset', 'file']
+function isTextEntry(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.isContentEditable || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement)
+    return true
+  return target instanceof HTMLInputElement && !NON_TEXT_INPUT_TYPES.includes(target.type)
+}
+const NUDGE_DIRECTIONS: Record<string, [number, number]> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+}
+function onEditorKeydown(event: KeyboardEvent) {
+  // ⌘⇧Z 的 key 是大寫 Z；非拉丁鍵盤配置 key 不是字母時退回實體鍵位 code
+  const key = /^[a-z]$/i.test(event.key)
+    ? event.key.toLowerCase()
+    : /^Key[A-Z]$/.test(event.code)
+      ? event.code.slice(3).toLowerCase()
+      : event.key
+  const withModifier = event.metaKey || event.ctrlKey
+  if (props.mode === 'retouch' || !hasSelectedAsset.value) return
+  // 元素層級處理器已處理（縮放把手方向鍵、圖層排序、文字 Enter／F2）、注音選字中、對話框開著（#app inert）
+  if (event.defaultPrevented || event.isComposing || document.querySelector<HTMLElement>('#app')?.inert) return
+  if (isTextEntry(event.target)) return
+  if (pointerActive.value || editingTextKey.value) {
+    // 沒攔下的 ⌘Z 會讓 macOS Chrome 執行原生 undo，焦點不在輸入框也會撤銷先前在 input 打的字
+    if (withModifier && (key === 'z' || key === 'y')) event.preventDefault()
+    return
+  }
+  // Windows AltGr＝Ctrl+Alt 是在打字元；選單開著時方向鍵／Delete 不去動圖層（看狀態不看焦點：Safari 點按鈕不給焦點）
+  if (withModifier ? event.altKey : fontMenuOpen.value || shortcutsOpen.value) return
+  const layer = canDuplicateSelectedLayer.value && tool.value !== 'crop' ? (selectedLayer.value as MovableLayer) : null
+  // 只有「畫布以外」的反白才讓給原生複製文字：開始編輯文字時的全選在結束編輯後仍殘留在畫布內
+  const selection = window.getSelection()
+  const pageTextSelected = Boolean(
+    selection && !selection.isCollapsed && !artboardRef.value?.contains(selection.anchorNode),
+  )
+  let handled = true
+  if (withModifier) {
+    if (key === 'z' && !event.shiftKey) undoEdit()
+    else if (key === 'z' || key === 'y') redoEdit()
+    else if (event.shiftKey)
+      handled = false // ⌘⇧C＝檢查元素、⌘⇧D＝全部分頁加書籤，不搶
+    else if (key === 'd') {
+      if (layer) duplicateSelectedLayer() // 沒有可複製的圖層也擋下，免得變成加書籤
+    } else if ((key === 'c' || key === 'x') && layer && !pageTextSelected) copySelectedLayer(key === 'x')
+    else if (key === 'v' && layerClipboard && tool.value !== 'crop') pasteLayer()
+    else handled = false
+  } else if ((key === 'Delete' || key === 'Backspace') && layer) deleteSelectedLayer()
+  else if (Object.hasOwn(NUDGE_DIRECTIONS, key) && layer) {
+    const [dx, dy] = NUDGE_DIRECTIONS[key]
+    const step = event.shiftKey ? 10 : 1
+    nudgeLayer(layer, dx * step, dy * step)
+  } else handled = false
+  if (handled) event.preventDefault()
+}
+// bubble 階段才看得到元素層級處理器的 defaultPrevented；元件卸載（切回素材庫）時自動移除
+useEventListener(document, 'keydown', onEditorKeydown)
 const ratioOptions = computed<Array<{ id: Exclude<CropRatioId, 'custom'>; label: string; aspect: number }>>(() => [
   { id: 'original', label: t('editor.originalRatio'), aspect: 4 / 3 },
   { id: 'square', label: '1:1', aspect: 1 },
@@ -1477,7 +1772,7 @@ const cropResizeDrag = usePointerDrag()
 // 取景範圍），而不是像自訂模式一樣寬高各自變形、也不應該把 ratio 悄悄改成「自訂」——
 // 「自訂」仍然是使用者要主動點選才會進入的無比例限制模式。
 const startCropResize = (event: PointerEvent, corner: CropCorner) => {
-  if (!artboardRef.value) return
+  if (event.button !== 0 || !artboardRef.value) return
   event.preventDefault()
   const bounds = artboardRef.value.getBoundingClientRect()
   const start = { pointerX: event.clientX, pointerY: event.clientY, ...cropRect }
@@ -1559,6 +1854,7 @@ const startCropMove = (event: PointerEvent) => {
 }
 
 onBeforeUnmount(() => {
+  clearTimeout(clipboardHintTimer)
   artboardResizeObserver?.disconnect()
   cropResizeDrag.stop()
   cropMoveDrag.stop()
@@ -1709,7 +2005,7 @@ const previews = computed(() =>
   align-items: center;
   gap: 0.625rem;
 }
-.canvasActions__zoom {
+.canvasActions__btn {
   width: 1.5rem;
   height: 1.5rem;
   padding: 0;
@@ -1718,21 +2014,30 @@ const previews = computed(() =>
   border-radius: 50%;
   color: #606692;
 }
-.canvasActions__zoom svg {
+.canvasActions__btn svg {
   width: 1rem;
   height: 1rem;
 }
-.canvasActions__zoom:hover:not(:disabled) {
+.canvasActions__btn:hover:not(:disabled) {
   background: #eff2fa;
   color: #2e3567;
 }
-.canvasActions__zoom:focus-visible {
+.canvasActions__btn:focus-visible {
   outline: 2px solid #f2bb00;
   outline-offset: 2px;
 }
-.canvasActions__zoom:disabled {
+.canvasActions__btn:disabled {
   cursor: not-allowed;
   opacity: 0.35;
+}
+.canvasActions__btn > span {
+  font-size: 1rem;
+  line-height: 1;
+}
+.canvasActions__divider {
+  width: 1px;
+  height: 1rem;
+  background: #d2d5dd;
 }
 .canvasActions__value {
   min-width: 2rem;
@@ -2203,6 +2508,86 @@ const previews = computed(() =>
   font-size: 0.75rem;
   line-height: 1.5;
   color: #606692;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  position: relative;
+}
+.shortcutHelp {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+.shortcutHelp kbd {
+  border: 1px solid #d2d5dd;
+  border-radius: 4px;
+  padding: 0 0.3125rem;
+  background: #eff2fa;
+  color: #2e3567;
+  font: inherit;
+  font-size: 0.75rem;
+}
+.shortcutHelp__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.25rem;
+  border-radius: 4px;
+  color: #606692;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.shortcutHelp__trigger:hover {
+  color: #2e3567;
+}
+.shortcutHelp__trigger:focus-visible {
+  outline: 2px solid #f2bb00;
+  outline-offset: 2px;
+}
+.shortcutHelp__panel {
+  position: absolute;
+  right: 1rem;
+  bottom: calc(100% + 0.5rem);
+  z-index: 20;
+  width: 17.5rem;
+  max-width: calc(100vw - 2rem);
+  background: #fff;
+  border: 1px solid #d2d5dd;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(46, 53, 103, 0.12);
+  padding: 0.75rem 1rem;
+  color: #2e3567;
+
+  strong {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.8125rem;
+  }
+
+  dl {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.375rem 0.75rem;
+    margin: 0;
+  }
+
+  dd {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    margin: 0;
+  }
+
+  small {
+    display: block;
+    margin-top: 0.625rem;
+    color: #606692;
+    font-size: 0.6875rem;
+  }
 }
 .layers h3,
 .cropPanel h3 {
@@ -2215,6 +2600,10 @@ const previews = computed(() =>
 .layers h3 button {
   float: right;
   font-size: 1.25rem;
+}
+.layers__delete {
+  margin-right: 0.5rem;
+  font-size: 1.125rem;
 }
 .cropPanel h3 {
   display: flex;
