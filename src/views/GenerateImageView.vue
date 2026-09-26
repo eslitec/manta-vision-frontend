@@ -171,7 +171,7 @@ const perImage = computed(() => prices.value[imageTier.value])
 const prompt = ref('')
 const applyBrand = ref(true)
 const advancedOpen = ref(false)
-const counts = [2, 4]
+const counts = [1, 2, 3, 4]
 const count = ref(2)
 const refImage = ref<Asset | null>(null)
 const pickerOpen = ref(false)
