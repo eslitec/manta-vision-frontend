@@ -564,6 +564,7 @@ export default {
     resizeText: '調整文字大小',
     resetCrop: '重設裁切範圍',
     selectionInstruction: '選取中：文字圖層・拖曳可移動・四角可縮放',
+    selectionInstructionObject: '選取中：物件圖層・拖曳可移動・四角可縮放',
     nonDestructive: '編輯不會變更原圖；另存後會在圖庫建立一張新素材，原圖保留。',
     layers: '圖層',
     duplicateLayer: '複製圖層',
