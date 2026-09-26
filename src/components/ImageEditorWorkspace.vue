@@ -113,7 +113,7 @@
         AppButton(v-if="hasSelectedAsset" :disabled="Boolean(savedAssetId)" @click="openSaveDialog") {{ savedAssetId ? t('common.saved') : t('editor.saveAsNew') }}
         span.visuallyHidden(v-if="savedAssetId" role="status" aria-live="polite") {{ t('common.saved') }}
         span.visuallyHidden(v-if="saveError" role="alert") {{ t('editor.saveFailed') }}
-      .canvas
+      .canvas(@pointerdown="deselectObjectLayer")
         .artboard(ref="artboardRef" :class="{cropping: tool==='crop'}" :style="artboardZoomStyle")
           .canvasEmpty(v-if="!originalLayer")
             IconImagePlaceholder
@@ -294,7 +294,7 @@
         small.properties__settings {{ t('editor.textSettings') }}
       .objectGenerator(v-if="tool === 'object'")
         h3 {{ t('editor.addObject.title') }}
-        AppButton(variant="outline" @click="openObjectPicker") {{ t('editor.addObject.pickFromLibrary') }}
+        AppButton(variant="outline" @click="openObjectPicker") {{ selectedObjectLayer ? t('editor.addObject.replaceImage') : t('editor.addObject.pickFromLibrary') }}
         textarea.objectGenerator__desc(
           v-model="objectDescription"
           maxlength="200"
@@ -384,7 +384,13 @@ import {
 import { api } from '@/api'
 import { useFeedStore } from '@/stores/feed'
 import { isInsufficientFeed } from '@/utils/error'
-import { coverRect, layerRectInSource, percentPointInSource, percentRectInSource } from '@/utils/composite'
+import {
+  containLayerInBox,
+  coverRect,
+  layerRectInSource,
+  percentPointInSource,
+  percentRectInSource,
+} from '@/utils/composite'
 import type { AppliedEditTool, EditorPricing, RetouchOptionKey } from '@/types/api'
 import type { Asset } from '@/types/asset'
 const props = defineProps<{ mode: string }>()
@@ -428,12 +434,14 @@ const editorPickerOpen = ref(false)
 // 以物件圖層疊到畫布上（產品決策，推翻 d58051a「加入物件只走文字描述生成」）。物件模式列
 // source=object（含內建物件），選到的圖只用 url 畫在畫布上、不送後端，所以內建素材在這裡可選。
 const editorPickerMode = ref<'asset' | 'object'>('asset')
-const editorPickerTitle = computed(() =>
-  editorPickerMode.value === 'object' ? t('editor.objectPickerTitle') : t('editor.sourcePickerTitle'),
-)
-const editorPickerSubtitle = computed(() =>
-  editorPickerMode.value === 'object' ? t('editor.addObject.pickerSubtitle') : t('editor.sourcePickerSubtitle'),
-)
+const editorPickerTitle = computed(() => {
+  if (editorPickerMode.value !== 'object') return t('editor.sourcePickerTitle')
+  return selectedObjectLayer.value ? t('editor.objectReplacePickerTitle') : t('editor.objectPickerTitle')
+})
+const editorPickerSubtitle = computed(() => {
+  if (editorPickerMode.value !== 'object') return t('editor.sourcePickerSubtitle')
+  return selectedObjectLayer.value ? t('editor.addObject.replacePickerSubtitle') : t('editor.addObject.pickerSubtitle')
+})
 // 尚未從圖庫選定素材時，名稱與網址都 SHALL 維持真的空字串，不能用示範資料頂替
 // （decision 1，fix-editor-empty-state-before-asset-selected）——畫面上是否顯示
 // 標題／圖層／工具列一律看這兩個 ref 是否有值，不是看它們「看起來像不像」有值。
@@ -472,9 +480,18 @@ const openObjectPicker = () => {
 // selectedAssetUrl 已經是既有、正確代表「有沒有真的選定素材」的 ref（見上方
 // selectedAssetUrl 宣告處的說明），沿用它，不重複定義語意相同的旗標。
 const hasSelectedAsset = computed(() => Boolean(selectedAssetUrl.value))
-const selectEditorAsset = (asset: Asset) => {
+const selectEditorAsset = async (asset: Asset) => {
   if (editorPickerMode.value === 'object') {
-    addObjectLayer(asset.name, asset.url ?? '')
+    const url = asset.url ?? ''
+    // 有選取的物件圖層（含 AI 生成的佔位）＝更換它的圖片：只換 url 與名稱，位置／縮放／順序／顯示／鎖定都保留
+    // （「已儲存」狀態由 layersFingerprint 看 url 變化自動重置）
+    const target = selectedObjectLayer.value
+    if (target) {
+      target.url = url
+      target.label = t('editor.objectLayerDynamic', { name: asset.name })
+      return
+    }
+    addObjectLayer(asset.name, url, await imageAspect(url, asset))
     return
   }
   selectedAssetName.value = asset.name
@@ -954,6 +971,15 @@ const selectedLayer = computed(() => layers.find((layer) => layer.key === select
 const selectedTextLayer = computed(() =>
   selectedLayer.value?.type === 'text' ? (selectedLayer.value as TextEditorLayer) : undefined,
 )
+// 有值時「從圖庫選擇」＝更換這個物件圖層的圖片（按鈕顯示「更換圖片」）；沒有才新增圖層到框選範圍
+const selectedObjectLayer = computed(() =>
+  selectedLayer.value?.type === 'object' ? (selectedLayer.value as ObjectEditorLayer) : undefined,
+)
+// 物件工具下點畫布空白處或框選範圍＝取消物件圖層的選取，讓下一次選圖回到「新增」。
+// 物件／文字圖層的 pointerdown 都有 .stop，點到圖層本身不會走到這裡。
+const deselectObjectLayer = () => {
+  if (tool.value === 'object' && selectedObjectLayer.value) selectedLayerKey.value = ''
+}
 const canDuplicateSelectedLayer = computed(
   () => selectedLayer.value?.type === 'object' || selectedLayer.value?.type === 'text',
 )
@@ -1047,8 +1073,9 @@ const objectPresets = computed(() =>
 const applyObjectPreset = (label: string) => {
   objectDescription.value = objectDescription.value.trim() ? `${objectDescription.value}、${label}` : label
 }
-// 圖庫選來的圖（有 url）置中放；AI 生成（mock）沿用畫布上框選範圍的位置。
-function addObjectLayer(description: string, url = '') {
+// 圖庫選來的圖（有 url）以原始比例 aspect contain 進框選範圍、中心對齊框中心；AI 生成（mock）沿用框選範圍的位置。
+function addObjectLayer(description: string, url = '', aspect = 1) {
+  const placed = url ? containLayerInBox(objectSelection, aspect, ARTBOARD_ASPECT) : null
   const key = `object-${crypto.randomUUID()}`
   const layer: ObjectEditorLayer = {
     key,
@@ -1056,9 +1083,9 @@ function addObjectLayer(description: string, url = '') {
     visible: true,
     locked: false,
     label: t('editor.objectLayerDynamic', { name: description }),
-    x: url ? 50 : objectSelection.x,
-    y: url ? 50 : objectSelection.y,
-    scale: 1,
+    x: placed ? placed.x : objectSelection.x,
+    y: placed ? placed.y : objectSelection.y,
+    scale: placed ? placed.widthPercent / OBJECT_LAYER_WIDTH_PERCENT : 1,
     dragging: false,
     url,
   }
@@ -1077,6 +1104,19 @@ function duplicateSelectedLayer() {
   layers.unshift(duplicated)
   selectedLayerKey.value = key
   savedAssetId.value = ''
+}
+// 圖片寬高比以瀏覽器載入後的 naturalWidth／Height 為準——畫布上的 <img> 顯示的就是它（套 EXIF 方向；
+// mock 的 Asset.width／height 也跟實圖不符），載不到才退回後端量的尺寸，再不行當正方形。
+// 不帶 crossOrigin：與畫布 <img> 同一種請求，共用快取（見 loadImageForCanvas 的說明）。
+async function imageAspect(url: string, fallback: { width?: number; height?: number }) {
+  try {
+    const img = new Image()
+    img.src = url
+    await img.decode()
+    return img.naturalWidth / img.naturalHeight
+  } catch {
+    return fallback.width && fallback.height ? fallback.width / fallback.height : 1
+  }
 }
 // MOCK：生成物件目前沒有真的 AI 影像產出，僅模擬一段生成延遲後直接建立圖層。
 async function generateObjectFromDescription() {
@@ -1176,6 +1216,7 @@ const objectSelectionStyle = computed(() => ({
 // 對齊 Figma 的框選（1141:1140）：只支援拖曳移動範圍，暫不支援拖角縮放
 // （四個 handle 先做視覺對齊，縮放留待有真的 AI 生成範圍需求時再補）。
 const startObjectSelectionDrag = (event: PointerEvent) => {
+  deselectObjectLayer()
   if (event.button !== 0 || !artboardRef.value) return
   event.preventDefault()
   const artboardBounds = artboardRef.value.getBoundingClientRect()

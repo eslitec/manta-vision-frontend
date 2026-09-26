@@ -546,6 +546,7 @@ export default {
     sourcePickerTitle: '從圖庫選擇要編輯的素材',
     sourcePickerSubtitle: '選擇後會載入畫布，原本的編輯內容會先提示是否儲存',
     objectPickerTitle: '選擇要加入的物件',
+    objectReplacePickerTitle: '選擇要替換的圖片',
     newTextPlaceholder: '輸入文字',
     objectLayerDynamic: '物件：{name}',
     resizeObject: '調整物件大小',
@@ -660,7 +661,9 @@ export default {
     addObject: {
       title: '加入物件',
       pickFromLibrary: '從圖庫選擇',
+      replaceImage: '更換圖片',
       pickerSubtitle: '選到的圖會以物件圖層疊到畫布上，可拖曳、縮放',
+      replacePickerSubtitle: '選到的圖會取代目前選取物件圖層的圖片，位置與縮放保留',
       descriptionLabel: '物件描述',
       descriptionPlaceholder: '描述要生成的物件，例：一束粉色乾燥花，放在桌面左側…',
       presets: { bouquet: '花束', plant: '綠植', tableware: '杯盤', shadow: '陰影', card: '裝飾字卡' },
