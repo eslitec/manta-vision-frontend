@@ -103,6 +103,7 @@ import BrandToggle from '@/components/BrandToggle.vue'
 import { IconFeedBottleSmall, IconAddObject, IconCopy, IconImagePlaceholder, IconLoader } from '@/components/icons'
 import postNextStepIconUrl from '@/assets/images/marketing-next-step-alert.svg'
 import { useFeedStore } from '@/stores/feed'
+import { useGenerationTasksStore } from '@/stores/generationTasks'
 import { useAssets } from '@/composables/useAssets'
 import { api } from '@/api'
 import { API_ERROR_CODES, hasErrorCode } from '@/api/errors'
@@ -113,6 +114,7 @@ import type { Asset, GeneratedPost, Inspiration, PostOutputType } from '@/types/
 
 const router = useRouter()
 const feed = useFeedStore()
+const tasksStore = useGenerationTasksStore()
 const { saveGenerated } = useAssets()
 const { t } = useI18n()
 
@@ -211,6 +213,17 @@ const onPick = (a: Asset) => {
 
 const failText = (e: unknown) =>
   isInsufficientFeed(e) ? t('errors.insufficientFeed') : displayMessage(e, t('errors.generationFailed'))
+// 任務中心一半一筆（配圖、文案各自扣點、各自成敗）；名稱比照圖生圖「類型_前 12 字」
+const taskHalves = (type: PostOutputType) =>
+  (['marketingImage', 'marketingText'] as const)
+    .filter((kind) => type !== (kind === 'marketingImage' ? 'textOnly' : 'imageOnly'))
+    .map((kind) => ({
+      kind,
+      name: t(`marketing.taskName.${kind}`, {
+        name: (kind === 'marketingImage' ? posterText.value : intro.value).trim().slice(0, 12),
+      }),
+      cost: prices.value[kind] ?? 0,
+    }))
 
 // only：「換一張圖」只重做配圖、「重寫文案」只重做文案，另一半保留、不重複扣點。
 // 模板點擊一律寫成 generate() 或 generate('imageOnly')，不能只寫函式名（Vue 會把 MouseEvent 當成 only 傳進來）
@@ -222,15 +235,20 @@ async function generate(only?: 'imageOnly' | 'textOnly') {
   generating.value = true
   copied.value = false
   try {
-    const next = await api.generatePost({
-      outputType: sentType,
-      useBrand: applyBrand.value,
-      imageId: productImage.value?.id,
-      posterText: posterText.value,
-      ratio: ratio.value, // 版位比例一併送給後端，影響構圖
-      inspirationId: inspirationId.value || undefined,
-      productDesc: intro.value,
-    })
+    const next = await tasksStore.createMarketingTask(
+      () =>
+        api.generatePost({
+          outputType: sentType,
+          useBrand: applyBrand.value,
+          imageId: productImage.value?.id,
+          posterText: posterText.value,
+          ratio: ratio.value, // 版位比例一併送給後端，影響構圖
+          inspirationId: inspirationId.value || undefined,
+          productDesc: intro.value,
+        }),
+      taskHalves(sentType),
+      failText,
+    )
     if (!result.value || !only) resultType.value = sentType
     result.value = mergePost(result.value, next, only)
     retryHalf.value = sentVersion === inputVersion ? retryTarget(retryHalf.value, next, only) : undefined

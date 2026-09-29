@@ -31,6 +31,7 @@ import { useBrandStore } from './brand'
 import { useConsentStore } from './consent'
 import { useModelsStore } from './models'
 import { useSessionStore } from './session'
+import { useGenerationTasksStore } from './generationTasks'
 import { ctx, clearAuth } from '@/api/http'
 import { fakeSession } from '@/test/factories'
 
@@ -370,5 +371,70 @@ describe('session store', () => {
       expect(brand.profile).toBeNull()
       expect(session.botName).toBe('')
     })
+  })
+})
+
+describe('generationTasks store', () => {
+  const poster = { id: 'r1', generationId: 'g1', url: '', adopted: false }
+  const halves = [
+    { kind: 'marketingImage' as const, name: '行銷海報圖_春季新品', cost: 5 },
+    { kind: 'marketingText' as const, name: '行銷文案_純棉透氣', cost: 0 },
+  ]
+  const errorText = (e: unknown) => `錯：${(e as Error | undefined)?.message}`
+  const byKind = (s: ReturnType<typeof useGenerationTasksStore>, kind: string) => s.tasks.find((t) => t.kind === kind)
+
+  it('行銷「文案＋配圖」記成兩筆任務：送出時進行中，完成後各自完成且計入未讀', async () => {
+    const s = useGenerationTasksStore()
+    let resolve!: (p: { poster: typeof poster; copy: string; hashtags: string[] }) => void
+    const p = s.createMarketingTask(() => new Promise((r) => (resolve = r)), halves, errorText)
+    expect(s.tasks.map((t) => [t.kind, t.name, t.status])).toEqual([
+      ['marketingText', '行銷文案_純棉透氣', 'processing'],
+      ['marketingImage', '行銷海報圖_春季新品', 'processing'],
+    ])
+    expect(s.activeCount).toBe(2)
+    resolve({ poster, copy: '文案', hashtags: [] })
+    await p
+    expect(s.tasks.map((t) => t.status)).toEqual(['done', 'done'])
+    expect(s.activeCount).toBe(0)
+    expect(s.unreadCount).toBe(2)
+  })
+
+  it('只成功一半：成功那筆完成、失敗那筆顯示頁面同一句錯誤', async () => {
+    const s = useGenerationTasksStore()
+    await s.createMarketingTask(
+      async () => ({ poster, hashtags: [], partialError: new Error('文案被擋') }),
+      halves,
+      errorText,
+    )
+    expect(byKind(s, 'marketingImage')).toMatchObject({ status: 'done', error: undefined })
+    expect(byKind(s, 'marketingText')).toMatchObject({ status: 'failed', error: '錯：文案被擋', read: false })
+  })
+
+  it('全部失敗：每筆都標失敗並帶錯誤，錯誤照樣丟回給頁面', async () => {
+    const s = useGenerationTasksStore()
+    await expect(s.createMarketingTask(() => Promise.reject(new Error('飼料不足')), halves, errorText)).rejects.toThrow(
+      '飼料不足',
+    )
+    expect(s.tasks.map((t) => [t.status, t.error])).toEqual([
+      ['failed', '錯：飼料不足'],
+      ['failed', '錯：飼料不足'],
+    ])
+    expect(s.unreadCount).toBe(2)
+  })
+
+  it('只要文案／只要配圖：只記呼叫端給的那一半', async () => {
+    const s = useGenerationTasksStore()
+    await s.createMarketingTask(async () => ({ copy: '文案', hashtags: [] }), [halves[1]!], errorText)
+    expect(s.tasks.map((t) => [t.kind, t.status])).toEqual([['marketingText', 'done']])
+  })
+
+  it('圖生圖完成後未讀徽章會更新（改的是 reactive 的任務，不是原物件）', async () => {
+    const s = useGenerationTasksStore()
+    const p = s.createImageTask(async () => [poster], '圖生圖_x', 8)
+    // 先讀一次：畫面上的徽章在生成中就已經算過，之後要靠 reactive 觸發才會重算
+    expect([s.activeCount, s.unreadCount]).toEqual([1, 0])
+    await p
+    expect(s.unreadCount).toBe(1)
+    expect(s.activeCount).toBe(0)
   })
 })

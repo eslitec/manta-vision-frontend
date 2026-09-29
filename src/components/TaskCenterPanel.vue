@@ -29,6 +29,7 @@ Teleport(to="body")
               span.task__name {{ task.name }}
             //- 圖生圖的結果不會自動入庫（後端 save_result 要按了才存），不能說「已存入圖庫」
             p.task__meta(v-if="task.kind === 'image'") {{ $t('taskCenter.imageCompleted') }}
+            p.task__meta(v-else-if="isMarketing(task.kind)") {{ $t(`taskCenter.${task.kind}Completed`) }}
             p.task__meta(v-else) {{ $t('taskCenter.completed', { type: $t(`assetTypes.${task.kind}`) }) }}
           template(v-else)
             .task__topline
@@ -37,7 +38,8 @@ Teleport(to="body")
             p.task__meta.task__meta--failed {{ task.error || $t('taskCenter.failedDetail') }}
         .task__action
           button(v-if="task.status === 'done' && task.kind === 'video'" @click="view") {{ $t('common.view') }}
-          button(v-else-if="task.status === 'failed'" @click="tasksStore.retryTask(task.id)") {{ $t('common.retry') }}
+          //- 行銷任務的結果只活在行銷頁，面板重試會扣點卻看不到結果：不給重試鈕，重做走頁面的「換一張圖／重寫文案」
+          button(v-else-if="task.status === 'failed' && !isMarketing(task.kind)" @click="tasksStore.retryTask(task.id)") {{ $t('common.retry') }}
     .taskpanel__foot
       p {{ t('taskCenter.notePrimary') }}
       p {{ t('taskCenter.notePolicy') }}
@@ -51,6 +53,7 @@ import { useI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 import { IconClose, IconImagePlaceholder, IconPlayCircle } from '@/components/icons'
+import type { GenerationTaskKind } from '@/types/api'
 
 const open = defineModel<boolean>('open', { required: true })
 const dialogRef = ref<HTMLElement | null>(null)
@@ -61,6 +64,7 @@ const router = useRouter()
 const { t } = useI18n()
 
 const close = () => (open.value = false)
+const isMarketing = (kind: GenerationTaskKind) => kind === 'marketingImage' || kind === 'marketingText'
 useAccessibleDialog(open, dialogRef, close)
 const remainingTime = (progress: number) => {
   const totalSeconds = Math.max(0, Math.round(((100 - progress) / 100) * 145))

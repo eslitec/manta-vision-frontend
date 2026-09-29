@@ -95,8 +95,9 @@ export interface VideoJob {
   error?: string
 }
 
-// ── 背景生成任務（跨頁面，圖生圖／圖生影共用；驅動頂部工具列「任務」按鈕與任務中心面板）──
-export type GenerationTaskKind = 'image' | 'video'
+// ── 背景生成任務（跨頁面，圖生圖／圖生影／行銷 PO 文共用；驅動頂部工具列「任務」按鈕與任務中心面板）──
+// 行銷 PO 文一半一種：marketingImage＝配圖、marketingText＝文案（名稱對齊後端 modelKey）
+export type GenerationTaskKind = 'image' | 'video' | 'marketingImage' | 'marketingText'
 // 圖生圖任務也共用這個型別（純前端內部概念，沒有對應的後端輪詢端點），
 // 但值域跟著 JobStatus 一起改，兩者目前是同一組字面值、指派時才不會型別對不上。
 export type GenerationTaskStatus = 'pending' | 'processing' | 'done' | 'failed'

@@ -142,9 +142,11 @@ export default {
     processing: '生成中…約 1–2 分鐘',
     completed: '已完成・已存入圖庫›{type}',
     imageCompleted: '已完成・結果不會自動存入圖庫，請在圖生圖頁按「存入圖庫」',
+    marketingImageCompleted: '已完成・結果不會自動存入圖庫，請在 AI 行銷 PO 文頁按「存入圖庫」',
+    marketingTextCompleted: '已完成・文案不會自動保存，請在 AI 行銷 PO 文頁按「複製文案」',
     failed: '生成失敗',
     failedDetail: '生成失敗・模型逾時',
-    notePrimary: '完成的影片會自動存入圖庫›影片，離開頁面不影響影片生成；圖生圖請留在頁面上等結果。',
+    notePrimary: '完成的影片會自動存入圖庫›影片，離開頁面不影響影片生成；圖生圖與行銷 PO 文請留在頁面上等結果。',
     notePolicy: '影片生成後無法取消；生成失敗不退還飼料。',
   },
   generationToast: {
@@ -221,6 +223,8 @@ export default {
     nextStep: '下一步：一鍵帶入群發訊息草稿（需與主產品介接，roadmap 項目）',
     pickerTitle: '選擇商品圖片',
     savedName: '行銷海報_{id}',
+    // 任務中心的任務名稱：類型名與用量統計的 modules.items 一致
+    taskName: { marketingImage: '行銷海報圖_{name}', marketingText: '行銷文案_{name}' },
     ratios: { post: '貼文', banner: '橫幅', story: '限動 / Reels' },
     outputType: {
       title: '要產出什麼',
