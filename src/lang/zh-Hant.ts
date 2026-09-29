@@ -38,6 +38,7 @@ export default {
     minutesSeconds: '{minutes} 分 {seconds} 秒',
     remainingMinutesSeconds: '約剩 {minutes} 分 {seconds} 秒',
     remainingSeconds: '約剩 {seconds} 秒',
+    takingLonger: '比預期久一些，請稍候…',
     leaveWhileGenerating: '生成還在進行中，離開這一頁就拿不到這次的結果，飼料仍會照扣。確定要離開嗎？',
   },
   errors: {

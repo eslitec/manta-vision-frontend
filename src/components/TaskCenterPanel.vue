@@ -68,6 +68,8 @@ useAccessibleDialog(open, dialogRef, close)
 // 後端回的 etaSeconds 優先；沒有（pending 前的瞬間、mock）才用進度推估
 const remainingTime = (task: GenerationTask) => {
   const totalSeconds = task.etaSeconds ?? Math.max(0, Math.round(((100 - task.progress) / 100) * 145))
+  // 跑得比該檔平均久時後端 eta 會停在 0：不要一直顯示「約剩 0 秒」
+  if (totalSeconds <= 0) return t('common.takingLonger')
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
 

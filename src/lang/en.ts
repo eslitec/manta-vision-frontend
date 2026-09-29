@@ -38,6 +38,7 @@ export default {
     minutesSeconds: '{minutes}m {seconds}s',
     remainingMinutesSeconds: 'About {minutes}m {seconds}s remaining',
     remainingSeconds: 'About {seconds}s remaining',
+    takingLonger: 'Taking a little longer than usual…',
     leaveWhileGenerating:
       'Generation is still in progress. If you leave this page you will not get this result, and the feed will still be charged. Leave anyway?',
   },

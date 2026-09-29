@@ -21,7 +21,7 @@
 
 ### Requirement: 影片進度輪詢與結果呈現
 
-系統 SHALL 每 3 秒呼叫 `GET /video/{taskId}` 直到 `done` 或 `failed`，進度與剩餘時間 SHALL 使用後端回傳的 `progress`／`etaSeconds`，扣點額 SHALL 以最近一次回傳的 `costFeeds` 為準。輪詢遇斷線、逾時或 5xx SHALL 下一輪再問，遇其他錯誤 SHALL 停止輪詢並把任務標為失敗。`done` 時預覽區 SHALL 播放 `resultUrl` 的影片，「下載」SHALL 把該檔存成「任務名.mp4」，耗時 SHALL 使用後端的 `durationMs`；`failed` 時預覽區與任務中心 SHALL 顯示 `failReason` 對應的文案（上游或存檔失敗說明未扣飼料，內容審核擋下說明飼料照扣）。任務完成或失敗後系統 SHALL 刷新飼料餘額。
+系統 SHALL 每 3 秒呼叫 `GET /video/{taskId}` 直到 `done` 或 `failed`，進度與剩餘時間 SHALL 使用後端回傳的 `progress`／`etaSeconds`（`etaSeconds` 為 0 而任務仍在進行時 SHALL 顯示「比預期久一些，請稍候…」而非「約剩 0 秒」），扣點額 SHALL 以最近一次回傳的 `costFeeds` 為準。輪詢遇斷線、逾時或 5xx SHALL 下一輪再問，遇其他錯誤 SHALL 停止輪詢並把任務標為失敗。`done` 時預覽區 SHALL 播放 `resultUrl` 的影片，「下載」SHALL 把該檔存成「任務名.mp4」，耗時 SHALL 使用後端的 `durationMs`；`failed` 時預覽區與任務中心 SHALL 顯示 `failReason` 對應的文案（上游或存檔失敗說明未扣飼料，內容審核擋下說明飼料照扣）。任務完成或失敗後系統 SHALL 刷新飼料餘額。
 
 #### Scenario: 生成完成可播放與下載
 
@@ -32,6 +32,11 @@
 
 - **WHEN** 某一輪 `GET /video/{taskId}` 回 503 或斷線
 - **THEN** 下一輪繼續輪詢，任務不標為失敗
+
+#### Scenario: 超過預估時間不顯示約剩 0 秒
+
+- **WHEN** 任務仍在 `processing`，輪詢回 `etaSeconds: 0`
+- **THEN** 預覽區與任務中心都顯示「比預期久一些，請稍候…」，不顯示「約剩 0 秒」
 
 #### Scenario: 上游失敗顯示原因
 
