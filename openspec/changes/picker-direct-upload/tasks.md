@@ -16,4 +16,5 @@
 - [x] 3.3 對齊 Requirement「素材挑選彈窗可直接上傳圖片」：真後端冒煙（5179 被另一個 worktree 的 dev server 佔用，改用 `vite --port 5185 --strictPort`、後端 :8000），新註冊的測試帳號從「生成圖片」選參考圖彈窗上傳 PNG → 參考圖顯示該圖、`GET /images` 看得到且 `source=upload`；從編輯器「加入物件」彈窗上傳 → `GET /images?source=object` 看得到、畫布新增物件圖層；不呼叫任何生成端點——7/7 PASS，非 GET 請求只有 `POST /api/auth/*` 與兩次 `POST /api/upload`，`GET /feeds` 餘額前後相同
 - [x] 3.4 `spectra validate picker-direct-upload` valid、`spectra analyze picker-direct-upload` Coverage／Consistency／Gaps 皆 Clean（在不含 git 的複本上跑；spectra 3.0.0 的 validate 沒有 `--strict` 旗標）
 - [x] 3.6 對齊 Requirement「素材挑選彈窗上傳成功後新圖置頂並自動選取」（審查後續）：上傳中關閉彈窗、上傳完成前重開時，重開的 `GET /images` 可能已帶到新圖，插入前以 `id` 去重，避免同一張出現兩筆；審查者的 `rv_extra.cjs` 第 7 項改前 FAIL（出現 2 筆）、改後 PASS（1 筆），其餘 9 項維持 PASS；`vue-tsc`、`lint`、prettier 皆過
+- [x] 3.7 對齊 Requirement「素材挑選彈窗可直接上傳圖片」（使用者回報上傳卡片變形）：`.picker__grid` 由 `repeat(4, 1fr)` 改為 `repeat(4, minmax(0, 1fr))`——`1fr` 的下限是內容寬，真後端圖片原始寬 640～1024px 會把欄撐開、格線橫向溢出、上傳卡片被擠窄（mock 圖小所以先前冒煙沒抓到）。驗證：真後端探針 `pickgrid/probe.cjs`（1440／1000 寬，全部素材與只剩 1 張兩種情境）改前各格寬 146／197 不一致且格線 828 > 672 溢出，改後每格 159 × 104、無溢出；mock 冒煙 34/34；`vue-tsc`／`lint`／prettier 通過
 - [ ] 3.5 PR 合併並確認畫面驗收無誤後執行 `spectra archive picker-direct-upload`
