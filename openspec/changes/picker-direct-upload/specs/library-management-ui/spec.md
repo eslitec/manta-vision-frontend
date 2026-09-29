@@ -2,7 +2,7 @@
 
 ### Requirement: 素材挑選彈窗可直接上傳圖片
 
-`ImagePickerDialog.vue`（各頁面「從圖庫選擇」共用的挑選彈窗，含圖庫「編輯圖片」選底圖、編輯器「加入物件」、AI 試穿選服飾、生成圖片選參考圖、行銷 PO 文選圖、生成影片選圖）的素材格線第一格 SHALL 是「上傳圖片」卡片，六個使用處 SHALL 共用這一份實作，SHALL NOT 在各頁面另寫上傳入口。卡片 SHALL 沿用格線既有的縮圖尺寸與色系，以虛線框、加號與「上傳圖片」文字呈現；卡片 SHALL 可用鍵盤聚焦，按 Enter 或 Space SHALL 開啟檔案選擇，並 SHALL 帶有說明格式與拖放的 `aria-label`。使用者把檔案拖放到彈窗內 SHALL 同樣觸發上傳。檔案選擇的 `accept` SHALL 取自既有的支援格式常數（jpg／jpeg／png／webp），SHALL NOT 另立一份清單。上傳 SHALL 走既有的 `useAssets().upload`（真後端 `POST /upload`）：物件模式 SHALL 帶 `source=object`，其他模式 SHALL NOT 帶 `source`。上傳進行中卡片 SHALL 顯示「上傳中…」與進行中圖示，確認鈕（「選擇這張」／「加入所選」）SHALL 停用，SHALL NOT 重複送出；上傳 SHALL NOT 消耗飼料。
+`ImagePickerDialog.vue`（各頁面「從圖庫選擇」共用的挑選彈窗，含圖庫「編輯圖片」選底圖、編輯器「加入物件」、AI 試穿選服飾、生成圖片選參考圖、行銷 PO 文選圖、生成影片選圖）的素材格線第一格 SHALL 是「上傳圖片」卡片，六個使用處 SHALL 共用這一份實作，SHALL NOT 在各頁面另寫上傳入口。卡片 SHALL 沿用格線既有的縮圖尺寸與色系，格線四欄 SHALL 等寬、不因素材圖片原始寬度而撐開或出現橫向捲動，上傳卡片 SHALL 與素材縮圖同尺寸；以虛線框、加號與「上傳圖片」文字呈現；卡片 SHALL 可用鍵盤聚焦，按 Enter 或 Space SHALL 開啟檔案選擇，並 SHALL 帶有說明格式與拖放的 `aria-label`。使用者把檔案拖放到彈窗內 SHALL 同樣觸發上傳。檔案選擇的 `accept` SHALL 取自既有的支援格式常數（jpg／jpeg／png／webp），SHALL NOT 另立一份清單。上傳 SHALL 走既有的 `useAssets().upload`（真後端 `POST /upload`）：物件模式 SHALL 帶 `source=object`，其他模式 SHALL NOT 帶 `source`。上傳進行中卡片 SHALL 顯示「上傳中…」與進行中圖示，確認鈕（「選擇這張」／「加入所選」）SHALL 停用，SHALL NOT 重複送出；上傳 SHALL NOT 消耗飼料。
 
 #### Scenario: 六個使用處的格線第一格都是上傳卡片
 
@@ -14,6 +14,11 @@
 - **GIVEN** 使用者在「生成圖片」頁
 - **WHEN** 點擊「從圖庫選擇」
 - **THEN** `.picker__grid` 的第一個子元素是 `aria-label` 為「上傳圖片（jpg／png／webp，10MB 以內），也可以把檔案拖放到這裡」的按鈕
+
+#### Scenario: 大圖不會撐開格線或擠窄上傳卡片
+
+- **WHEN** 圖庫素材是原始寬度 640～1024px 的真後端圖片，且格線裡只有少量素材
+- **THEN** 格線四欄等寬、沒有橫向捲動，上傳卡片與素材縮圖同為 159 × 104 的比例與尺寸
 
 #### Scenario: 使用鍵盤開啟檔案選擇
 

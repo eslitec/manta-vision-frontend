@@ -297,9 +297,11 @@ const confirm = () => {
   }
 }
 // dlg_grid：4 欄（159 寬）、列距 16、欄距 12
+// minmax(0, 1fr) 而不是 1fr：1fr 的下限是內容寬，真後端的圖原始寬 640～1024px 會把欄撐開，
+// 格線橫向溢出、上傳卡片被擠窄
 .picker__grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   column-gap: 0.75rem;
   row-gap: 1rem;
   overflow-y: auto;
