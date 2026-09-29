@@ -428,6 +428,14 @@ describe('generationTasks store', () => {
     expect(s.tasks.map((t) => [t.kind, t.status])).toEqual([['marketingText', 'done']])
   })
 
+  it('圖生圖失敗：任務帶頁面同一句錯誤（不是固定的「模型逾時」）', async () => {
+    const s = useGenerationTasksStore()
+    await expect(
+      s.createImageTask(() => Promise.reject(new Error('飼料不足')), '圖生圖_x', 8, errorText),
+    ).rejects.toThrow('飼料不足')
+    expect(byKind(s, 'image')).toMatchObject({ status: 'failed', error: '錯：飼料不足', read: false })
+  })
+
   it('圖生圖完成後未讀徽章會更新（改的是 reactive 的任務，不是原物件）', async () => {
     const s = useGenerationTasksStore()
     const p = s.createImageTask(async () => [poster], '圖生圖_x', 8)

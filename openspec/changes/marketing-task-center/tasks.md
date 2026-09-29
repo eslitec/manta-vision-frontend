@@ -14,3 +14,7 @@
 
 - [x] 3.1 mock 冒煙（puppeteer 真滑鼠）：三種輸出類型、整次失敗、只成功一半、圖生圖與影片任務；同一支腳本在 bf213e7 上 FAIL、改動後全 PASS。
 - [x] 3.2 `npx vitest run`、`npx vue-tsc --noEmit`、`npm run lint`、`npx prettier --check <改動檔>` 全數通過。
+
+## 4. 審查後續
+
+- [x] 4.1 對齊 Requirement「圖生圖任務狀態即時反映在任務中心」：`createImageTask` 新增選填 `errorText`，`GenerateImageView` 兩處呼叫傳入與頁面相同的 `failText`，失敗任務不再固定顯示「生成失敗・模型逾時」；面板「重試」鈕只給影片任務（`retryTask` 只處理影片，原本圖生圖失敗會出現按了沒反應的重試鈕）；`.task__meta` 由單行截斷改為最多兩行並在失敗說明加 `title`，行銷完成文案的「請在行銷頁按存入圖庫」不再被截掉。驗證：新增 vitest 1 條，拿掉錯誤傳遞時紅、還原綠；`npx vitest run` 289 passed；mock 冒煙 `a1-smoke.cjs` 9/9 PASS 並目視截圖兩行顯示；`vue-tsc`／`lint`／prettier 通過

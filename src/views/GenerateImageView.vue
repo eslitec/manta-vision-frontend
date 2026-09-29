@@ -291,6 +291,7 @@ async function generate() {
       () => api.generateImages(buildReq(count.value)),
       t('image.taskName', { name: prompt.value.slice(0, 12) || Date.now() }),
       price * count.value,
+      (e) => failText(e, t('errors.insufficientFeed')),
     )
   } catch (e: unknown) {
     errorMsg.value = failText(e, t('errors.insufficientFeed'))
@@ -343,6 +344,7 @@ async function regen(r: GeneratedImage) {
       () => api.generateImages(buildReq(1, r.id)), // 用當下的參考圖（可為空），後端不沿用原生成那張
       t('image.regenerationTaskName'),
       price,
+      (e) => failText(e, t('image.regenerationInsufficientFeed')),
     )
     const i = results.value.findIndex((x) => x.id === r.id)
     if (i >= 0 && next) results.value[i] = next
