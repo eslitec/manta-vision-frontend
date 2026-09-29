@@ -112,11 +112,12 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     task.read = false
   }
 
-  // 圖生圖：包一層只是讓任務紀錄／任務中心跟影片走同一條路徑
+  // 圖生圖：包一層只是讓任務紀錄／任務中心跟影片走同一條路徑。errorText 由頁面傳入，面板與頁面講同一句錯誤
   async function createImageTask(
     run: () => Promise<GeneratedImage[]>,
     name: string,
     cost: number,
+    errorText?: (e: unknown) => string,
   ): Promise<GeneratedImage[]> {
     const task = addTask('image', name, cost)
     try {
@@ -125,7 +126,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
       finish(task, 'done')
       return result
     } catch (e) {
-      finish(task, 'failed')
+      finish(task, 'failed', errorText?.(e))
       throw e
     }
   }

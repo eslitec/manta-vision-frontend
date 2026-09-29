@@ -35,11 +35,11 @@ Teleport(to="body")
             .task__topline
               span.task__dot.task__dot--failed
               span.task__name {{ task.name }}
-            p.task__meta.task__meta--failed {{ task.error || $t('taskCenter.failedDetail') }}
+            p.task__meta.task__meta--failed(:title="task.error || $t('taskCenter.failedDetail')") {{ task.error || $t('taskCenter.failedDetail') }}
         .task__action
           button(v-if="task.status === 'done' && task.kind === 'video'" @click="view") {{ $t('common.view') }}
-          //- 行銷任務的結果只活在行銷頁，面板重試會扣點卻看不到結果：不給重試鈕，重做走頁面的「換一張圖／重寫文案」
-          button(v-else-if="task.status === 'failed' && !isMarketing(task.kind)" @click="tasksStore.retryTask(task.id)") {{ $t('common.retry') }}
+          //- 只有影片能從面板重試（retryTask 只處理影片）：圖生圖與行銷的結果只活在各自頁面，面板重做會扣點卻看不到結果
+          button(v-else-if="task.status === 'failed' && task.kind === 'video'" @click="tasksStore.retryTask(task.id)") {{ $t('common.retry') }}
     .taskpanel__foot
       p {{ t('taskCenter.notePrimary') }}
       p {{ t('taskCenter.notePolicy') }}
@@ -271,8 +271,10 @@ const view = () => {
     color: #606692;
     font-size: 0.75rem;
     line-height: normal;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    // 最多兩行：行銷完成文案的重點（「請在行銷頁按存入圖庫」）與較長的失敗原因在一行裡會被截掉
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 
     &--failed {
       color: #ff6148;
