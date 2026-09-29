@@ -13,3 +13,4 @@
 
 - [x] 3.1 mock 冒煙（puppeteer 真滑鼠）`a1-smoke.cjs`：試穿、快速修飾、指令修圖、重新修圖、兩種失敗，以及行銷、圖生圖、影片任務；同一支腳本在 05867b3 上 FAIL 12／20、改動後 20／20 PASS。
 - [x] 3.2 `npx vitest run`（291 passed）、`npx vue-tsc --noEmit`、`npm run lint`、`npx prettier --check <改動檔>` 全數通過。
+- [x] 2.5 對齊 Requirement「AI 修圖生成列入任務中心」（審查後續：說明被截斷）：`TaskCenterPanel.vue` 的 `.task__meta` 拿掉兩行上限、`.task` 加 `flex-shrink: 0`。驗證：`clamp2.cjs` 截斷檢查改前 zh 360 兩筆、en 360／375／1440 全部 TRUNC，改後全 ok；另加重疊檢查（說明底部不超出該列、下一列不疊上一列），只拿掉上限時 en 五列全溢出、補 `flex-shrink: 0` 後 zh／en × 360／1440 皆無重疊，目視截圖確認

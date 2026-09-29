@@ -160,8 +160,10 @@ const view = () => {
   }
 }
 
+// 列表是會捲動的直向 flex：不加 flex-shrink: 0 的話任務多時每列被壓回 min-height，較長的說明會疊到下一列
 .task {
   @include flex(flex-start, center, 0.625rem);
+  flex-shrink: 0;
   min-height: 3.5rem;
   padding: 0.5rem;
   border-radius: 8px;
@@ -268,10 +270,7 @@ const view = () => {
     color: #606692;
     font-size: 0.75rem;
     line-height: normal;
-    // 最多兩行：行銷完成文案的重點（「請在行銷頁按存入圖庫」）與較長的失敗原因在一行裡會被截掉
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    // 不設行數上限：完成說明的重點在句尾（「請到○○頁按○○」），手機寬度與英文介面兩行放不下，截掉就等於沒說
 
     &--failed {
       color: #ff6148;

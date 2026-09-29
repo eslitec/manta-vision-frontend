@@ -38,7 +38,7 @@ AI 試穿（`POST /tryon`）與 AI 修圖（`POST /edit`，multipart）在 `src/
 - `tryonCompleted`：「已完成・結果不會自動存入圖庫，請在 AI 試穿頁按「存入圖庫」」（按鈕文字＝`common.saveToLibrary`）。
 - `retouchCompleted`：「已完成・結果不會自動存入圖庫，請到圖庫「AI 修圖」按「另存為新素材」」（分頁＝`library.tabs.retouch`、按鈕＝`editor.saveAsNew`）。
 
-面板說明最多兩行（`TaskCenterPanel.vue` 的 `-webkit-line-clamp: 2`），中文完成說明以手機 375 寬兩行放得下為上限，否則按鈕名會被截掉（修圖原本寫「…分頁按…」在 375 寬被截成「按「另存為…」」，因此拿掉「分頁」、「請在」改「請到」）。
+面板說明原本最多兩行（`-webkit-line-clamp: 2`），手機 360 寬與英文介面仍會截掉句尾的按鈕名；9/29 改為不設行數上限、完整換行，並給 `.task` 加 `flex-shrink: 0`（列表是會捲動的直向 flex，列會被壓回 min-height 而讓說明疊到下一列）。修圖說明仍維持縮短後的版本。
 
 任務名稱前綴與既有 i18n 一致：「AI 試穿」＝`sources.tryon`／`usage.modules.items.tryon`，「AI 修圖」＝`library.tabs.retouch`。試穿用服飾素材名、修圖用來源素材名（重新修圖的來源素材不變，名稱相同）。
 
