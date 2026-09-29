@@ -139,10 +139,14 @@ export default {
     processing: 'Generating… about 1–2 minutes',
     completed: 'Completed · Saved to Library › {type}',
     imageCompleted: 'Completed · Results are not saved automatically. Use "Save to library" on the image page.',
+    marketingImageCompleted:
+      'Completed · Results are not saved automatically. Use "Save to library" on the AI Marketing Post page.',
+    marketingTextCompleted:
+      'Completed · Copy is not saved automatically. Use "Copy text" on the AI Marketing Post page.',
     failed: 'Generation failed',
     failedDetail: 'Generation failed · Model timeout',
     notePrimary:
-      'Completed videos are saved automatically to Library › Videos, and leaving the page does not interrupt video generation. For images, stay on the page until the results appear.',
+      'Completed videos are saved automatically to Library › Videos, and leaving the page does not interrupt video generation. For images and marketing posts, stay on the page until the results appear.',
     notePolicy: 'Video generation cannot be cancelled after it starts; failed generations are not refunded.',
   },
   generationToast: {
@@ -244,6 +248,7 @@ export default {
     nextStep: 'Next: Add directly to a broadcast draft (requires main-product integration; roadmap item)',
     pickerTitle: 'Select product image',
     savedName: 'Marketing poster_{id}',
+    taskName: { marketingImage: 'Marketing poster_{name}', marketingText: 'Marketing copy_{name}' },
     ratios: { post: 'Post', banner: 'Banner', story: 'Story / Reels' },
     outputType: {
       title: 'What to generate',
