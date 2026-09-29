@@ -443,6 +443,7 @@ import {
 import { api } from '@/api'
 import { API_ERROR_CODES, hasErrorCode } from '@/api/errors'
 import { useFeedStore } from '@/stores/feed'
+import { useGenerationTasksStore } from '@/stores/generationTasks'
 import { downloadFile } from '@/utils/download'
 import { displayMessage, isInsufficientFeed } from '@/utils/error'
 import {
@@ -458,6 +459,7 @@ const props = defineProps<{ mode: string }>()
 const { t } = useI18n()
 const { saveEdited, saveGenerated, folders, loadFolders, upload } = useAssets()
 const feed = useFeedStore()
+const tasksStore = useGenerationTasksStore()
 
 // 價目表一律問後端，前端不寫死金額（CLAUDE.md：前端不得硬寫範例數字）
 const pricing = ref<EditorPricing | null>(null)
@@ -951,13 +953,22 @@ function startRetouch() {
 }
 // 重新修圖＝同樣條件再送一次：上一發已有結果、冪等鍵已放掉，後端當新請求再扣一次（按鈕上標價）
 const retouchAgain = () => lastRetouchReq && runRetouch(lastRetouchReq)
+const retouchFailText = (error: unknown) =>
+  isInsufficientFeed(error) ? t('errors.insufficientFeed') : displayMessage(error, t('errors.generationFailed'))
 async function runRetouch(req: RetouchReq) {
   if (retouching.value) return
   retouching.value = true
   retouchError.value = ''
   const sourceName = selectedAssetName.value
   try {
-    const result = await api.retouchImage(req)
+    // 任務中心記一筆（開始修圖與重新修圖都是；名稱＝「AI 修圖_素材名前 12 字」）；請求照舊，結果與錯誤原樣回到這裡
+    const result = await tasksStore.trackTask(
+      'retouch',
+      t('editor.retouch.taskName', { name: sourceName.trim().slice(0, 12) }),
+      retouchPrice.value ?? 0,
+      () => api.retouchImage(req),
+      retouchFailText,
+    )
     // 修圖中兩個分頁的換圖按鈕都停用，照理不會發生；萬一換了圖，結果不能配到新圖上，
     // 也不能默默丟掉（已扣點）——明講結果屬於哪張圖
     if (req.imageId !== selectedAssetId.value) {
@@ -969,9 +980,7 @@ async function runRetouch(req: RetouchReq) {
     retouchSaved.value = false
     retouchSetupOpen.value = false
   } catch (error) {
-    retouchError.value = isInsufficientFeed(error)
-      ? t('errors.insufficientFeed')
-      : displayMessage(error, t('errors.generationFailed'))
+    retouchError.value = retouchFailText(error)
   } finally {
     retouching.value = false
     // 成功或失敗都刷新：內容被擋會扣點、失敗會退點。刷新本身失敗不蓋掉修圖的錯誤訊息

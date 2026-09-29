@@ -144,9 +144,11 @@ export default {
     imageCompleted: '已完成・結果不會自動存入圖庫，請在圖生圖頁按「存入圖庫」',
     marketingImageCompleted: '已完成・結果不會自動存入圖庫，請在 AI 行銷 PO 文頁按「存入圖庫」',
     marketingTextCompleted: '已完成・文案不會自動保存，請在 AI 行銷 PO 文頁按「複製文案」',
+    tryonCompleted: '已完成・結果不會自動存入圖庫，請在 AI 試穿頁按「存入圖庫」',
+    retouchCompleted: '已完成・結果不會自動存入圖庫，請在圖庫「AI 修圖」分頁按「另存為新素材」',
     failed: '生成失敗',
     failedDetail: '生成失敗・模型逾時',
-    notePrimary: '完成的影片會自動存入圖庫›影片，離開頁面不影響影片生成；圖生圖與行銷 PO 文請留在頁面上等結果。',
+    notePrimary: '完成的影片會自動存入圖庫›影片，離開頁面不影響影片生成；其他生成請留在頁面上等結果。',
     notePolicy: '影片生成後無法取消；生成失敗不退還飼料。',
   },
   generationToast: {
@@ -299,6 +301,7 @@ export default {
     resultHint: '結果只暫存 24 小時，按「存入圖庫」才會保留',
     pickerTitle: '選擇服飾素材',
     savedName: '試穿圖_{timestamp}',
+    taskName: 'AI 試穿_{name}',
     terms: {
       title: '肖像權同意條款',
       intro:
@@ -755,6 +758,7 @@ export default {
       commandApplied: '已依修圖指令完成',
       commandAppliedDynamic: '已依指令修圖・額外套用：{items}',
       again: '重新修圖（{count} 顆）',
+      taskName: 'AI 修圖_{name}',
       priceLoadFailed: '修圖價格載入失敗，暫時無法開始修圖。請重新整理頁面再試。',
       staleResult: '修圖完成前已換成別張圖：這次結果屬於先前的「{name}」，沒有套用到目前這張（已扣 {count} 顆飼料）。',
       options: {

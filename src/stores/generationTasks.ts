@@ -2,12 +2,12 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/api'
 import { i18n } from '@/lang'
-import type { GenerationTask, GenerationTaskKind, GeneratedImage, GeneratedPost, VideoJobReq } from '@/types/api'
+import type { GenerationTask, GenerationTaskKind, GeneratedPost, VideoJobReq } from '@/types/api'
 
 let seq = 0
 const uid = () => `imgtask_${Date.now()}_${++seq}`
 
-// 背景生成任務：跨頁面（圖生圖／圖生影／行銷 PO 文共用），不綁在任何頁面元件的生命週期上，
+// 背景生成任務：跨頁面（圖生圖／圖生影／行銷 PO 文／AI 試穿／AI 修圖共用），不綁在任何頁面元件的生命週期上，
 // 使用者離開頁面後任務仍持續在背景輪詢，驅動頂部工具列「任務」徽章與任務中心面板。
 export const useGenerationTasksStore = defineStore('generationTasks', () => {
   const tasks = ref<GenerationTask[]>([])
@@ -89,7 +89,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     return task.id
   }
 
-  // 呼叫端自己 await 結果的生成（圖生圖、行銷 PO 文）：任務只負責讓任務中心看得到進行中與成敗。
+  // 呼叫端自己 await 結果的生成（圖生圖、行銷 PO 文、AI 試穿、AI 修圖）：任務只負責讓任務中心看得到進行中與成敗。
   // 一定要改 tasks 裡的 reactive proxy——改 unshift 進去的原物件不會觸發徽章與面板更新
   function addTask(kind: GenerationTaskKind, name: string, cost: number): GenerationTask {
     tasks.value.unshift({
@@ -112,46 +112,42 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     task.read = false
   }
 
-  // 圖生圖：包一層只是讓任務紀錄／任務中心跟影片走同一條路徑。errorText 由頁面傳入，面板與頁面講同一句錯誤
-  async function createImageTask(
-    run: () => Promise<GeneratedImage[]>,
+  // 頁面照原樣呼叫自己的 API（run），這裡只記一筆任務：進行中 → 完成／失敗，結果與錯誤原封不動交還頁面。
+  // errorText 由頁面傳入，面板與頁面講同一句錯誤。
+  // ponytail: 這類任務不支援從面板重試——結果只活在各自頁面元件裡，面板重做會扣點卻看不到結果
+  async function trackTask<T>(
+    kind: GenerationTaskKind,
     name: string,
     cost: number,
-    errorText?: (e: unknown) => string,
-  ): Promise<GeneratedImage[]> {
-    const task = addTask('image', name, cost)
+    run: () => Promise<T>,
+    errorText: (e: unknown) => string,
+  ): Promise<T> {
+    const task = addTask(kind, name, cost)
     try {
       const result = await run()
-      task.resultImages = result
       finish(task, 'done')
       return result
     } catch (e) {
-      finish(task, 'failed', errorText?.(e))
+      finish(task, 'failed', errorText(e))
       throw e
     }
   }
 
   // 行銷 PO 文：配圖與文案是兩支獨立端點（各自扣點、各自成敗），所以一半記一筆任務，
-  // 「文案＋配圖」在任務中心就是兩筆、各自顯示完成或失敗。errorText 由頁面傳入，面板與頁面講同一句錯誤。
-  // ponytail: 不支援從面板重試——結果只活在行銷頁元件裡，面板重做會扣點卻看不到結果；重做走頁面的「換一張圖／重寫文案」
+  // 「文案＋配圖」在任務中心就是兩筆、各自顯示完成或失敗。只成功一半時失敗那筆帶 partialError 的原因
   async function createMarketingTask(
     run: () => Promise<GeneratedPost>,
     halves: { kind: 'marketingImage' | 'marketingText'; name: string; cost: number }[],
     errorText: (e: unknown) => string,
   ): Promise<GeneratedPost> {
-    const mine = halves.map((h) => addTask(h.kind, h.name, h.cost))
-    try {
-      const post = await run()
-      for (const task of mine) {
-        const ok = task.kind === 'marketingImage' ? !!post.poster : post.copy !== undefined
-        if (ok) finish(task, 'done')
-        else finish(task, 'failed', errorText(post.partialError))
-      }
-      return post
-    } catch (e) {
-      mine.forEach((task) => finish(task, 'failed', errorText(e)))
-      throw e
+    const post = run()
+    const half = async (kind: 'marketingImage' | 'marketingText') => {
+      const p = await post
+      if (kind === 'marketingImage' ? !p.poster : p.copy === undefined) throw p.partialError
     }
+    // 每一半的錯誤已記在各自的任務上；整次失敗的錯誤由下面的 return 丟回頁面
+    await Promise.allSettled(halves.map((h) => trackTask(h.kind, h.name, h.cost, () => half(h.kind), errorText)))
+    return post
   }
 
   async function retryTask(id: string): Promise<string | undefined> {
@@ -173,7 +169,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     activeCount,
     unreadCount,
     createVideoTask,
-    createImageTask,
+    trackTask,
     createMarketingTask,
     retryTask,
     markAllRead,
