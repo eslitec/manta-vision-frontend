@@ -431,18 +431,46 @@ describe('generationTasks store', () => {
   it('圖生圖失敗：任務帶頁面同一句錯誤（不是固定的「模型逾時」）', async () => {
     const s = useGenerationTasksStore()
     await expect(
-      s.createImageTask(() => Promise.reject(new Error('飼料不足')), '圖生圖_x', 8, errorText),
+      s.trackTask('image', '圖生圖_x', 8, () => Promise.reject(new Error('飼料不足')), errorText),
     ).rejects.toThrow('飼料不足')
     expect(byKind(s, 'image')).toMatchObject({ status: 'failed', error: '錯：飼料不足', read: false })
   })
 
   it('圖生圖完成後未讀徽章會更新（改的是 reactive 的任務，不是原物件）', async () => {
     const s = useGenerationTasksStore()
-    const p = s.createImageTask(async () => [poster], '圖生圖_x', 8)
+    const p = s.trackTask('image', '圖生圖_x', 8, async () => [poster], errorText)
     // 先讀一次：畫面上的徽章在生成中就已經算過，之後要靠 reactive 觸發才會重算
     expect([s.activeCount, s.unreadCount]).toEqual([1, 0])
     await p
     expect(s.unreadCount).toBe(1)
     expect(s.activeCount).toBe(0)
+  })
+
+  it('AI 試穿：送出時進行中，完成後標完成、計入未讀，結果原樣交還頁面', async () => {
+    const s = useGenerationTasksStore()
+    let resolve!: (r: typeof poster) => void
+    const p = s.trackTask(
+      'tryon',
+      'AI 試穿_白色棉T',
+      6,
+      () => new Promise<typeof poster>((r) => (resolve = r)),
+      errorText,
+    )
+    expect(s.tasks.map((t) => [t.kind, t.name, t.status, t.cost])).toEqual([
+      ['tryon', 'AI 試穿_白色棉T', 'processing', 6],
+    ])
+    expect([s.activeCount, s.unreadCount]).toEqual([1, 0])
+    resolve(poster)
+    await expect(p).resolves.toBe(poster)
+    expect(byKind(s, 'tryon')).toMatchObject({ status: 'done', progress: 100, error: undefined, read: false })
+    expect([s.activeCount, s.unreadCount]).toEqual([0, 1])
+  })
+
+  it('AI 修圖失敗：任務帶頁面同一句錯誤，錯誤照樣丟回頁面', async () => {
+    const s = useGenerationTasksStore()
+    const err = new Error('內容被擋')
+    await expect(s.trackTask('retouch', 'AI 修圖_桌面', 8, () => Promise.reject(err), errorText)).rejects.toBe(err)
+    expect(byKind(s, 'retouch')).toMatchObject({ status: 'failed', error: '錯：內容被擋', read: false })
+    expect(s.unreadCount).toBe(1)
   })
 })

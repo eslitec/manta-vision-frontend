@@ -27,10 +27,9 @@ Teleport(to="body")
             .task__topline
               span.task__dot.task__dot--done
               span.task__name {{ task.name }}
-            //- 圖生圖的結果不會自動入庫（後端 save_result 要按了才存），不能說「已存入圖庫」
-            p.task__meta(v-if="task.kind === 'image'") {{ $t('taskCenter.imageCompleted') }}
-            p.task__meta(v-else-if="isMarketing(task.kind)") {{ $t(`taskCenter.${task.kind}Completed`) }}
-            p.task__meta(v-else) {{ $t('taskCenter.completed', { type: $t(`assetTypes.${task.kind}`) }) }}
+            //- 只有影片會自動入庫；其餘（圖生圖、行銷、試穿、修圖）後端 save_result 要按了才存，不能說「已存入圖庫」
+            p.task__meta(v-if="task.kind === 'video'") {{ $t('taskCenter.completed', { type: $t(`assetTypes.${task.kind}`) }) }}
+            p.task__meta(v-else) {{ $t(`taskCenter.${task.kind}Completed`) }}
           template(v-else)
             .task__topline
               span.task__dot.task__dot--failed
@@ -38,7 +37,7 @@ Teleport(to="body")
             p.task__meta.task__meta--failed(:title="task.error || $t('taskCenter.failedDetail')") {{ task.error || $t('taskCenter.failedDetail') }}
         .task__action
           button(v-if="task.status === 'done' && task.kind === 'video'" @click="view") {{ $t('common.view') }}
-          //- 只有影片能從面板重試（retryTask 只處理影片）：圖生圖與行銷的結果只活在各自頁面，面板重做會扣點卻看不到結果
+          //- 只有影片能從面板重試（retryTask 只處理影片）：其餘任務的結果只活在各自頁面，面板重做會扣點卻看不到結果
           button(v-else-if="task.status === 'failed' && task.kind === 'video'" @click="tasksStore.retryTask(task.id)") {{ $t('common.retry') }}
     .taskpanel__foot
       p {{ t('taskCenter.notePrimary') }}
@@ -53,7 +52,6 @@ import { useI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 import { IconClose, IconImagePlaceholder, IconPlayCircle } from '@/components/icons'
-import type { GenerationTaskKind } from '@/types/api'
 
 const open = defineModel<boolean>('open', { required: true })
 const dialogRef = ref<HTMLElement | null>(null)
@@ -64,7 +62,6 @@ const router = useRouter()
 const { t } = useI18n()
 
 const close = () => (open.value = false)
-const isMarketing = (kind: GenerationTaskKind) => kind === 'marketingImage' || kind === 'marketingText'
 useAccessibleDialog(open, dialogRef, close)
 const remainingTime = (progress: number) => {
   const totalSeconds = Math.max(0, Math.round(((100 - progress) / 100) * 145))

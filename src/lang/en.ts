@@ -143,10 +143,14 @@ export default {
       'Completed · Results are not saved automatically. Use "Save to library" on the AI Marketing Post page.',
     marketingTextCompleted:
       'Completed · Copy is not saved automatically. Use "Copy text" on the AI Marketing Post page.',
+    tryonCompleted:
+      'Completed · Results are not saved automatically. Use "Save to library" on the AI Virtual Try-On page.',
+    retouchCompleted:
+      'Completed · Results are not saved automatically. Use "Save as new asset" on the AI retouch tab in Library.',
     failed: 'Generation failed',
     failedDetail: 'Generation failed · Model timeout',
     notePrimary:
-      'Completed videos are saved automatically to Library › Videos, and leaving the page does not interrupt video generation. For images and marketing posts, stay on the page until the results appear.',
+      'Completed videos are saved automatically to Library › Videos, and leaving the page does not interrupt video generation. For all other generations, stay on the page until the results appear.',
     notePolicy: 'Video generation cannot be cancelled after it starts; failed generations are not refunded.',
   },
   generationToast: {
@@ -329,6 +333,7 @@ export default {
     resultHint: 'Results are kept for 24 hours. Save to library to keep them.',
     pickerTitle: 'Select apparel asset',
     savedName: 'Try-on_{timestamp}',
+    taskName: 'AI try-on_{name}',
     terms: {
       title: 'Portrait rights consent terms',
       intro:
@@ -817,6 +822,7 @@ export default {
       commandApplied: 'Completed from retouch instructions',
       commandAppliedDynamic: 'Prompt retouch completed · Additional: {items}',
       again: 'Retouch again ({count} feed)',
+      taskName: 'AI retouch_{name}',
       priceLoadFailed:
         'Could not load the retouch price, so retouching is unavailable for now. Please refresh the page and try again.',
       staleResult:

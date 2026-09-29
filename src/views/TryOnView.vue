@@ -136,6 +136,7 @@ import {
 import { useBrandStore } from '@/stores/brand'
 import { useConsentStore } from '@/stores/consent'
 import { useFeedStore } from '@/stores/feed'
+import { useGenerationTasksStore } from '@/stores/generationTasks'
 import { useAssets } from '@/composables/useAssets'
 import { api } from '@/api'
 import { API_ERROR_CODES, hasErrorCode } from '@/api/errors'
@@ -149,6 +150,7 @@ const brand = useBrandStore()
 const consentStore = useConsentStore()
 const { consented, loaded: consentLoaded } = storeToRefs(consentStore)
 const feed = useFeedStore()
+const tasksStore = useGenerationTasksStore()
 const { saveGenerated, upload, deleteAssets } = useAssets()
 const { t } = useI18n()
 
@@ -340,9 +342,12 @@ async function download() {
   }
 }
 
+const failText = (e: unknown) =>
+  isInsufficientFeed(e) ? t('errors.insufficientFeed') : displayMessage(e, t('errors.generationFailed'))
 async function onGenerate() {
   const cloth = apparel.value
-  if (!canGenerate.value || !cloth) return
+  const cost = price.value
+  if (!canGenerate.value || !cloth || cost === undefined) return
   await consentStore.load().catch(() => undefined) // 同 onModelUpload：先等同意狀態回來再判斷
   if (!consented.value) {
     showConsent.value = true
@@ -351,16 +356,20 @@ async function onGenerate() {
   errorMsg.value = ''
   generating.value = true
   try {
-    result.value = await api.tryOn({ ...modelRef.value, clothImageId: cloth.id })
+    // 任務中心記一筆（名稱＝「AI 試穿_服飾名前 12 字」）；請求內容照舊，結果與錯誤原樣回到這頁
+    result.value = await tasksStore.trackTask(
+      'tryon',
+      t('tryOn.taskName', { name: cloth.name.trim().slice(0, 12) }),
+      cost,
+      () => api.tryOn({ ...modelRef.value, clothImageId: cloth.id }),
+      failText,
+    )
   } catch (e: unknown) {
     // 後端說這個使用者還沒同意（本機狀態過期）：改回未同意並開同意視窗，不當成生成失敗
     if (hasErrorCode(e, API_ERROR_CODES.CONSENT_REQUIRED)) {
       consented.value = false
       showConsent.value = true
-    } else
-      errorMsg.value = isInsufficientFeed(e)
-        ? t('errors.insufficientFeed')
-        : displayMessage(e, t('errors.generationFailed'))
+    } else errorMsg.value = failText(e)
   } finally {
     generating.value = false
     // 成功或失敗都刷新：內容被擋會扣點、失敗的 202 會退點；刷新失敗不覆蓋生成的錯誤訊息

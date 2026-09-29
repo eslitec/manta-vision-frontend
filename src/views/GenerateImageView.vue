@@ -287,10 +287,11 @@ async function generate() {
   errorMsg.value = ''
   generating.value = true
   try {
-    results.value = await tasksStore.createImageTask(
-      () => api.generateImages(buildReq(count.value)),
+    results.value = await tasksStore.trackTask(
+      'image',
       t('image.taskName', { name: prompt.value.slice(0, 12) || Date.now() }),
       price * count.value,
+      () => api.generateImages(buildReq(count.value)),
       (e) => failText(e, t('errors.insufficientFeed')),
     )
   } catch (e: unknown) {
@@ -340,10 +341,11 @@ async function regen(r: GeneratedImage) {
   errorMsg.value = ''
   generating.value = true
   try {
-    const [next] = await tasksStore.createImageTask(
-      () => api.generateImages(buildReq(1, r.id)), // 用當下的參考圖（可為空），後端不沿用原生成那張
+    const [next] = await tasksStore.trackTask(
+      'image',
       t('image.regenerationTaskName'),
       price,
+      () => api.generateImages(buildReq(1, r.id)), // 用當下的參考圖（可為空），後端不沿用原生成那張
       (e) => failText(e, t('image.regenerationInsufficientFeed')),
     )
     const i = results.value.findIndex((x) => x.id === r.id)
