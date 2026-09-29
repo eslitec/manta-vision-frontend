@@ -203,6 +203,8 @@ const statusLabel = computed(() =>
 const etaText = computed(() => {
   if (myTask.value?.status !== 'processing') return ''
   const remain = myTask.value.etaSeconds ?? Math.max(5, Math.round(((100 - (myTask.value.progress ?? 0)) / 100) * 110))
+  // 跑得比該檔平均久時後端 eta 會停在 0：不要一直顯示「約剩 0 秒」
+  if (remain <= 0) return t('common.takingLonger')
   const m = Math.floor(remain / 60)
   const s = remain % 60
   return m > 0

@@ -13,6 +13,7 @@
 - [x] 3.1 對齊 Requirement「圖生影生成走真後端」「影片檔位與價格讀自後端」與設計決策「價格與檔位讀後端，比照圖生圖頁」：`GenerateVideoView.vue` 模板改契約值、價格讀 `listModels('video')`、沒選圖／價格未載入／送出中停用生成鈕、錯誤顯示後端訊息、送出後刷新餘額；驗證：真後端 e2e「三張卡 45／90／180」「沒選圖停用」「恰一發 POST、body 為契約欄位」「402 顯示飼料不足」通過。
 - [x] 3.2 對齊 Requirement「影片進度輪詢與結果呈現」與設計決策「失敗文案依 failReason」：預覽區在 done 播放 `resultUrl`、下載存成「任務名.mp4」、剩餘時間與耗時用後端值、失敗顯示原因；`TaskCenterPanel.vue` 剩餘時間用 `etaSeconds`；驗證：真後端 e2e「video src 為 resultUrl 且可播放」「下載存下該影片」「上游失敗預覽區與面板同一句原因」通過。
 - [x] 3.3 對齊 Requirement「重新整理後還原影片任務」：`DefaultLayout.vue` 掛載時呼叫 `restoreVideoTasks`；面板對沒有 `videoReq` 的任務不顯示重試；驗證：真後端 e2e「重新整理後任務中心出現還原測試並持續輪詢」通過。
+- [x] 3.4 對齊 Requirement「影片進度輪詢與結果呈現」：`GenerateVideoView.vue` 的 `etaText` 與 `TaskCenterPanel.vue` 的 `remainingTime` 在剩餘秒數 ≤ 0 時改顯示 `common.takingLonger`（兩語系新增）；驗證：真後端 e2e「ETA=0：頁面／面板不顯示約剩 0 秒、改顯示比預期久」通過，在改動前的檔案上 FAIL。
 
 ## 4. 其他
 
