@@ -5,13 +5,7 @@ import { CLIENT_ERROR_CODES, hasErrorCode, isApiError } from '@/api/errors'
 import { i18n } from '@/lang'
 import { displayMessage } from '@/utils/error'
 import { useFeedStore } from '@/stores/feed'
-import type {
-  GenerationTask,
-  GenerationTaskKind,
-  GeneratedPost,
-  VideoJob,
-  VideoJobReq,
-} from '@/types/api'
+import type { GenerationTask, GenerationTaskKind, GeneratedPost, VideoJob, VideoJobReq } from '@/types/api'
 
 let seq = 0
 const uid = () => `imgtask_${Date.now()}_${++seq}`
