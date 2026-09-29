@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 // 把 @/api 換成受控的假實作，讓 store 在隔離狀態下測試（不依賴 mock.ts 內部 db）。
@@ -11,6 +11,9 @@ const listModels = vi.fn()
 const listBots = vi.fn()
 const login = vi.fn()
 const logout = vi.fn()
+const createVideoJob = vi.fn()
+const getVideoJob = vi.fn()
+const listVideoJobs = vi.fn()
 
 vi.mock('@/api', () => ({
   api: {
@@ -23,6 +26,9 @@ vi.mock('@/api', () => ({
     listBots: () => listBots(),
     login: (u: string, p: string) => login(u, p),
     logout: () => logout(),
+    createVideoJob: (req: unknown) => createVideoJob(req),
+    getVideoJob: (id: string) => getVideoJob(id),
+    listVideoJobs: () => listVideoJobs(),
   },
 }))
 
@@ -33,6 +39,7 @@ import { useModelsStore } from './models'
 import { useSessionStore } from './session'
 import { useGenerationTasksStore } from './generationTasks'
 import { ctx, clearAuth } from '@/api/http'
+import { ApiError } from '@/api/errors'
 import { fakeSession } from '@/test/factories'
 
 // environment: 'node' 沒有原生 localStorage，用記憶體 Map 塞一個最小 shim
@@ -472,5 +479,149 @@ describe('generationTasks store', () => {
     await expect(s.trackTask('retouch', 'AI 修圖_桌面', 8, () => Promise.reject(err), errorText)).rejects.toBe(err)
     expect(byKind(s, 'retouch')).toMatchObject({ status: 'failed', error: '錯：內容被擋', read: false })
     expect(s.unreadCount).toBe(1)
+  })
+})
+
+describe('generationTasks store：影片任務（#21～#23）', () => {
+  const REQ = { sourceImageId: 'img_1', modelKey: 'videoStandard', template: 'cameraPan' as const, ratio: '9:16' }
+  const job = (patch: Record<string, unknown> = {}) => ({
+    id: 'vt_1',
+    status: 'processing',
+    progress: 40,
+    cost: 45,
+    ...patch,
+  })
+  const polls = () => getVideoJob.mock.calls.length
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    getFeed.mockResolvedValue({ balance: 1, monthlyLimit: null, monthUsed: 0, estImages: 0, estVideos: 0 })
+    createVideoJob.mockResolvedValue({ id: 'vt_1', status: 'pending', progress: 0, cost: 45 })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('送出帶 taskName；每 3 秒輪詢一次（不是每秒）', async () => {
+    const s = useGenerationTasksStore()
+    getVideoJob.mockResolvedValue(job())
+    await s.createVideoTask(REQ, '圖生影_鏡頭推移')
+    expect(createVideoJob).toHaveBeenCalledWith({ ...REQ, taskName: '圖生影_鏡頭推移' })
+    await vi.advanceTimersByTimeAsync(2999)
+    expect(polls()).toBe(0)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(polls()).toBe(1)
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(polls()).toBe(2)
+    expect(s.tasks[0]).toMatchObject({ status: 'processing', progress: 40, videoReq: REQ })
+  })
+
+  it('輪詢遇 503 或斷線不停、不標失敗；遇 404 停止並標失敗（帶後端訊息）', async () => {
+    const s = useGenerationTasksStore()
+    getVideoJob
+      .mockRejectedValueOnce(new ApiError({ code: 'SERVICE_UNAVAILABLE', message: '忙線', status: 503 }))
+      .mockRejectedValueOnce(new ApiError({ code: 'NETWORK_ERROR', message: '斷線' }))
+      .mockRejectedValueOnce(new ApiError({ code: 'NOT_FOUND', message: '影片任務不存在', status: 404 }))
+    await s.createVideoTask(REQ, 'v')
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(s.tasks[0].status).toBe('pending')
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(s.tasks[0]).toMatchObject({ status: 'failed', error: '影片任務不存在', read: false })
+    await vi.advanceTimersByTimeAsync(9000)
+    expect(polls()).toBe(3)
+  })
+
+  it('done：更新 resultUrl／實扣額／耗時，停止輪詢、未讀＋1、刷新餘額', async () => {
+    const s = useGenerationTasksStore()
+    getVideoJob
+      .mockResolvedValueOnce(job({ etaSeconds: 60 }))
+      .mockResolvedValue(
+        job({ status: 'done', progress: 100, cost: 45, resultUrl: 'https://r2/v.mp4', durationMs: 90000 }),
+      )
+    await s.createVideoTask(REQ, 'v')
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(s.tasks[0].etaSeconds).toBe(60)
+    getFeed.mockClear()
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(s.tasks[0]).toMatchObject({
+      status: 'done',
+      progress: 100,
+      resultUrl: 'https://r2/v.mp4',
+      durationMs: 90000,
+    })
+    expect(s.unreadCount).toBe(1)
+    expect(getFeed).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(9000)
+    expect(polls()).toBe(2)
+  })
+
+  it('failed：failReason 翻成文案、costFeeds 歸 0（上游失敗釋放）；不認得的代碼只說生成失敗', async () => {
+    const s = useGenerationTasksStore()
+    getVideoJob.mockResolvedValue(job({ status: 'failed', progress: 0, cost: 0, error: 'upstreamError' }))
+    await s.createVideoTask(REQ, 'v')
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(s.tasks[0]).toMatchObject({ status: 'failed', cost: 0, error: '生成失敗・AI 服務暫時無法完成，未扣飼料' })
+    expect(s.toast?.kind).toBe('failed')
+
+    createVideoJob.mockResolvedValue({ id: 'vt_2', status: 'pending', progress: 0, cost: 45 })
+    getVideoJob.mockResolvedValue(job({ id: 'vt_2', status: 'failed', error: 'somethingNew' }))
+    await s.createVideoTask(REQ, 'v2')
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(s.tasks[0].error).toBe('生成失敗')
+  })
+
+  it('restoreVideoTasks：併入不重複、當已讀、沒有 videoReq；進行中的續輪詢，已結束的不輪詢', async () => {
+    const s = useGenerationTasksStore()
+    await s.createVideoTask(REQ, '這個分頁送的')
+    listVideoJobs.mockResolvedValue([
+      job({ id: 'vt_1', name: '這個分頁送的' }),
+      job({ id: 'vt_old', name: '還原測試', status: 'processing', progress: 50 }),
+      job({ id: 'vt_done', name: '早就好了', status: 'done', progress: 100, resultUrl: 'u' }),
+    ])
+    await s.restoreVideoTasks()
+    expect(s.tasks.map((t) => [t.id, t.name, t.status])).toEqual([
+      ['vt_1', '這個分頁送的', 'pending'],
+      ['vt_old', '還原測試', 'processing'],
+      ['vt_done', '早就好了', 'done'],
+    ])
+    expect([s.tasks[1].read, s.tasks[1].videoReq]).toEqual([true, undefined])
+    expect(s.unreadCount).toBe(0)
+    getVideoJob.mockImplementation(async (id: string) => job({ id }))
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(getVideoJob.mock.calls.map((c) => c[0]).sort()).toEqual(['vt_1', 'vt_old'])
+  })
+
+  it('restoreVideoTasks 回來前已登出（reset）：上一個帳號的任務不併入、不輪詢', async () => {
+    const s = useGenerationTasksStore()
+    let resolve!: (jobs: unknown[]) => void
+    listVideoJobs.mockReturnValue(new Promise((r) => (resolve = r)))
+    const p = s.restoreVideoTasks()
+    s.reset()
+    resolve([job({ id: 'vt_prev', status: 'processing' })])
+    await p
+    expect(s.tasks).toEqual([])
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(polls()).toBe(0)
+  })
+
+  it('restoreVideoTasks 失敗只記 console，不丟錯', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    listVideoJobs.mockRejectedValue(new Error('boom'))
+    await expect(useGenerationTasksStore().restoreVideoTasks()).resolves.toBeUndefined()
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('登出（session.discard → reset）清空任務並停止所有輪詢', async () => {
+    const s = useGenerationTasksStore()
+    getVideoJob.mockResolvedValue(job())
+    await s.createVideoTask(REQ, 'v')
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(polls()).toBe(1)
+    logout.mockResolvedValue(undefined)
+    await useSessionStore().logout()
+    expect(s.tasks).toEqual([])
+    await vi.advanceTimersByTimeAsync(30000)
+    expect(polls()).toBe(1)
   })
 })

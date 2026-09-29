@@ -18,7 +18,7 @@ Teleport(to="body")
               span.task__dot.task__dot--running
               span.task__name {{ task.name }}
               //- 圖生圖沒有真的進度（固定 60%），推算出來的秒數會一直停在「剩 58 秒」
-              span.task__eta(v-if="task.kind === 'video'") {{ remainingTime(task.progress) }}
+              span.task__eta(v-if="task.kind === 'video'") {{ remainingTime(task) }}
             .task__progressRow
               .task__bar(role="progressbar" :aria-label="task.name" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="task.progress")
                 .task__barFill(:style="{ width: task.progress + '%' }")
@@ -37,8 +37,9 @@ Teleport(to="body")
             p.task__meta.task__meta--failed(:title="task.error || $t('taskCenter.failedDetail')") {{ task.error || $t('taskCenter.failedDetail') }}
         .task__action
           button(v-if="task.status === 'done' && task.kind === 'video'" @click="view") {{ $t('common.view') }}
-          //- 只有影片能從面板重試（retryTask 只處理影片）：其餘任務的結果只活在各自頁面，面板重做會扣點卻看不到結果
-          button(v-else-if="task.status === 'failed' && task.kind === 'video'" @click="tasksStore.retryTask(task.id)") {{ $t('common.retry') }}
+          //- 只有影片能從面板重試（retryTask 只處理影片）：其餘任務的結果只活在各自頁面，面板重做會扣點卻看不到結果。
+          //- 重新整理後還原的影片沒有原始參數（videoReq），按了也沒作用，不給鈕
+          button(v-else-if="task.status === 'failed' && task.kind === 'video' && task.videoReq" @click="tasksStore.retryTask(task.id)") {{ $t('common.retry') }}
     .taskpanel__foot
       p {{ t('taskCenter.notePrimary') }}
       p {{ t('taskCenter.notePolicy') }}
@@ -52,6 +53,7 @@ import { useI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 import { IconClose, IconImagePlaceholder, IconPlayCircle } from '@/components/icons'
+import type { GenerationTask, GenerationTaskKind } from '@/types/api'
 
 const open = defineModel<boolean>('open', { required: true })
 const dialogRef = ref<HTMLElement | null>(null)
@@ -63,8 +65,9 @@ const { t } = useI18n()
 
 const close = () => (open.value = false)
 useAccessibleDialog(open, dialogRef, close)
-const remainingTime = (progress: number) => {
-  const totalSeconds = Math.max(0, Math.round(((100 - progress) / 100) * 145))
+// 後端回的 etaSeconds 優先；沒有（pending 前的瞬間、mock）才用進度推估
+const remainingTime = (task: GenerationTask) => {
+  const totalSeconds = task.etaSeconds ?? Math.max(0, Math.round(((100 - task.progress) / 100) * 145))
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
 

@@ -149,7 +149,7 @@ export default {
     failed: '生成失敗',
     failedDetail: '生成失敗・模型逾時',
     notePrimary: '完成的影片會自動存入圖庫›影片，離開頁面不影響影片生成；其他生成請留在頁面上等結果。',
-    notePolicy: '影片生成後無法取消；生成失敗不退還飼料。',
+    notePolicy: '影片生成後無法取消；生成失敗不扣飼料（內容審核擋下除外）。',
   },
   generationToast: {
     videoDone: '影片生成完成',
@@ -186,9 +186,15 @@ export default {
   },
   video: {
     steps: { source: '1. 選擇來源圖片', template: '2. 選擇動態模板', ratio: '3. 輸出比例', model: '4. 生成模型' },
-    modelHint: '倍率以標準模型 45 顆/支 為基準',
+    modelHint: '倍率以標準模型 {count} 顆/支 為基準',
     modelDescriptions: { standard: '5 秒・流暢', advanced: '10 秒・細緻', pro: '10 秒・最高' },
-    templates: { cameraMove: '鏡頭推移', productSpin: '商品旋轉', textEntrance: '文字進場', zoomBreathing: '縮放呼吸' },
+    templates: { cameraPan: '鏡頭推移', rotate: '商品旋轉', textIn: '文字進場', zoomBreath: '縮放呼吸' },
+    // 後端 GET /video/{taskId} 的 failReason 代碼；上游與存檔失敗會釋放預留，內容審核擋下照扣
+    failReasons: {
+      upstreamError: '生成失敗・AI 服務暫時無法完成，未扣飼料',
+      storageError: '生成失敗・影片存檔失敗，未扣飼料',
+      contentBlocked: '生成失敗・內容未通過審核，飼料照扣',
+    },
     highCostWarning: '影片生成飼料消耗較高，生成前會再次確認',
     generate: '生成影片',
     previewHint: '設定好左側選項後按「生成影片」',

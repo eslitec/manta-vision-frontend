@@ -5,6 +5,7 @@ import { clearAuth, setAuth } from '@/api/http'
 import { i18n } from '@/lang'
 import { useBrandStore } from './brand'
 import { useConsentStore } from './consent'
+import { useGenerationTasksStore } from './generationTasks'
 import type { Bot, Session } from '@/types/api'
 
 const STORAGE_KEY = 'mv_session'
@@ -17,6 +18,7 @@ export const useSessionStore = defineStore('session', () => {
   const namesLoaded = ref(false)
   const brand = useBrandStore()
   const consent = useConsentStore()
+  const generationTasks = useGenerationTasksStore()
 
   const isAuthenticated = computed(() => session.value !== null)
 
@@ -61,6 +63,7 @@ export const useSessionStore = defineStore('session', () => {
     namesLoaded.value = false
     brand.reset()
     consent.reset() // 同意綁使用者：不清的話下一個帳號在同一分頁會沿用上一個人的同意狀態
+    generationTasks.reset() // 不清的話影片輪詢在登出後繼續打 401，下一個帳號也看得到上一個人的任務
     localStorage.removeItem(STORAGE_KEY)
     clearAuth()
   }

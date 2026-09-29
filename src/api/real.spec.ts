@@ -4,7 +4,7 @@ import { http } from './http'
 import { mockApi } from './mock'
 import { realApi } from './real'
 import { i18n } from '@/lang'
-import type { GenerateImageReq, GeneratePostReq, TryOnReq } from '@/types/api'
+import type { GenerateImageReq, GeneratePostReq, TryOnReq, VideoJobReq } from '@/types/api'
 import { API_ERROR_CODES, CLIENT_ERROR_CODES, hasErrorCode } from './errors'
 
 // 跟 http.spec.ts 一樣用假 adapter 取代網路，但這裡關心的是**上一層**：
@@ -218,6 +218,9 @@ describe('尚未接上的方法', () => {
     expect(realApi.retouchImage).not.toBe(mockApi.retouchImage)
     expect(realApi.getConsent).not.toBe(mockApi.getConsent)
     expect(realApi.giveConsent).not.toBe(mockApi.giveConsent)
+    expect(realApi.createVideoJob).not.toBe(mockApi.createVideoJob)
+    expect(realApi.getVideoJob).not.toBe(mockApi.getVideoJob)
+    expect(realApi.listVideoJobs).not.toBe(mockApi.listVideoJobs)
   })
 
   it('儲值在真後端模式明確停用（TopUpDialog 走「不支援」分支）', () => {
@@ -1385,5 +1388,148 @@ describe('POST /tryon 與肖像同意', () => {
     expect(calls[0].method).toBe('put')
     expect(calls[0].body).toEqual({ consent: true })
     expect(calls[0].headers?.['Idempotency-Key']).toBeUndefined()
+  })
+})
+
+// 契約以後端程式碼為準：app/schemas/video.py、app/routers/video.py（#21～#23）
+describe('圖生影（POST /video、GET /video/{taskId}、GET /video）', () => {
+  const VIDEO_REQ: VideoJobReq = {
+    sourceImageId: '11111111-1111-4111-8111-111111111111',
+    modelKey: 'videoPro',
+    template: 'cameraPan',
+    ratio: '9:16',
+    taskName: '圖生影_鏡頭推移',
+  }
+  const TASK_ID = '22222222-2222-4222-8222-222222222222'
+  const ACCEPTED = { status: 202, data: { taskId: TASK_ID, status: 'pending', costFeeds: 180, balance: 820 } }
+
+  it('createVideoJob：POST /video、body 恰為契約五個欄位、帶 Idempotency-Key 與 100 秒逾時；202 翻成 VideoJob', async () => {
+    const calls = stubRoutes({ '/video': ACCEPTED })
+
+    const job = await realApi.createVideoJob(VIDEO_REQ)
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0].method).toBe('post')
+    expect(calls[0].body).toStrictEqual(VIDEO_REQ)
+    expect(calls[0].headers?.['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/)
+    expect(calls[0].timeout).toBe(100000)
+    // 202 就是完整答案：不會去輪詢 /generations/{id}
+    expect(job).toEqual({ id: TASK_ID, status: 'pending', progress: 0, cost: 180 })
+  })
+
+  it('402 飼料不足不重送，碼原樣往上丟', async () => {
+    const calls = stubRoutes({
+      '/video': {
+        status: 402,
+        data: { code: 'INSUFFICIENT_FEEDS', message: '飼料不足', fieldErrors: null, requestId: 'r' },
+      },
+    })
+
+    const assertion = expect(realApi.createVideoJob(VIDEO_REQ)).rejects.toMatchObject({
+      code: 'INSUFFICIENT_FEEDS',
+      status: 402,
+    })
+    await vi.advanceTimersByTimeAsync(20_000)
+    await assertion
+    expect(calls).toHaveLength(1)
+  })
+
+  it('逾時後重送沿用同一把 key 與同一份 body（後端 24 小時內回放同一個 taskId，不會再預留一次）', async () => {
+    const calls = stubRoutes({ '/video': [{ error: 'timeout' }, ACCEPTED] })
+
+    const p = realApi.createVideoJob(VIDEO_REQ)
+    await vi.advanceTimersByTimeAsync(5000)
+
+    await expect(p).resolves.toMatchObject({ id: TASK_ID })
+    expect(calls).toHaveLength(2)
+    expect(calls[1].headers?.['Idempotency-Key']).toBe(calls[0].headers?.['Idempotency-Key'])
+    expect(calls[1].raw).toBe(calls[0].raw)
+  })
+
+  it('getVideoJob：GET /video/{taskId}，failReason→error、costFeeds→cost，null 欄位變 undefined', async () => {
+    const calls = stubRoutes({
+      [`/video/${TASK_ID}`]: {
+        data: {
+          taskId: TASK_ID,
+          taskName: '圖生影_鏡頭推移',
+          status: 'failed',
+          progress: 0,
+          etaSeconds: null,
+          step: '失敗',
+          resultUrl: null,
+          failReason: 'upstreamError',
+          costFeeds: 0,
+          durationMs: 61000,
+        },
+      },
+    })
+
+    const job = await realApi.getVideoJob(TASK_ID)
+
+    expect(calls[0].method).toBe('get')
+    expect(job).toEqual({
+      id: TASK_ID,
+      name: '圖生影_鏡頭推移',
+      status: 'failed',
+      progress: 0,
+      cost: 0,
+      etaSeconds: undefined,
+      resultUrl: undefined,
+      error: 'upstreamError',
+      durationMs: 61000,
+    })
+  })
+
+  it('getVideoJob：done 帶 resultUrl 與實扣額；processing 帶 etaSeconds', async () => {
+    stubRoutes({
+      [`/video/${TASK_ID}`]: [
+        {
+          data: { taskId: TASK_ID, taskName: 'x', status: 'processing', progress: 40, etaSeconds: 60, costFeeds: 180 },
+        },
+        {
+          data: {
+            taskId: TASK_ID,
+            taskName: 'x',
+            status: 'done',
+            progress: 100,
+            resultUrl: 'https://r2.example/v.mp4',
+            costFeeds: 180,
+            durationMs: 90000,
+          },
+        },
+      ],
+    })
+
+    expect(await realApi.getVideoJob(TASK_ID)).toMatchObject({ status: 'processing', progress: 40, etaSeconds: 60 })
+    expect(await realApi.getVideoJob(TASK_ID)).toMatchObject({
+      status: 'done',
+      progress: 100,
+      cost: 180,
+      resultUrl: 'https://r2.example/v.mp4',
+      durationMs: 90000,
+    })
+  })
+
+  it('listVideoJobs：GET /video?limit=10，items 逐筆翻成 VideoJob（unread 不讀）', async () => {
+    const calls = stubRoutes({
+      '/video': {
+        data: {
+          unread: 0,
+          items: [
+            { taskId: 't2', taskName: '還原測試', status: 'processing', progress: 50, etaSeconds: 30, costFeeds: 45 },
+            { taskId: 't1', taskName: '舊的', status: 'done', progress: 100, resultUrl: 'u', costFeeds: 45 },
+          ],
+        },
+      },
+    })
+
+    const jobs = await realApi.listVideoJobs()
+
+    expect(calls[0].method).toBe('get')
+    expect(calls[0].params).toEqual({ limit: 10 })
+    expect(jobs.map((j) => [j.id, j.name, j.status, j.progress, j.cost])).toEqual([
+      ['t2', '還原測試', 'processing', 50, 45],
+      ['t1', '舊的', 'done', 100, 45],
+    ])
   })
 })

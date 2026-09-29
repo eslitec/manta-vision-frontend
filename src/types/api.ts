@@ -74,25 +74,26 @@ export interface Inspiration {
 // 狀態值對齊後端影片任務狀態機（pending → processing → done → failed）；
 // 舊版前端用 succeeded，跟後端對不上會導致輪詢永遠等不到「完成」。
 export type JobStatus = 'pending' | 'processing' | 'done' | 'failed'
-export type VideoModelTier = 'standard' | 'advanced' | 'pro'
-export const VIDEO_MODEL_TIERS: { key: VideoModelTier; label: string; multiplier: number }[] = [
-  { key: 'standard', label: '標準', multiplier: 1 },
-  { key: 'advanced', label: '進階', multiplier: 2 },
-  { key: 'pro', label: '專業', multiplier: 4 },
-]
+// 動態模板：契約值（後端 schemas/video.py 的 Literal），同時當 i18n 鍵 video.templates.*
+export type VideoTemplate = 'cameraPan' | 'rotate' | 'textIn' | 'zoomBreath'
+// 欄位名等於後端 VideoCreateRequest（#21），real 版整包當 body；modelKey 讀 GET /ai-models?modelType=video
 export interface VideoJobReq {
-  sourceImageId?: string
-  template: string
-  ratio: string
-  modelTier: VideoModelTier
+  sourceImageId: string
+  modelKey: string // videoStandard／videoAdvanced／videoPro
+  template: VideoTemplate
+  ratio: string // 9:16／1:1／16:9
+  taskName?: string // 不帶＝後端自動命名「圖生影_YYYYMMDD_HHmm」
 }
 export interface VideoJob {
   id: string
+  name?: string
   status: JobStatus
-  progress: number // 0..100，由後端任務狀態 API 回傳
-  cost: number
+  progress: number // 0..100，後端估算（封頂 95，done 才 100），前端不得自行累加
+  cost: number // pending／processing＝預扣、done＝實扣、failed＝0（內容審核擋下為實扣）
+  etaSeconds?: number
   resultUrl?: string
-  error?: string
+  error?: string // failReason 代碼：upstreamError／storageError／contentBlocked
+  durationMs?: number
 }
 
 // ── 背景生成任務（跨頁面，圖生圖／圖生影／行銷 PO 文／AI 試穿／AI 修圖共用；驅動頂部工具列「任務」按鈕與任務中心面板）──
@@ -112,7 +113,10 @@ export interface GenerationTask {
   read: boolean // 完成／失敗後使用者是否已在任務中心看過
   createdAt: number
   doneAt?: number
-  videoReq?: VideoJobReq // kind === 'video' 才有；保留原始請求供「重試」使用
+  videoReq?: VideoJobReq // kind === 'video' 且在這個分頁送出的才有；保留原始請求供「重試」使用（重新整理後還原的沒有）
+  etaSeconds?: number // 以下三個 kind === 'video' 才有，來自 GET /video/{taskId}
+  resultUrl?: string
+  durationMs?: number
 }
 
 // ── 試穿（POST /tryon）──

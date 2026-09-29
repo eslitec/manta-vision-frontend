@@ -444,6 +444,15 @@ watch([activeView, activeSource], () => {
 })
 // 分頁與篩選條件共用同一支查詢；三者任一變動都重打 GET /images
 watch([activeView, activeSource, page], fetchAssets)
+// 影片在這個分頁輪詢到完成（後端已自動入庫）：佔位卡消失，同時重抓當頁，新影片不必手動重整才出現。
+// 只看有 doneAt 的（這次輪詢收尾的）；重新整理後還原的已完成任務本來就在清單裡
+watch(
+  () => generationTasks.value.filter((t) => t.kind === 'video' && t.status === 'done' && t.doneAt).length,
+  (count, before) => {
+    const v = activeView.value
+    if (count > before && (v.kind === 'all' || (v.kind === 'category' && v.dimension === 'mediaType'))) fetchAssets()
+  },
+)
 
 // 關鍵字搜尋做小小 debounce，不然每敲一個字就打一次後端
 let keywordTimer: ReturnType<typeof setTimeout> | undefined
