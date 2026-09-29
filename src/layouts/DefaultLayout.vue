@@ -50,7 +50,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, type Component } from 'vue'
+import { computed, onMounted, ref, watch, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
@@ -78,7 +78,10 @@ watch(
   () => route.path,
   () => (sidebarOpen.value = false), // 換頁自動收起手機抽屜
 )
-const { activeCount, unreadCount } = storeToRefs(useGenerationTasksStore())
+const tasksStore = useGenerationTasksStore()
+const { activeCount, unreadCount } = storeToRefs(tasksStore)
+// 登入後（含重新整理）把後端還在追的影片任務併回任務中心；失敗只記 console，不擋畫面
+onMounted(() => void tasksStore.restoreVideoTasks())
 // 部分導覽項目除了自己的路徑外，還要涵蓋其他子路由才算選取中——
 // 「AI 生成工作台」從首頁點進圖生圖／圖生影片／AI 產文／AI 試穿等
 // 工具卡片後，會導到獨立的 /generate/* 路由，此時 sidebar 仍要保持

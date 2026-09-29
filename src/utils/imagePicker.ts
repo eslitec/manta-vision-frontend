@@ -14,7 +14,10 @@ export interface PickerFilter {
 // 彈窗清單要不要列這張素材；清單（filtered）與「上傳後新圖會不會被藏住」共用同一套規則。
 // 內建素材（source='builtin'）只在物件模式列：生成／編輯／試穿的底圖、參考圖、商品圖端點只查
 // images 表，選了 materialId 會 404（見 library-builtin-source design.md 決策 6）。
+// 影片一律不列：所有用到彈窗的地方（編輯器、圖生圖、試穿、行銷、圖生影）要的都是圖片，
+// 選到影片只會在送出（甚至扣點）後才失敗。
 export function isListedInPicker(a: Asset, f: PickerFilter): boolean {
+  if (a.type === 'video') return false
   if (a.source === 'builtin' && f.mode !== 'object') return false
   if (f.excludeSources.includes(a.source)) return false
   const bySource = f.source === 'all' || a.source === f.source

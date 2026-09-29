@@ -33,7 +33,6 @@ import type {
   VideoJobReq,
 } from '@/types/api'
 import type { UploadSource } from '@/types/asset'
-import { VIDEO_MODEL_TIERS } from '@/types/api'
 import { formatDimensions } from '@/utils/dimensions'
 
 // ⚠️ 這是「假後端」：所有資料在記憶體中，讓前端功能可端到端運作。
@@ -215,7 +214,7 @@ const db = {
   editGenerations: new Set<string>(),
   jobs: new Map<
     string,
-    { req: VideoJobReq; created: number; cost: number; failed?: boolean; failedChecked?: boolean }
+    { req: VideoJobReq; name: string; created: number; cost: number; failed?: boolean; failedChecked?: boolean }
   >(),
 }
 
@@ -233,6 +232,9 @@ const MOCK_MODELS: AiModel[] = [
   { modelKey: 'marketingText', name: '行銷文案', modelType: 'marketing', costFeeds: 0 },
   { modelKey: 'tryonStandard', name: '標準', modelType: 'tryon', costFeeds: 12 },
   { modelKey: 'imageEdit', name: '修圖', modelType: 'edit', costFeeds: 8 },
+  { modelKey: 'videoStandard', name: '標準', modelType: 'video', costFeeds: 45 },
+  { modelKey: 'videoAdvanced', name: '進階', modelType: 'video', costFeeds: 90 },
+  { modelKey: 'videoPro', name: '專業', modelType: 'video', costFeeds: 180 },
 ]
 const priceOf = (modelKey: string) => MOCK_MODELS.find((m) => m.modelKey === modelKey)?.costFeeds
 
@@ -639,24 +641,28 @@ export const mockApi = {
     ]
   },
 
-  // POST /generate/video → 建立非同步任務；扣款依生成模型倍率（標準×1／進階×2／專業×4）
+  // POST /video（#21）→ 預扣該檔單價、建立非同步任務、立刻回 pending
   async createVideoJob(req: VideoJobReq): Promise<VideoJob> {
-    const tier = VIDEO_MODEL_TIERS.find((t) => t.key === req.modelTier)
-    const cost = 45 * (tier ? tier.multiplier : 1)
+    const cost = MOCK_MODELS.find((m) => m.modelKey === req.modelKey && m.modelType === 'video')?.costFeeds
+    if (cost === undefined) throw new Error('MODEL_NOT_ALLOWED') // 同後端：不是影片檔位一律 400
     deduct(cost)
     db.totalGen += 1
     const id = uid('job')
-    db.jobs.set(id, { req, created: Date.now(), cost })
+    const name = req.taskName || `圖生影_${new Date().toISOString().slice(0, 16)}`
+    db.jobs.set(id, { req, name, created: Date.now(), cost })
     await delay(300)
-    return { id, status: 'pending', progress: 0, cost }
+    return { id, name, status: 'pending', progress: 0, cost }
   },
 
-  // GET /generate/video/:id → 查任務狀態（demo 用短時間模擬 1–2 分鐘；processing 階段有小機率模擬模型逾時失敗，讓失敗／重試／退款流程可被實際觸發與測試）
+  // GET /video/{taskId}（#22）→ demo 用短時間模擬 1–2 分鐘；processing 階段有小機率模擬上游失敗（退回預扣），
+  // 讓失敗流程可被實際觸發。done 時同後端自動入庫（圖庫多一支影片，只塞一次）。
+  // ponytail: mock 沒有影片檔，resultUrl 留空（同圖生圖 mock 結果的 url: ''）；播放與下載由真後端 e2e 驗
   async getVideoJob(id: string): Promise<VideoJob> {
     await delay(200)
     const j = db.jobs.get(id)
-    if (!j) return { id, status: 'failed', progress: 0, cost: 0, error: 'NOT_FOUND' }
-    if (j.failed) return { id, status: 'failed', progress: 0, cost: j.cost, error: 'MODEL_TIMEOUT' }
+    if (!j) throw new Error('NOT_FOUND')
+    const base = { id, name: j.name }
+    if (j.failed) return { ...base, status: 'failed', progress: 0, cost: 0, error: 'upstreamError' }
     const elapsed = Date.now() - j.created
     let status: VideoJob['status'] = 'pending'
     let progress = Math.min(10, Math.round((elapsed / 1500) * 10))
@@ -665,20 +671,32 @@ export const mockApi = {
       progress = 100
     } else if (elapsed > 1500) {
       status = 'processing'
-      progress = Math.min(99, 10 + Math.round(((elapsed - 1500) / 3500) * 90))
+      progress = Math.min(95, 10 + Math.round(((elapsed - 1500) / 3500) * 90))
       if (!j.failedChecked) {
         j.failedChecked = true
         if (Math.random() < 0.12) {
           j.failed = true
-          return { id, status: 'failed', progress, cost: j.cost, error: 'MODEL_TIMEOUT' }
+          db.feedBalance += j.cost // 上游失敗釋放預留
+          db.monthlyUsed -= j.cost
+          return { ...base, status: 'failed', progress: 0, cost: 0, error: 'upstreamError' }
         }
       }
     }
     if (status === 'done') {
-      db.successGen += 1
-      return { id, status, progress, cost: j.cost, resultUrl: 'mock://video' }
+      if (!db.assets.some((a) => a.id === id)) {
+        db.successGen += 1
+        db.assets.unshift({ id, name: j.name, source: 'aiGenerate', dim: '', type: 'video' })
+      }
+      return { ...base, status, progress, cost: j.cost, durationMs: elapsed }
     }
-    return { id, status, progress, cost: j.cost }
+    return { ...base, status, progress, cost: j.cost, etaSeconds: Math.max(0, Math.round((5000 - elapsed) / 1000)) }
+  },
+
+  // GET /video?limit=10（#23）→ 新到舊最多 10 筆
+  async listVideoJobs(): Promise<VideoJob[]> {
+    await delay(150)
+    const ids = [...db.jobs.keys()].reverse().slice(0, 10)
+    return Promise.all(ids.map((id) => mockApi.getVideoJob(id)))
   },
 
   // POST /tryon（同真後端：固定檔位 tryonStandard、回一張結果；結果圖用 picsum 依模特 id 取一張假圖）。

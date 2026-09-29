@@ -1,8 +1,17 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/api'
+import { CLIENT_ERROR_CODES, hasErrorCode, isApiError } from '@/api/errors'
 import { i18n } from '@/lang'
-import type { GenerationTask, GenerationTaskKind, GeneratedPost, VideoJobReq } from '@/types/api'
+import { displayMessage } from '@/utils/error'
+import { useFeedStore } from '@/stores/feed'
+import type {
+  GenerationTask,
+  GenerationTaskKind,
+  GeneratedPost,
+  VideoJob,
+  VideoJobReq,
+} from '@/types/api'
 
 let seq = 0
 const uid = () => `imgtask_${Date.now()}_${++seq}`
@@ -12,7 +21,8 @@ const uid = () => `imgtask_${Date.now()}_${++seq}`
 export const useGenerationTasksStore = defineStore('generationTasks', () => {
   const tasks = ref<GenerationTask[]>([])
   const toast = ref<{ taskId: string; title: string; message: string; kind: 'done' | 'failed' } | null>(null)
-  const timers = new Map<string, number>()
+  const timers = new Map<string, ReturnType<typeof setInterval>>()
+  let epoch = 0 // reset 一次加一：reset 之前發出、之後才回來的還原結果不採用
 
   const activeCount = computed(
     () => tasks.value.filter((t) => t.status === 'pending' || t.status === 'processing').length,
@@ -45,34 +55,64 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     }
   }
 
+  // failReason 代碼（後端 upstreamError／storageError／contentBlocked）→ 文案；不認得的代碼只說生成失敗
+  function failReasonText(code?: string) {
+    const { t, te } = i18n.global
+    return code && te(`video.failReasons.${code}`) ? t(`video.failReasons.${code}`) : t('taskCenter.failed')
+  }
+
+  // 輪詢打的是 GET，本身冪等：斷線、逾時、5xx（部署中、代理吐的 502）下一輪再問；
+  // 其他錯誤（404 任務不見、401／403）結果已確定，再問也一樣，停止並標失敗（401 另由 session 攔截器登出、reset）
+  const isPollRetryable = (e: unknown) =>
+    hasErrorCode(e, CLIENT_ERROR_CODES.TIMEOUT) ||
+    hasErrorCode(e, CLIENT_ERROR_CODES.NETWORK_ERROR) ||
+    (isApiError(e) && e.status >= 500)
+
+  function applyVideoJob(t: GenerationTask, j: VideoJob) {
+    t.status = j.status
+    t.progress = Math.max(0, Math.min(100, j.progress)) // 後端估算，前端不自行累加
+    t.cost = j.cost // 預扣 → 實扣；失敗釋放後為 0
+    t.etaSeconds = j.etaSeconds
+    t.resultUrl = j.resultUrl
+    t.durationMs = j.durationMs
+    if (j.status === 'failed') t.error = failReasonText(j.error)
+  }
+
+  function endVideoTask(t: GenerationTask, kind: 'done' | 'failed') {
+    clearTimer(t.id)
+    if (kind === 'done') t.progress = 100
+    t.doneAt = Date.now()
+    t.read = false
+    showToast(t, kind)
+    // 完成是實扣、失敗是釋放預留（審核擋下除外）：餘額都可能變了
+    useFeedStore()
+      .refresh()
+      .catch(() => undefined)
+  }
+
   function poll(taskId: string) {
-    const timer = window.setInterval(async () => {
+    if (timers.has(taskId)) return // 同一個任務只輪詢一份，不留下清不掉的計時器
+    const timer = setInterval(async () => {
       const t = tasks.value.find((x) => x.id === taskId)
       if (!t) return clearTimer(taskId)
-      const j = await api.getVideoJob(taskId)
-      t.status = j.status
-      // mock：processing 期間讓進度平滑往上爬（真實後端應回傳實際百分比）
-      t.progress = Math.max(0, Math.min(100, j.progress))
-      if (j.status === 'done') {
-        clearTimer(taskId)
-        t.progress = 100
-        t.doneAt = Date.now()
-        t.read = false
-        showToast(t, 'done')
-      } else if (j.status === 'failed') {
-        clearTimer(taskId)
-        t.error = j.error
-        t.doneAt = Date.now()
-        t.read = false
-        showToast(t, 'failed')
+      try {
+        const j = await api.getVideoJob(taskId)
+        if (!timers.has(taskId)) return // 回應回來前已收尾或已登出（reset）
+        applyVideoJob(t, j)
+        if (j.status === 'done' || j.status === 'failed') endVideoTask(t, j.status)
+      } catch (e) {
+        if (!timers.has(taskId) || isPollRetryable(e)) return
+        t.status = 'failed'
+        t.error = displayMessage(e, failReasonText())
+        endVideoTask(t, 'failed')
       }
-    }, 1000)
+    }, 3000) // 契約建議 3 秒（v13 #22）
     timers.set(taskId, timer)
   }
 
   // 影片生成：送出後立刻回傳 taskId，呼叫端可選擇性記錄用於本頁預覽，但任務本身不受頁面卸載影響
   async function createVideoTask(req: VideoJobReq, name: string): Promise<string> {
-    const job = await api.createVideoJob(req)
+    const job = await api.createVideoJob({ ...req, taskName: name })
     const task: GenerationTask = {
       id: job.id,
       kind: 'video',
@@ -87,6 +127,45 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     tasks.value.unshift(task)
     poll(task.id)
     return task.id
+  }
+
+  // 重新整理或重新登入後把後端還在追的影片任務（GET /video，最近 10 筆）併回任務中心，進行中的續輪詢。
+  // 已在清單上的跳過；還原的任務沒有 videoReq（#23 不回原始參數），所以不能從面板重試。
+  // ponytail: 已讀只存在記憶體，重新整理前就完成的任務一律當已讀，不再亮紅點
+  async function restoreVideoTasks() {
+    const mine = epoch
+    let jobs: VideoJob[]
+    try {
+      jobs = await api.listVideoJobs()
+    } catch (e) {
+      console.warn('還原影片任務失敗', e)
+      return
+    }
+    if (mine !== epoch) return // 回來前已登出：那是上一個帳號的任務
+    for (const j of jobs) {
+      if (tasks.value.some((x) => x.id === j.id)) continue
+      const task: GenerationTask = {
+        id: j.id,
+        kind: 'video',
+        name: j.name ?? '',
+        status: j.status,
+        progress: j.progress,
+        cost: j.cost,
+        read: true,
+        createdAt: Date.now(),
+      }
+      applyVideoJob(task, j)
+      tasks.value.push(task) // 後端新到舊，接在這個分頁新送出的任務後面
+      if (j.status === 'pending' || j.status === 'processing') poll(j.id)
+    }
+  }
+
+  // 登出（含 token 失效）時呼叫：停掉所有輪詢、清空任務，下一個帳號看不到上一個人的任務
+  function reset() {
+    epoch++
+    for (const id of [...timers.keys()]) clearTimer(id)
+    tasks.value = []
+    toast.value = null
   }
 
   // 呼叫端自己 await 結果的生成（圖生圖、行銷 PO 文、AI 試穿、AI 修圖）：任務只負責讓任務中心看得到進行中與成敗。
@@ -181,6 +260,8 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     unreadCount,
     createVideoTask,
     trackTask,
+    restoreVideoTasks,
+    reset,
     createMarketingTask,
     retryTask,
     markAllRead,

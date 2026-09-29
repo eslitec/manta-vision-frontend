@@ -29,6 +29,12 @@ describe('isListedInPicker', () => {
     expect(isListedInPicker(asset('builtin'), filter({ mode: 'object' }))).toBe(true)
   })
 
+  it('影片素材不列（所有選圖的地方要的都是圖片）', () => {
+    expect(isListedInPicker({ ...asset('aiGenerate'), type: 'video' }, filter())).toBe(false)
+    expect(isListedInPicker({ ...asset('aiGenerate'), type: 'video' }, filter({ mode: 'object' }))).toBe(false)
+    expect(isListedInPicker(asset('aiGenerate'), filter())).toBe(true)
+  })
+
   it('excludeSources 的來源不列（試穿選服飾不列模特照）', () => {
     expect(isListedInPicker(asset('tryonModel'), filter({ excludeSources: ['tryonModel'] }))).toBe(false)
     expect(isListedInPicker(asset('upload'), filter({ excludeSources: ['tryonModel'] }))).toBe(true)

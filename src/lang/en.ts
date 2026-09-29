@@ -151,7 +151,8 @@ export default {
     failedDetail: 'Generation failed · Model timeout',
     notePrimary:
       'Completed videos are saved automatically to Library › Videos, and leaving the page does not interrupt video generation. For all other generations, stay on the page until the results appear.',
-    notePolicy: 'Video generation cannot be cancelled after it starts; failed generations are not refunded.',
+    notePolicy:
+      'Video generation cannot be cancelled after it starts; failed generations are not charged (except content blocked by moderation).',
   },
   generationToast: {
     videoDone: 'Video generation complete',
@@ -202,13 +203,18 @@ export default {
       ratio: '3. Output ratio',
       model: '4. Generation model',
     },
-    modelHint: 'Multipliers are based on Standard at 45 feed/video',
+    modelHint: 'Multipliers are based on Standard at {count} feed/video',
     modelDescriptions: { standard: '5 sec · Smooth', advanced: '10 sec · Detailed', pro: '10 sec · Highest quality' },
     templates: {
-      cameraMove: 'Camera move',
-      productSpin: 'Product spin',
-      textEntrance: 'Text entrance',
-      zoomBreathing: 'Breathing zoom',
+      cameraPan: 'Camera move',
+      rotate: 'Product spin',
+      textIn: 'Text entrance',
+      zoomBreath: 'Breathing zoom',
+    },
+    failReasons: {
+      upstreamError: 'Generation failed · The AI service could not finish. No feed was charged.',
+      storageError: 'Generation failed · The video could not be saved. No feed was charged.',
+      contentBlocked: 'Generation failed · Blocked by content moderation. Feed is still charged.',
     },
     highCostWarning: 'Video generation uses more feed. You will confirm before generation.',
     generate: 'Generate video',

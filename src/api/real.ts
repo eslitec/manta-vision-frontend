@@ -36,6 +36,8 @@ import type {
   TryOnReq,
   UsageQuery,
   UsageSummary,
+  VideoJob,
+  VideoJobReq,
 } from '@/types/api'
 
 // 打真後端的 API 實作。
@@ -650,6 +652,50 @@ async function retouchImage(req: RetouchReq): Promise<RetouchResult> {
   return { ...firstImage(out), method: req.method, options: req.options, cost: out.costFeeds ?? 0 }
 }
 
+// ── 圖生影（POST /video、GET /video/{taskId}、GET /video）──
+// 契約以後端為準：app/schemas/video.py、app/routers/video.py（#21～#23）。全站唯一非同步的生成：
+// POST 預留點數、建任務、立刻回 202（就是完整答案，24 小時內同一把 key 回放同一個 taskId）；
+// 進度由 store 每 3 秒打 #22。不走 runGeneration——它看到 202 會去輪詢 /generations/{id}。
+interface WireVideoTask {
+  taskId: string
+  taskName?: string | null
+  status: VideoJob['status']
+  progress?: number
+  etaSeconds?: number | null
+  resultUrl?: string | null
+  failReason?: string | null
+  costFeeds?: number
+  durationMs?: number | null
+}
+const toVideoJob = (w: WireVideoTask): VideoJob => ({
+  id: w.taskId,
+  name: w.taskName ?? undefined,
+  status: w.status,
+  progress: w.progress ?? 0, // 202 沒有 progress
+  cost: w.costFeeds ?? 0,
+  etaSeconds: w.etaSeconds ?? undefined,
+  resultUrl: w.resultUrl ?? undefined,
+  error: w.failReason ?? undefined,
+  durationMs: w.durationMs ?? undefined,
+})
+
+async function createVideoJob(req: VideoJobReq): Promise<VideoJob> {
+  // req 的欄位名等於後端 VideoCreateRequest，整包當 body；402／400／404／415 都是 4xx，postPaid 不重送
+  const { data } = await postPaid<WireVideoTask>('/video', req)
+  return toVideoJob(data)
+}
+
+async function getVideoJob(id: string): Promise<VideoJob> {
+  const { data } = await http.get<WireVideoTask>(`/video/${id}`)
+  return toVideoJob(data)
+}
+
+// unread 不讀：後端恆為 0，已讀只存在前端記憶體（擱置區 #9）
+async function listVideoJobs(): Promise<VideoJob[]> {
+  const { data } = await http.get<{ unread: number; items: WireVideoTask[] }>('/video', { params: { limit: 10 } })
+  return data.items.map(toVideoJob)
+}
+
 // ── 肖像同意（GET／PUT /users/me/consent；user-scoped，不看 X-Bot-Id）──
 // 契約：docs/api/v14.md #24／#25。同意綁使用者個人，沒有撤回（PUT 只收 true）。
 async function getConsent(): Promise<{ consented: boolean }> {
@@ -707,6 +753,9 @@ export const realApi = {
   listInspirations,
   tryOn,
   retouchImage,
+  createVideoJob,
+  getVideoJob,
+  listVideoJobs,
   getConsent,
   giveConsent,
   // 儲值明確停用：`...mockApi` 會把假儲值帶進來，按下去會把 mock 的假餘額寫進 feed store，

@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GenerateImageReq } from '@/types/api'
+import type { GenerateImageReq, VideoJobReq } from '@/types/api'
 
 // mock.ts 的 db 是模組層級的可變狀態，測試間會互相污染。
 // 用 resetModules + 動態 import，讓每個測試都拿到全新、乾淨的假後端。
 type MockApi = typeof import('./mock').mockApi
+const VIDEO_REQ: VideoJobReq = { sourceImageId: 'a1', modelKey: 'videoStandard', template: 'cameraPan', ratio: '9:16' }
 let api: MockApi
 
 beforeEach(async () => {
@@ -99,22 +100,26 @@ describe('計費與扣點', () => {
     expect((await api.listModels('tryon')).map((m) => m.costFeeds)).toEqual([12])
   })
 
-  it('createVideoJob 扣 45 顆並回傳 pending 與 0% 進度', async () => {
+  it('createVideoJob 扣標準檔 45 顆並回傳 pending 與 0% 進度、記下任務名', async () => {
     const before = (await api.getFeed()).balance
-    const job = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'standard' })
-    expect(job.status).toBe('pending')
-    expect(job.progress).toBe(0)
-    expect(job.cost).toBe(45)
+    const job = await api.createVideoJob({ ...VIDEO_REQ, taskName: '圖生影_鏡頭推移' })
+    expect(job).toMatchObject({ status: 'pending', progress: 0, cost: 45, name: '圖生影_鏡頭推移' })
     expect((await api.getFeed()).balance).toBe(before - 45)
   })
 
-  it('createVideoJob 依生成模型倍率扣款（進階×2／專業×4）', async () => {
+  it('createVideoJob 依 modelKey 的單價扣款，價格同 GET /ai-models?modelType=video', async () => {
+    expect((await api.listModels('video')).map((m) => [m.modelKey, m.costFeeds])).toEqual([
+      ['videoStandard', 45],
+      ['videoAdvanced', 90],
+      ['videoPro', 180],
+    ])
     const before = (await api.getFeed()).balance
-    const advanced = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'advanced' })
+    const advanced = await api.createVideoJob({ ...VIDEO_REQ, modelKey: 'videoAdvanced' })
     expect(advanced.cost).toBe(90)
-    const pro = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'pro' })
+    const pro = await api.createVideoJob({ ...VIDEO_REQ, modelKey: 'videoPro' })
     expect(pro.cost).toBe(180)
     expect((await api.getFeed()).balance).toBe(before - 90 - 180)
+    await expect(api.createVideoJob({ ...VIDEO_REQ, modelKey: 'imagePro' })).rejects.toThrow('MODEL_NOT_ALLOWED')
   })
 })
 
@@ -234,15 +239,13 @@ describe('品牌套用（行銷 PO 文）', () => {
 })
 
 describe('圖生影非同步任務', () => {
-  it('未知 id 回傳 failed / NOT_FOUND', async () => {
-    const j = await api.getVideoJob('job_不存在')
-    expect(j.status).toBe('failed')
-    expect(j.error).toBe('NOT_FOUND')
+  it('未知 id 同真後端 404：丟 NOT_FOUND', async () => {
+    await expect(api.getVideoJob('job_不存在')).rejects.toThrow('NOT_FOUND')
   })
 
-  it('依經過時間由 pending → processing → done 並回傳進度', async () => {
+  it('依經過時間由 pending → processing → done 並回傳進度；done 自動入庫一次、listVideoJobs 列得到', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5)
-    const job = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'standard' })
+    const job = await api.createVideoJob({ ...VIDEO_REQ, taskName: '圖生影_入庫' })
     // 剛建立：pending
     const pending = await api.getVideoJob(job.id)
     expect(pending.status).toBe('pending')
@@ -259,7 +262,23 @@ describe('圖生影非同步任務', () => {
     const done = await api.getVideoJob(job.id)
     expect(done.status).toBe('done')
     expect(done.progress).toBe(100)
-    expect(done.resultUrl).toBeTruthy()
+    expect(done.durationMs).toBeGreaterThan(0)
+    await api.getVideoJob(job.id) // 再查一次不重複入庫
+    const videos = (await api.listImages({ mediaType: 'video', pageSize: 100 })).items.filter(
+      (a) => a.name === '圖生影_入庫',
+    )
+    expect(videos).toHaveLength(1)
+    expect((await api.listVideoJobs()).map((j) => [j.id, j.status])).toEqual([[job.id, 'done']])
+  })
+
+  it('processing 抽中上游失敗：failReason=upstreamError、costFeeds 為 0，預扣退回餘額', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    const before = (await api.getFeed()).balance
+    const job = await api.createVideoJob(VIDEO_REQ)
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 3000)
+    const failed = await api.getVideoJob(job.id)
+    expect(failed).toMatchObject({ status: 'failed', error: 'upstreamError', cost: 0 })
+    expect((await api.getFeed()).balance).toBe(before)
   })
 })
 
