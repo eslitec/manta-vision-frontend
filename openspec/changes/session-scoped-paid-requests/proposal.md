@@ -13,6 +13,7 @@
 - `createVideoTask` 送出前記下 store 的 epoch，回應回來時已 `reset` 就丟 `SESSION_CHANGED`，不建任務、不輪詢。
 - `postPaid` 與 `pollGeneration` 開始時記下登入身分（token＋botId），每次送出前確認沒變，變了就丟 `SESSION_CHANGED`，不重送、不輪詢；新增 `resetPaidRequests()` 在登出時清掉沒定案的 key。
 - `postPaid` 新增 `pendingOn202` 旗標（只有 `runGeneration` 帶）：202 時保留 key，`runGeneration` 在輪詢得到 `done`／`failed` 才丟；其餘輪詢錯誤保留，同輸入重送會帶同一把 key，後端回放同一個 202（同一個 `generationId`）。影片（`POST /video` 的 202 即完整答案）不帶旗標，行為不變。上限：後端只記 202 到 `idempotency_pending_ttl_seconds`（900 秒）。
+- codex 第二輪補強：`postPaid`／`pollGeneration` 在每個回應回來後也確認身分（晚到的回應不動冪等鍵紀錄、不觸發輪詢），刪 key 只刪本次那一把，輪詢沿用送出當下的身分；`brand.save()`、`consent.give()` 以 epoch 丟棄登出後才回來的回應，`saveBrand` 在 Logo 上傳與 `PUT /brand` 之間確認身分。
 - 新增錯誤碼 `CLIENT_ERROR_CODES.SESSION_CHANGED` 與 i18n `errors.sessionChanged`（兩語系）。
 - 請求內容與欄位不變。
 
@@ -39,6 +40,8 @@
     - src/api/errors.ts
     - src/stores/session.ts
     - src/stores/feed.ts
+    - src/stores/brand.ts
+    - src/stores/consent.ts
     - src/stores/generationTasks.ts
     - src/stores/stores.spec.ts
     - src/composables/useAssets.ts

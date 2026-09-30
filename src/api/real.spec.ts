@@ -603,6 +603,25 @@ describe('品牌設定（brand）', () => {
     expect((calls[1].body as Record<string, unknown>).logoImageId).toBe('img_new_logo')
   })
 
+  it('saveBrand 上傳 Logo 途中換帳號：丟 SESSION_CHANGED，不拿下一個帳號的憑證 PUT /brand', async () => {
+    setAuth({ token: 'token_a', botId: 'bot_a' })
+    const calls = stubRoutes({
+      '/upload': { status: 201, data: { ...WIRE_IMAGE, imageId: 'img_new_logo' }, delay: 10_000 },
+      '/brand': { data: WIRE_BRAND },
+    })
+
+    const a = expect(
+      realApi.saveBrand({ ...BASE_PROFILE, logoName: 'logo.png', logoUrl: 'data:image/png;base64,AAAA' }),
+    ).rejects.toMatchObject({ code: 'SESSION_CHANGED' })
+    await vi.advanceTimersByTimeAsync(1000)
+    clearAuth()
+    setAuth({ token: 'token_b', botId: 'bot_b' })
+    await vi.advanceTimersByTimeAsync(20_000)
+    await a
+
+    expect(calls.map((c) => c.url)).toEqual(['/upload'])
+  })
+
   it('saveBrand 的 logoUrl 是空字串（使用者清空 Logo）時，logoImageId 明確送 null', async () => {
     const calls = stubRoutes({ '/brand': { data: WIRE_BRAND } })
 
@@ -1127,6 +1146,74 @@ describe('POST /generate', () => {
     await assertion
 
     expect(calls).toHaveLength(2)
+  })
+
+  // ── 送出後換帳號，上一個帳號的回應晚到（codex R2）──
+  /** 帳號 A 送出後登出，帳號 B 登入（discard 的順序：清 key → 換憑證） */
+  function switchToB() {
+    resetPaidRequests()
+    clearAuth()
+    setAuth({ token: 'token_b', botId: 'bot_b' })
+  }
+  const byB = (calls: Recorded[]) => calls.filter((c) => c.headers?.Authorization === 'Bearer token_b')
+
+  it('A 晚到的 200 不刪 B 的 key：B 同輸入結果不確定後再按，仍沿用 B 原本那把', async () => {
+    setAuth({ token: 'token_a', botId: 'bot_a' })
+    const calls = stubRoutes({ '/generate': [{ ...GEN_OK, delay: 10_000 }, { error: 'timeout' }] })
+
+    const a = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({ code: 'SESSION_CHANGED' })
+    await vi.advanceTimersByTimeAsync(1000)
+    switchToB()
+    // B 同輸入送出：t=1、6、11 秒三發都逾時（key 留著）；A 的 200 在 t=10 秒回來
+    const b1 = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({ code: 'TIMEOUT' })
+    await vi.advanceTimersByTimeAsync(20_000)
+    await a
+    await b1
+    const b2 = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({ code: 'TIMEOUT' })
+    await vi.advanceTimersByTimeAsync(20_000)
+    await b2
+
+    const keys = keysOf(byB(calls))
+    expect(keys).toHaveLength(6)
+    expect(new Set(keys).size).toBe(1)
+    expect(keys[0]).not.toBe(keysOf(calls)[0]) // 不是 A 的那把
+  })
+
+  it('A 晚到的 202 不用 B 的憑證輪詢 A 的 generationId', async () => {
+    setAuth({ token: 'token_a', botId: 'bot_a' })
+    const calls = stubRoutes({ '/generate': { ...PENDING, delay: 10_000 }, '/generations/gen_1': DONE })
+
+    const a = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({ code: 'SESSION_CHANGED' })
+    await vi.advanceTimersByTimeAsync(1000)
+    switchToB()
+    await vi.advanceTimersByTimeAsync(60_000)
+    await a
+
+    expect(calls.map((c) => c.url)).toEqual(['/generate'])
+  })
+
+  it.each([
+    ['done', DONE],
+    ['failed', FAILED],
+  ])('A 輪詢晚到的 %s 不刪 B 的 key', async (_status, final) => {
+    setAuth({ token: 'token_a', botId: 'bot_a' })
+    const calls = stubRoutes({
+      '/generate': [PENDING, { error: 'timeout' }],
+      '/generations/gen_1': { ...final, delay: 10_000 },
+    })
+
+    const a = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({ code: 'SESSION_CHANGED' })
+    await vi.advanceTimersByTimeAsync(6000) // A 的輪詢 GET 已送出（t=5 秒），t=15 秒才回
+    switchToB()
+    const b1 = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({ code: 'TIMEOUT' })
+    await vi.advanceTimersByTimeAsync(20_000)
+    await a
+    await b1
+    const b2 = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({ code: 'TIMEOUT' })
+    await vi.advanceTimersByTimeAsync(20_000)
+    await b2
+
+    expect(new Set(keysOf(byB(calls))).size).toBe(1)
   })
 
   it('resetPaidRequests（登出）清掉沒定案的 key：同輸入再送是新的 key', async () => {
