@@ -31,6 +31,8 @@
 
 付費請求開始時系統 SHALL 記下登入身分（token 與 botId）；每次自動重送 POST 之前與每次輪詢 `GET /generations/{id}` 之前 SHALL 確認身分未變，已變則 SHALL 中止並丟出 `SESSION_CHANGED`，SHALL NOT 以新的憑證重送或輪詢。登出時系統 SHALL 清掉所有尚未定案的 `Idempotency-Key`。
 
+每個付費 POST 與輪詢 GET 的回應（成功或失敗）回來後，系統 SHALL 再確認一次身分；已變則 SHALL 丟出 `SESSION_CHANGED` 且 SHALL NOT 更動冪等鍵紀錄。輪詢 SHALL 使用送出 POST 當下記下的身分，SHALL NOT 在收到 202 後重新擷取。刪除冪等鍵時系統 SHALL 只刪除本次請求自己的那一把。
+
 #### Scenario: 等待重送時換帳號
 
 - **WHEN** 帳號 A 的付費 POST 逾時、正在等待重送時登出並登入帳號 B
@@ -45,6 +47,35 @@
 
 - **WHEN** 一次付費請求結果不確定（key 保留中）後登出，再以相同輸入送出
 - **THEN** 使用新的 `Idempotency-Key`
+
+#### Scenario: 上一個帳號的回應晚到不刪下一個帳號的 key
+
+- **WHEN** 帳號 A 送出付費 POST 後登出，帳號 B 登入並以相同輸入送出（結果不確定、key 保留中），之後 A 的 200、確定失敗或輪詢的 `done`／`failed` 才回來
+- **THEN** A 的呼叫端收到 `SESSION_CHANGED`，B 以相同輸入再送時仍帶 B 原本那把 `Idempotency-Key`
+
+#### Scenario: 上一個帳號晚到的 202 不觸發輪詢
+
+- **WHEN** 帳號 A 的付費 POST 尚未回應時換成帳號 B，之後 A 的 202 才回來
+- **THEN** 不送出任何 `GET /generations/{id}`，A 的呼叫端收到 `SESSION_CHANGED`
+
+### Requirement: 帳號範圍的寫入在回應晚到時不得寫回
+
+品牌存檔（`PUT /brand`）與肖像同意（`PUT /users/me/consent`）送出後、回應回來前若已登出，系統 SHALL NOT 把該回應寫進 store，SHALL NOT 更動下一個帳號的存檔中旗標。品牌存檔需先上傳 Logo 時，上傳回來後系統 SHALL 確認登入身分未變，已變則 SHALL 丟出 `SESSION_CHANGED` 且 SHALL NOT 送出 `PUT /brand`。
+
+#### Scenario: 品牌存檔的晚到回應
+
+- **WHEN** 帳號 A 按下儲存、`PUT /brand` 尚未回應時登出並登入帳號 B，之後 A 的回應才回來
+- **THEN** 品牌 store 仍是 B 的資料，B 進行中的存檔旗標不受影響
+
+#### Scenario: 上傳 Logo 途中換帳號
+
+- **WHEN** 品牌存檔的 Logo 上傳尚未回應時登入身分改變
+- **THEN** 不送出 `PUT /brand`，呼叫端收到 `SESSION_CHANGED`
+
+#### Scenario: 肖像同意的晚到回應
+
+- **WHEN** `PUT /users/me/consent` 尚未回應時登出，之後回應才回來
+- **THEN** 同意狀態維持未同意
 
 ### Requirement: 202 受理後保留冪等鍵直到輪詢定案
 

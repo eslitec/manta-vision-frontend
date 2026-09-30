@@ -142,6 +142,31 @@ describe('brand store', () => {
     await pending
     expect(brand.profile).toBeNull()
   })
+
+  it('save 送出後換帳號：A 晚到的 PUT 回應不寫進 B 的 profile，也不動 B 的 saving', async () => {
+    getBrand.mockResolvedValueOnce({ name: '帳號 A' }).mockResolvedValueOnce({ name: '帳號 B' })
+    let resolveA!: (v: unknown) => void
+    saveBrand.mockReturnValueOnce(new Promise((r) => (resolveA = r)))
+    const brand = useBrandStore()
+    await brand.load()
+    const pendingA = brand.save()
+    brand.reset() // A 登出
+    expect(brand.saving).toBe(false)
+    await brand.load() // B 登入
+    let resolveB!: (v: unknown) => void
+    saveBrand.mockReturnValueOnce(new Promise((r) => (resolveB = r)))
+    const pendingB = brand.save()
+
+    resolveA({ name: '帳號 A（已存檔）' })
+    await pendingA
+    expect(brand.profile?.name).toBe('帳號 B')
+    expect(brand.saving).toBe(true) // B 的存檔還在路上
+
+    resolveB({ name: '帳號 B（已存檔）' })
+    await pendingB
+    expect(brand.profile?.name).toBe('帳號 B（已存檔）')
+    expect(brand.saving).toBe(false)
+  })
 })
 
 describe('consent store', () => {
@@ -193,6 +218,17 @@ describe('consent store', () => {
     await consent.load()
     expect(getConsent).toHaveBeenCalledTimes(2)
     expect(consent.loaded).toBe(true)
+  })
+
+  it('give 送出後登出：晚到的 PUT 回應不把下一個帳號標成已同意', async () => {
+    let resolve!: (v: unknown) => void
+    giveConsent.mockReturnValueOnce(new Promise((r) => (resolve = r)))
+    const consent = useConsentStore()
+    const pending = consent.give()
+    consent.reset()
+    resolve(undefined)
+    await pending
+    expect(consent.consented).toBe(false)
   })
 })
 
