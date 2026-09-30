@@ -59,6 +59,7 @@ export default {
       'This generation did not succeed. If it was blocked by content moderation, the feed is not refunded, so please revise the description before trying again. Check the balance at the top right for the actual charge.',
     generationStillProcessing:
       'Generation is taking unusually long, so we stopped waiting (ID {id}). The feed will still be settled when it finishes; refresh later to check your balance.',
+    sessionChanged: 'You signed out or switched accounts, so this request was stopped.',
   },
   auth: {
     title: 'Log in to Manta Vision',

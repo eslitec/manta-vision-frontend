@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AxiosAdapter, AxiosRequestConfig, AxiosResponse } from 'axios'
-import { http } from './http'
+import { clearAuth, http, setAuth } from './http'
 import { mockApi } from './mock'
-import { realApi } from './real'
+import { realApi, resetPaidRequests } from './real'
 import { i18n } from '@/lang'
 import type { GenerateImageReq, GeneratePostReq, TryOnReq, VideoJobReq } from '@/types/api'
 import { API_ERROR_CODES, CLIENT_ERROR_CODES, hasErrorCode } from './errors'
@@ -99,6 +99,8 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   http.defaults.adapter = undefined
+  clearAuth()
+  resetPaidRequests() // 沒定案的 key 是模組層級的，不清會漏到下一個測試
 })
 
 describe('login', () => {
@@ -1041,6 +1043,102 @@ describe('POST /generate', () => {
 
     expect(calls).toHaveLength(3)
     expect(new Set(keysOf(calls)).size).toBe(1)
+  })
+
+  // ── 202 之後 key 留到輪詢定案（F4）──
+  const NOT_FOUND = { status: 404, data: { code: 'NOT_FOUND', message: '找不到這筆生成', requestId: 'req_404' } }
+
+  it('202 後輪詢沒定案就斷掉（404）：同輸入再送沿用同一把 key，不會拿新 key 再扣一次', async () => {
+    const calls = stubRoutes({ '/generate': PENDING, '/generations/gen_1': [NOT_FOUND, DONE] })
+
+    const first = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({ status: 404 })
+    await vi.advanceTimersByTimeAsync(5000)
+    await first
+
+    const second = realApi.generateImages(GEN_REQ) // 後端回放同一個 202，接回去輪詢
+    await vi.advanceTimersByTimeAsync(5000)
+    await expect(second).resolves.toEqual(GENERATED)
+
+    const keys = keysOf(calls.filter((c) => c.url === '/generate'))
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBeTruthy()
+    expect(keys[1]).toBe(keys[0])
+  })
+
+  it('202 後輪詢超過上限仍 processing：同輸入再送沿用同一把 key', async () => {
+    const calls = stubRoutes({ '/generate': PENDING, '/generations/gen_1': PROCESSING })
+
+    const first = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({ code: 'GENERATION_STILL_PROCESSING' })
+    await vi.advanceTimersByTimeAsync(12 * 60_000)
+    await first
+
+    const second = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({
+      code: 'GENERATION_STILL_PROCESSING',
+    })
+    await vi.advanceTimersByTimeAsync(12 * 60_000)
+    await second
+
+    const keys = keysOf(calls.filter((c) => c.url === '/generate'))
+    expect(keys[1]).toBe(keys[0])
+  })
+
+  it.each([
+    ['done', DONE],
+    ['failed', FAILED],
+  ])('202 後輪詢到 %s 是定案：同輸入再送是新的 key', async (_status, final) => {
+    const calls = stubRoutes({ '/generate': PENDING, '/generations/gen_1': final })
+
+    for (let i = 0; i < 2; i++) {
+      const p = realApi.generateImages(GEN_REQ).catch(() => undefined)
+      await vi.advanceTimersByTimeAsync(5000)
+      await p
+    }
+
+    const keys = keysOf(calls.filter((c) => c.url === '/generate'))
+    expect(keys).toHaveLength(2)
+    expect(keys[1]).not.toBe(keys[0])
+  })
+
+  // ── 付費流程綁登入身分（F3）──
+  it('重送前登入身分變了（登出後換帳號）：中止並丟 SESSION_CHANGED，不用新帳號的憑證重送', async () => {
+    setAuth({ token: 'token_a', botId: 'bot_a' })
+    const calls = stubRoutes({ '/generate': [{ error: 'timeout' }, GEN_OK] })
+
+    const assertion = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({ code: 'SESSION_CHANGED' })
+    await vi.advanceTimersByTimeAsync(1000) // 第一發逾時，正在等 5 秒後重送
+    clearAuth()
+    setAuth({ token: 'token_b', botId: 'bot_b' })
+    await vi.advanceTimersByTimeAsync(10_000)
+    await assertion
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0].headers?.Authorization).toBe('Bearer token_a')
+  })
+
+  it('202 輪詢中登入身分變了：停止輪詢並丟 SESSION_CHANGED，不拿新帳號的憑證問上一個人的生成', async () => {
+    setAuth({ token: 'token_a', botId: 'bot_a' })
+    const calls = stubRoutes({ '/generate': PENDING, '/generations/gen_1': PROCESSING })
+
+    const assertion = expect(realApi.generateImages(GEN_REQ)).rejects.toMatchObject({ code: 'SESSION_CHANGED' })
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(calls.map((c) => c.url)).toEqual(['/generate', '/generations/gen_1'])
+    setAuth({ token: 'token_b', botId: 'bot_b' })
+    await vi.advanceTimersByTimeAsync(60_000)
+    await assertion
+
+    expect(calls).toHaveLength(2)
+  })
+
+  it('resetPaidRequests（登出）清掉沒定案的 key：同輸入再送是新的 key', async () => {
+    const calls = stubRoutes({ '/generate': { error: 'timeout' } })
+    for (let i = 0; i < 2; i++) {
+      const p = realApi.generateImages(GEN_REQ).catch(() => undefined)
+      await vi.advanceTimersByTimeAsync(20_000)
+      await p
+      if (i === 0) resetPaidRequests()
+    }
+    const keys = [...new Set(keysOf(calls))]
+    expect(keys).toHaveLength(2)
   })
 
   it('重新生成帶 regenOf', async () => {

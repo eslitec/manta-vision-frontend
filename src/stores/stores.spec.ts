@@ -14,6 +14,8 @@ const logout = vi.fn()
 const createVideoJob = vi.fn()
 const getVideoJob = vi.fn()
 const listVideoJobs = vi.fn()
+const listFolders = vi.fn()
+const resetPaidRequests = vi.fn()
 
 vi.mock('@/api', () => ({
   api: {
@@ -29,8 +31,11 @@ vi.mock('@/api', () => ({
     createVideoJob: (req: unknown) => createVideoJob(req),
     getVideoJob: (id: string) => getVideoJob(id),
     listVideoJobs: () => listVideoJobs(),
+    listFolders: () => listFolders(),
   },
 }))
+
+vi.mock('@/api/real', () => ({ resetPaidRequests: () => resetPaidRequests() }))
 
 import { useFeedStore } from './feed'
 import { useBrandStore } from './brand'
@@ -41,6 +46,7 @@ import { useGenerationTasksStore } from './generationTasks'
 import { ctx, clearAuth } from '@/api/http'
 import { ApiError } from '@/api/errors'
 import { fakeSession } from '@/test/factories'
+import { useAssets } from '@/composables/useAssets'
 
 // environment: 'node' 沒有原生 localStorage，用記憶體 Map 塞一個最小 shim
 function createLocalStorageStub() {
@@ -321,6 +327,54 @@ describe('session store', () => {
     expect(consent.loaded).toBe(false)
   })
 
+  describe('登出清掉帳號範圍的快取（餘額、資料夾）', () => {
+    const FEED_A = { balance: 900, monthlyLimit: 1000, monthUsed: 100, estImages: 9, estVideos: 3 }
+    const FOLDERS_A = { items: [{ folderId: 'f_a', folderName: 'A 的資料夾', imageCount: 2 }], unfiledCount: 5 }
+
+    it('登出後餘額與資料夾歸零、loaded 旗標放掉，下一個帳號會重新取', async () => {
+      getFeed.mockResolvedValue(FEED_A)
+      listFolders.mockResolvedValue(FOLDERS_A)
+      logout.mockResolvedValue(undefined)
+      const session = useSessionStore()
+      const feed = useFeedStore()
+      const { folders, unfiledCount, loadFolders } = useAssets()
+      await feed.refresh()
+      await loadFolders()
+      expect(feed.balance).toBe(900)
+      expect(folders.value).toHaveLength(1)
+
+      await session.logout()
+
+      expect(feed).toMatchObject({ loaded: false, balance: 0, monthlyLimit: null, monthUsed: 0 })
+      expect(folders.value).toEqual([])
+      expect(unfiledCount.value).toBe(0)
+      expect(resetPaidRequests).toHaveBeenCalledTimes(1) // 沒定案的 Idempotency-Key 一併清掉
+      listFolders.mockResolvedValue({ items: [], unfiledCount: 0 })
+      await loadFolders() // 不帶 force：旗標沒放掉的話這裡不會打 API
+      expect(listFolders).toHaveBeenCalledTimes(2)
+    })
+
+    it('登出前發出、登出後才回來的 GET /feeds 與 GET /folders 不寫回狀態', async () => {
+      let resolveFeed!: (v: unknown) => void
+      let resolveFolders!: (v: unknown) => void
+      getFeed.mockReturnValue(new Promise((r) => (resolveFeed = r)))
+      listFolders.mockReturnValue(new Promise((r) => (resolveFolders = r)))
+      const session = useSessionStore()
+      const feed = useFeedStore()
+      const { folders, unfiledCount, loadFolders } = useAssets()
+      const pending = [feed.refresh(), loadFolders(true)]
+
+      session.forceLogout()
+      resolveFeed(FEED_A)
+      resolveFolders(FOLDERS_A)
+      await Promise.all(pending)
+
+      expect(feed).toMatchObject({ loaded: false, balance: 0 })
+      expect(folders.value).toEqual([])
+      expect(unfiledCount.value).toBe(0)
+    })
+  })
+
   describe('botName', () => {
     const ownBot = { botId: 'bot-123', botName: '我的機器人' }
 
@@ -599,6 +653,19 @@ describe('generationTasks store：影片任務（#21～#23）', () => {
     s.reset()
     resolve([job({ id: 'vt_prev', status: 'processing' })])
     await p
+    expect(s.tasks).toEqual([])
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(polls()).toBe(0)
+  })
+
+  it('createVideoTask 回來前已登出（reset）：丟 SESSION_CHANGED，不把任務塞回清單、不輪詢', async () => {
+    const s = useGenerationTasksStore()
+    let resolve!: (job: unknown) => void
+    createVideoJob.mockReturnValue(new Promise((r) => (resolve = r)))
+    const p = s.createVideoTask(REQ, 'v')
+    s.reset()
+    resolve({ id: 'vt_prev', status: 'pending', progress: 0, cost: 45 })
+    await expect(p).rejects.toMatchObject({ code: 'SESSION_CHANGED' })
     expect(s.tasks).toEqual([])
     await vi.advanceTimersByTimeAsync(6000)
     expect(polls()).toBe(0)

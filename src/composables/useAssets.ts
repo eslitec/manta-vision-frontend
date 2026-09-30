@@ -19,13 +19,24 @@ import { api } from '@/api'
 const folders = ref<Folder[]>([])
 const unfiledCount = ref(0)
 const foldersLoaded = ref(false)
+let foldersEpoch = 0 // resetFolders 一次加一：登出前發出、登出後才回來的清單不採用
 
 async function loadFolders(force = false) {
   if (foldersLoaded.value && !force) return
+  const mine = foldersEpoch
   const res = await api.listFolders()
+  if (mine !== foldersEpoch) return
   folders.value = res.items
   unfiledCount.value = res.unfiledCount
   foldersLoaded.value = true
+}
+
+/** 登出時呼叫（session store 的 discard）：資料夾綁機器人，下一個帳號要重新取 */
+export function resetFolders(): void {
+  foldersEpoch++
+  folders.value = []
+  unfiledCount.value = 0
+  foldersLoaded.value = false
 }
 
 // 新增資料夾

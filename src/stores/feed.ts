@@ -11,8 +11,12 @@ export const useFeedStore = defineStore('feed', () => {
   const estVideos = ref(0)
   const loaded = ref(false)
 
+  let epoch = 0 // reset 一次加一：登出前發出、登出後才回來的餘額不採用（同 generationTasks）
+
   async function refresh() {
+    const mine = epoch
     const feed = await api.getFeed()
+    if (mine !== epoch) return
     balance.value = feed.balance
     monthlyLimit.value = feed.monthlyLimit
     monthUsed.value = feed.monthUsed
@@ -27,5 +31,16 @@ export const useFeedStore = defineStore('feed', () => {
     loaded.value = true
   }
 
-  return { balance, monthlyLimit, monthUsed, estImages, estVideos, loaded, refresh, applyTopUp }
+  /** 登出時清掉：錢包綁帳號，下一個帳號要重新取，進行中的舊請求回來也不採用 */
+  function reset() {
+    epoch++
+    balance.value = 0
+    monthlyLimit.value = null
+    monthUsed.value = 0
+    estImages.value = 0
+    estVideos.value = 0
+    loaded.value = false
+  }
+
+  return { balance, monthlyLimit, monthUsed, estImages, estVideos, loaded, refresh, applyTopUp, reset }
 })

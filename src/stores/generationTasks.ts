@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/api'
-import { CLIENT_ERROR_CODES, hasErrorCode, isApiError } from '@/api/errors'
+import { ApiError, CLIENT_ERROR_CODES, hasErrorCode, isApiError } from '@/api/errors'
 import { i18n } from '@/lang'
 import { displayMessage } from '@/utils/error'
 import { useFeedStore } from '@/stores/feed'
@@ -106,7 +106,11 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
 
   // 影片生成：送出後立刻回傳 taskId，呼叫端可選擇性記錄用於本頁預覽，但任務本身不受頁面卸載影響
   async function createVideoTask(req: VideoJobReq, name: string): Promise<string> {
+    const mine = epoch
     const job = await api.createVideoJob({ ...req, taskName: name })
+    // 回來前已登出：不把上一個帳號的任務塞回清單，也不拿下一個帳號的憑證輪詢它
+    if (mine !== epoch)
+      throw new ApiError({ code: CLIENT_ERROR_CODES.SESSION_CHANGED, message: i18n.global.t('errors.sessionChanged') })
     const task: GenerationTask = {
       id: job.id,
       kind: 'video',
