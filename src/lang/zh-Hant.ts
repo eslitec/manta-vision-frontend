@@ -58,6 +58,7 @@ export default {
       '這次生成沒有成功。若是內容被審核擋下，飼料不會退回，請修改描述後再試；實際扣點以右上角餘額為準。',
     generationStillProcessing:
       '生成時間異常地長，已停止等待（編號 {id}）。完成時仍會結清飼料，請稍後重新整理確認餘額。',
+    sessionChanged: '你已登出或切換帳號，這次請求已停止。',
   },
   auth: {
     title: '登入 Manta Vision',

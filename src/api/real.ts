@@ -1,7 +1,7 @@
 import { i18n } from '@/lang'
 import { formatDimensions } from '@/utils/dimensions'
 import { ApiError, API_ERROR_CODES, CLIENT_ERROR_CODES, hasErrorCode, isApiError } from './errors'
-import { http } from './http'
+import { ctx, http } from './http'
 import { mockApi } from './mock'
 import type {
   Asset,
@@ -492,24 +492,41 @@ const isSettledFailure = (e: unknown) =>
 // 「端點＋body」→ 還沒有確定結果的那把 Idempotency-Key。
 // ponytail: 只存在記憶體，重新整理就消失；輸入差一個字就視為新的操作。要跨重新整理再搬到 sessionStorage
 const openKeys = new Map<string, string>()
+/** 登出時呼叫（session store 的 discard）：上一個帳號沒定案的 key 不留給下一個帳號 */
+export function resetPaidRequests(): void {
+  openKeys.clear()
+}
+
+// 付費流程綁住送出當下的登入身分：重送與輪詢的認證標頭是送出那一刻才從 ctx 取的，
+// 中途登出、換帳號的話會變成拿下一個帳號的憑證送上一個人的請求（扣到別人的點）。
+const identity = () => `${ctx.token}\n${ctx.botId}`
+function assertSameIdentity(who: string): void {
+  if (identity() !== who)
+    throw new ApiError({ code: CLIENT_ERROR_CODES.SESSION_CHANGED, message: i18n.global.t('errors.sessionChanged') })
+}
 
 /**
  * 付費端點：同一份輸入沿用還沒有確定結果的那把 Idempotency-Key，否則產新的一把。
  * 逾時、斷線、閘道 5xx、409 等到期限、未知的 5xx 丟錯後 key 留著：使用者再按一次，前一發若已扣點，
- * 後端會回放或回 409，不會再扣。2xx（含 202）、4xx、UPSTREAM_ERROR 結果已確定，下次按是真的想再生成一次。
+ * 後端會回放或回 409，不會再扣。2xx、4xx、UPSTREAM_ERROR 結果已確定，下次按是真的想再生成一次。
+ * pendingOn202：202 只是「已受理」的端點（runGeneration）收到 202 時 key 留著，由呼叫端在輪詢定案後丟；
+ * 影片的 202 就是完整答案，不帶這個旗標。
+ * 每次送出前確認登入身分沒變（見 assertSameIdentity），變了就丟 SESSION_CHANGED，不用新帳號的憑證重送。
  * 重送沿用同一把 key 與**同一個 body 物件**——後端比對 body 的 bytes，物件換了就會被當成新請求再扣一次點。
  * 只重送「不確定有沒有送到」的錯誤（isTransient，最多 PAID_MAX_ATTEMPTS 次），以及同 key 還在跑的 409
  * （重送到 PAID_IN_PROGRESS_MS 期限）；其他錯誤（402、400、CONTENT_BLOCKED、後端的 5xx…）直接往上丟。
  * op：辨識「同一份輸入」的字串。FormData 經 JSON.stringify 一律是 "{}"，multipart 端點要自己給。
  */
-async function postPaid<T>(url: string, body: object, op = url + JSON.stringify(body)) {
+async function postPaid<T>(url: string, body: object, op = url + JSON.stringify(body), pendingOn202 = false) {
+  const who = identity()
   const key = openKeys.get(op) ?? crypto.randomUUID()
   openKeys.set(op, key)
   let deadline = Date.now() + PAID_IN_PROGRESS_MS
   for (let failures = 0; ;) {
+    assertSameIdentity(who)
     try {
       const res = await http.post<T>(url, body, { headers: { 'Idempotency-Key': key }, timeout: PAID_TIMEOUT_MS })
-      openKeys.delete(op)
+      if (!(pendingOn202 && res.status === 202)) openKeys.delete(op)
       return res
     } catch (e) {
       if (hasErrorCode(e, API_ERROR_CODES.IDEMPOTENCY_IN_PROGRESS)) {
@@ -527,9 +544,11 @@ async function postPaid<T>(url: string, body: object, op = url + JSON.stringify(
 
 /** 202 之後每 pollAfterMs 打一次 GET /generations/{id}，直到 done 或 failed。不重送 POST。 */
 async function pollGeneration(generationId: string, pollAfterMs = 5000): Promise<WireOutput> {
+  const who = identity()
   const deadline = Date.now() + POLL_MAX_MS
   for (;;) {
     await sleep(Math.max(1000, pollAfterMs))
+    assertSameIdentity(who) // 登出、換帳號後不拿別人的憑證問上一個人的生成
     try {
       const { data } = await http.get<WireStatus>(`/generations/${generationId}`)
       if (data.status === 'done') return data
@@ -550,12 +569,25 @@ async function pollGeneration(generationId: string, pollAfterMs = 5000): Promise
   }
 }
 
-/** 送出付費生成：200 直接回，202 改走輪詢。輪詢放在 postPaid 的重送迴圈外面，輪詢失敗不會重送 POST。 */
-async function runGeneration(url: string, body: object, op?: string): Promise<WireOutput> {
-  const res = await postPaid<WireOutput | WirePending>(url, body, op)
+/**
+ * 送出付費生成：200 直接回，202 改走輪詢。輪詢放在 postPaid 的重送迴圈外面，輪詢失敗不會重送 POST。
+ * 202 只是「已受理」（已預留點數）：key 留到輪詢得到 done／failed 才丟。輪詢沒定案就斷掉（404、逾時上限…）時，
+ * 同一份輸入再按一次會帶同一把 key，後端回放同一個 202（同一個 generationId），接回去輪詢而不是再扣一次。
+ * ponytail: 後端只記 202 到 idempotency_pending_ttl_seconds（900 秒，app/idempotency.py），過了之後同一把 key
+ * 也會被當新請求再扣一次；要蓋住更久得靠後端延長或做生成紀錄頁，前端留 key 補不了。
+ */
+async function runGeneration(url: string, body: object, op = url + JSON.stringify(body)): Promise<WireOutput> {
+  const res = await postPaid<WireOutput | WirePending>(url, body, op, true)
   if (res.status !== 202) return res.data as WireOutput
   const pending = res.data as WirePending
-  return pollGeneration(pending.generationId, pending.pollAfterMs)
+  try {
+    const out = await pollGeneration(pending.generationId, pending.pollAfterMs)
+    openKeys.delete(op)
+    return out
+  } catch (e) {
+    if (hasErrorCode(e, CLIENT_ERROR_CODES.GENERATION_FAILED)) openKeys.delete(op) // failed 是定案，其餘都還懸著
+    throw e
+  }
 }
 
 function toGeneratedImage(generationId: string, r: WireResult): GeneratedImage {

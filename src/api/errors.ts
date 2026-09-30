@@ -54,6 +54,8 @@ export const CLIENT_ERROR_CODES = {
   GENERATION_FAILED: 'GENERATION_FAILED',
   /** 輪詢超過上限仍是 processing（後端之後完成仍會結清飼料） */
   GENERATION_STILL_PROCESSING: 'GENERATION_STILL_PROCESSING',
+  /** 付費請求送出後登入身分變了（登出、換帳號）：不重送、不輪詢、回應丟棄 */
+  SESSION_CHANGED: 'SESSION_CHANGED',
 } as const
 
 export type ApiErrorCode =
