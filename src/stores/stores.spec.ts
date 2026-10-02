@@ -727,6 +727,70 @@ describe('generationTasks store：影片任務（#21～#23）', () => {
     await vi.advanceTimersByTimeAsync(30000)
     expect(polls()).toBe(1)
   })
+
+  describe('面板重試先過確認窗（Requirement「送出生成前二次確認」）', () => {
+    // 建一筆失敗的影片任務（有 videoReq），回傳 store
+    const failedTask = async () => {
+      const s = useGenerationTasksStore()
+      getVideoJob.mockResolvedValue(job({ status: 'failed', progress: 0, cost: 0, error: 'upstreamError' }))
+      await s.createVideoTask(REQ, 'v')
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(s.tasks[0].status).toBe('failed')
+      createVideoJob.mockClear()
+      createVideoJob.mockResolvedValue({ id: 'vt_2', status: 'pending', progress: 0, cost: 45 })
+      listModels.mockResolvedValue([
+        { modelKey: 'videoStandard', name: '標準', modelType: 'video', costFeeds: 45 },
+        { modelKey: 'videoPro', name: '專業', modelType: 'video', costFeeds: 180 },
+      ])
+      return s
+    }
+
+    it('requestRetry 只開確認窗（價格取該檔單價），不送出', async () => {
+      const s = await failedTask()
+      await s.requestRetry('vt_1')
+      expect(s.retryConfirm).toEqual({ taskId: 'vt_1', cost: 45, modelLabel: '標準' })
+      expect(createVideoJob).not.toHaveBeenCalled()
+      expect(s.tasks.map((t) => t.id)).toEqual(['vt_1'])
+    })
+
+    it('取消：不送出，失敗那筆原樣留著', async () => {
+      const s = await failedTask()
+      await s.requestRetry('vt_1')
+      s.cancelRetry()
+      await s.confirmRetry() // 取消後再按確定（窗已關）也不送
+      expect(s.retryConfirm).toBeNull()
+      expect(createVideoJob).not.toHaveBeenCalled()
+      expect(s.tasks).toHaveLength(1)
+      expect(s.tasks[0]).toMatchObject({ id: 'vt_1', status: 'failed' })
+    })
+
+    it('確定才送出，連按兩次也只送一次；成功後才移除失敗那筆', async () => {
+      const s = await failedTask()
+      await s.requestRetry('vt_1')
+      await Promise.all([s.confirmRetry(), s.confirmRetry()])
+      expect(createVideoJob).toHaveBeenCalledTimes(1)
+      expect(createVideoJob).toHaveBeenCalledWith({ ...REQ, taskName: 'v' })
+      expect(s.tasks.map((t) => t.id)).toEqual(['vt_2'])
+    })
+
+    it('確定後送出失敗（402）：失敗那筆留著並顯示原因', async () => {
+      const s = await failedTask()
+      createVideoJob.mockRejectedValue(new ApiError({ code: 'INSUFFICIENT_FEEDS', message: 'x', status: 402 }))
+      await s.requestRetry('vt_1')
+      await s.confirmRetry()
+      expect(s.tasks).toHaveLength(1)
+      expect(s.tasks[0]).toMatchObject({ id: 'vt_1', status: 'failed', read: false })
+      expect(s.tasks[0].error).not.toBe('')
+    })
+
+    it('檔位已停用：不開確認窗、丟錯給面板顯示', async () => {
+      const s = await failedTask()
+      listModels.mockResolvedValue([{ modelKey: 'videoPro', name: '專業', modelType: 'video', costFeeds: 180 }])
+      await expect(s.requestRetry('vt_1')).rejects.toThrow()
+      expect(s.retryConfirm).toBeNull()
+      expect(createVideoJob).not.toHaveBeenCalled()
+    })
+  })
 })
 
 describe('帳號範圍的 store 以 Pinia 慣例 $reset() 重設', () => {

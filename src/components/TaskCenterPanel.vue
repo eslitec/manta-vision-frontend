@@ -39,10 +39,12 @@ Teleport(to="body")
           button(v-if="task.status === 'done' && task.kind === 'video'" @click="view") {{ $t('common.view') }}
           //- 只有影片能從面板重試（retryTask 只處理影片）：其餘任務的結果只活在各自頁面，面板重做會扣點卻看不到結果。
           //- 重新整理後還原的影片沒有原始參數（videoReq），按了也沒作用，不給鈕
-          button(v-else-if="task.status === 'failed' && task.kind === 'video' && task.videoReq" @click="tasksStore.retryTask(task.id)") {{ $t('common.retry') }}
+          button(v-else-if="task.status === 'failed' && task.kind === 'video' && task.videoReq" @click="retry(task)") {{ $t('common.retry') }}
     .taskpanel__foot
       p {{ t('taskCenter.notePrimary') }}
       p {{ t('taskCenter.notePolicy') }}
+//- 放在面板 v-if 之外：開確認窗時面板先關（兩個對話框同時開會互搶焦點），面板元件常駐版面，任何頁面都叫得到
+ConfirmGenerateDialog(v-model:open="retryConfirmOpen" :cost="retryConfirm?.cost ?? 0" :model-label="retryConfirm?.modelLabel" @confirm="tasksStore.confirmRetry()")
 </template>
 
 <script setup lang="ts">
@@ -50,8 +52,10 @@ import { useRouter } from 'vue-router'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import ConfirmGenerateDialog from '@/components/ConfirmGenerateDialog.vue'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
+import { displayMessage } from '@/utils/error'
 import { IconClose, IconImagePlaceholder, IconPlayCircle } from '@/components/icons'
 import type { GenerationTask, GenerationTaskKind } from '@/types/api'
 
@@ -59,7 +63,7 @@ const open = defineModel<boolean>('open', { required: true })
 const dialogRef = ref<HTMLElement | null>(null)
 
 const tasksStore = useGenerationTasksStore()
-const { tasks } = storeToRefs(tasksStore)
+const { tasks, retryConfirm } = storeToRefs(tasksStore)
 const router = useRouter()
 const { t } = useI18n()
 
@@ -74,6 +78,22 @@ const remainingTime = (task: GenerationTask) => {
   const seconds = totalSeconds % 60
 
   return minutes ? t('common.remainingMinutesSeconds', { minutes, seconds }) : t('common.remainingSeconds', { seconds })
+}
+// 重試會再扣一次飼料：先查價開確認窗（與生成頁主按鈕同一個），確定才送出。
+// 等面板關掉才開窗：查價是 async，兩個對話框若分兩輪 flush 開關，確認窗會先記下「#app 已 inert」，關窗後還原成 inert、整頁點不動
+const retryConfirmOpen = computed({
+  get: () => !!retryConfirm.value && !open.value,
+  set: (v) => {
+    if (!v) tasksStore.cancelRetry()
+  },
+})
+const retry = async (task: GenerationTask) => {
+  try {
+    await tasksStore.requestRetry(task.id)
+    close()
+  } catch (e) {
+    task.error = displayMessage(e, t('errors.loadFailed'))
+  }
 }
 const view = () => {
   router.push('/library')

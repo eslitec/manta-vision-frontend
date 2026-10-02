@@ -150,6 +150,7 @@ export default {
     retouchCompleted: '已完成・結果不會自動存入圖庫，請到圖庫「AI 修圖」按「另存為新素材」',
     failed: '生成失敗',
     failedDetail: '生成失敗・模型逾時',
+    retryUnavailable: '這個檔位目前無法使用，請到圖生影頁重新選擇',
     notePrimary: '完成的影片會自動存入圖庫›影片，離開頁面不影響影片生成；其他生成請留在頁面上等結果。',
     notePolicy: '影片生成後無法取消；生成失敗不扣飼料（內容審核擋下除外）。',
   },

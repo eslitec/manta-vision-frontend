@@ -151,6 +151,7 @@ export default {
       'Completed · Results are not saved automatically. Use "Save as new asset" on the AI retouch tab in Library.',
     failed: 'Generation failed',
     failedDetail: 'Generation failed · Model timeout',
+    retryUnavailable: 'This model tier is no longer available. Choose another on the Image to Video page.',
     notePrimary:
       'Completed videos are saved automatically to Library › Videos, and leaving the page does not interrupt video generation. For all other generations, stay on the page until the results appear.',
     notePolicy:

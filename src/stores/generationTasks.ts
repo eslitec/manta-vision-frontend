@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { api } from '@/api'
 import { ApiError, CLIENT_ERROR_CODES, hasErrorCode, isApiError } from '@/api/errors'
 import { i18n } from '@/lang'
-import { displayMessage } from '@/utils/error'
+import { displayMessage, isInsufficientFeed } from '@/utils/error'
 import { useFeedStore } from '@/stores/feed'
 import type { GenerationTask, GenerationTaskKind, GeneratedPost, VideoJob, VideoJobReq } from '@/types/api'
 
@@ -164,6 +164,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     for (const id of [...timers.keys()]) clearTimer(id)
     tasks.value = []
     toast.value = null
+    retryConfirm.value = null
   }
 
   // 呼叫端自己 await 結果的生成（圖生圖、行銷 PO 文、AI 試穿、AI 修圖）：任務只負責讓任務中心看得到進行中與成敗。
@@ -227,11 +228,50 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     return post
   }
 
+  // 新任務建立成功才移除失敗那筆：送出失敗（402 飼料不足…）時失敗任務留著，還能再試
   async function retryTask(id: string): Promise<string | undefined> {
     const t = tasks.value.find((x) => x.id === id)
     if (!t || t.kind !== 'video' || !t.videoReq) return
+    const newId = await createVideoTask(t.videoReq, t.name)
     tasks.value = tasks.value.filter((x) => x.id !== id)
-    return createVideoTask(t.videoReq, t.name)
+    return newId
+  }
+
+  // 面板「重試」走與生成頁主按鈕同一個確認視窗（ConfirmGenerateDialog）：
+  // requestRetry 只查價、開視窗，不送出；confirmRetry 才扣點；cancelRetry 什麼都不送。
+  // 價格與主按鈕同源（GET /ai-models?modelType=video 的該檔單價）——任務上的 cost 失敗後已釋放成 0，不能拿來顯示
+  const retryConfirm = ref<{ taskId: string; cost: number; modelLabel: string } | null>(null)
+  async function requestRetry(id: string) {
+    const t = tasks.value.find((x) => x.id === id)
+    if (!t || t.kind !== 'video' || !t.videoReq) return
+    const modelKey = t.videoReq.modelKey
+    const model = (await api.listModels('video')).find((m) => m.modelKey === modelKey)
+    // 檔位已被後端停用：不開一個寫著 0 顆、送出卻被拒的確認窗
+    if (!model) throw new Error(i18n.global.t('taskCenter.retryUnavailable'))
+    retryConfirm.value = { taskId: id, cost: model.costFeeds, modelLabel: model.name }
+  }
+  function cancelRetry() {
+    retryConfirm.value = null
+  }
+  async function confirmRetry() {
+    const pending = retryConfirm.value
+    retryConfirm.value = null // 先清掉：連按兩下確定也只送一次
+    if (!pending) return
+    try {
+      await retryTask(pending.taskId)
+    } catch (e) {
+      const t = tasks.value.find((x) => x.id === pending.taskId)
+      if (t) {
+        t.error = isInsufficientFeed(e)
+          ? i18n.global.t('errors.insufficientFeed')
+          : displayMessage(e, i18n.global.t('errors.submitFailed'))
+        t.read = false
+      }
+    } finally {
+      useFeedStore()
+        .refresh()
+        .catch(() => undefined)
+    }
   }
 
   function markAllRead() {
@@ -262,6 +302,10 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     $reset,
     createMarketingTask,
     retryTask,
+    retryConfirm,
+    requestRetry,
+    cancelRetry,
+    confirmRetry,
     markAllRead,
     dismissToast,
     $reset,
