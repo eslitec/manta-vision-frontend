@@ -44,7 +44,7 @@
 
 ## Risks / Trade-offs
 
-- 後端只記 202 到 `idempotency_pending_ttl_seconds`（900 秒）；超過後同一把 key 也會被當成新請求。前端輪詢上限 11 分鐘（660 秒），所以逾時後約有 4 分鐘的保護窗；要更久得靠後端。程式內以 `ponytail:` 註解標明。
-- 輪詢回 404 後 key 保留：同輸入重試會一直接回同一個 `generationId`（再 404），直到後端的 202 紀錄過期（最長 900 秒）。取「不重複扣點」優先；改一個字就是新操作。
+- 後端原本只記 202 到 `idempotency_pending_ttl_seconds`（900 秒）；後端 `afbaeed`（10/2）已改為 24 小時（`idempotency_ttl_seconds`），保護窗不再受前端輪詢上限影響。剩下的上限是 key 只存在記憶體：重新整理或重新登入換 token 後接不回去。程式內以 `ponytail:` 註解標明。
+- 輪詢回 404 後 key 保留：同輸入重試會一直接回同一個 `generationId`（再 404），直到後端的 202 紀錄過期（最長 24 小時）。取「不重複扣點」優先；改一個字就是新操作。
 - 登出後用**新 token** 重新登入同一帳號，後端冪等範圍已不同，舊 key 本來就擋不住——這是後端範圍設計，前端以登出清 key 對齊。
 - `feed.applyTopUp` 由元件在 `await api.topUp` 之後呼叫，沒有 epoch 防護；真後端模式儲值停用，暫不處理。

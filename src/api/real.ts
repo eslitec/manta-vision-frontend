@@ -603,8 +603,8 @@ async function pollGeneration(generationId: string, who: string, pollAfterMs = 5
  * 送出付費生成：200 直接回，202 改走輪詢。輪詢放在 postPaid 的重送迴圈外面，輪詢失敗不會重送 POST。
  * 202 只是「已受理」（已預留點數）：key 留到輪詢得到 done／failed 才丟。輪詢沒定案就斷掉（404、逾時上限…）時，
  * 同一份輸入再按一次會帶同一把 key，後端回放同一個 202（同一個 generationId），接回去輪詢而不是再扣一次。
- * ponytail: 後端只記 202 到 idempotency_pending_ttl_seconds（900 秒，app/idempotency.py），過了之後同一把 key
- * 也會被當新請求再扣一次；要蓋住更久得靠後端延長或做生成紀錄頁，前端留 key 補不了。
+ * ponytail: 後端對 202 的冪等回放保留 24 小時（idempotency_ttl_seconds，app/idempotency.py），但 key 只存在記憶體：
+ * 重新整理頁面或冪等範圍換了（重新登入換 token）就接不回去，要蓋住得持久化 key 或做生成紀錄頁。
  */
 async function runGeneration(url: string, body: object, op = url + JSON.stringify(body)): Promise<WireOutput> {
   const who = identity()
