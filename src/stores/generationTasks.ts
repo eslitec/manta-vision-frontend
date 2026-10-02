@@ -16,7 +16,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
   const tasks = ref<GenerationTask[]>([])
   const toast = ref<{ taskId: string; title: string; message: string; kind: 'done' | 'failed' } | null>(null)
   const timers = new Map<string, ReturnType<typeof setInterval>>()
-  let epoch = 0 // reset 一次加一：reset 之前發出、之後才回來的還原結果不採用
+  let epoch = 0 // $reset 一次加一：$reset 之前發出、之後才回來的還原結果不採用
 
   const activeCount = computed(
     () => tasks.value.filter((t) => t.status === 'pending' || t.status === 'processing').length,
@@ -56,7 +56,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
   }
 
   // 輪詢打的是 GET，本身冪等：斷線、逾時、5xx（部署中、代理吐的 502）下一輪再問；
-  // 其他錯誤（404 任務不見、401／403）結果已確定，再問也一樣，停止並標失敗（401 另由 session 攔截器登出、reset）
+  // 其他錯誤（404 任務不見、401／403）結果已確定，再問也一樣，停止並標失敗（401 另由 session 攔截器登出、$reset）
   const isPollRetryable = (e: unknown) =>
     hasErrorCode(e, CLIENT_ERROR_CODES.TIMEOUT) ||
     hasErrorCode(e, CLIENT_ERROR_CODES.NETWORK_ERROR) ||
@@ -91,7 +91,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
       if (!t) return clearTimer(taskId)
       try {
         const j = await api.getVideoJob(taskId)
-        if (!timers.has(taskId)) return // 回應回來前已收尾或已登出（reset）
+        if (!timers.has(taskId)) return // 回應回來前已收尾或已登出（$reset）
         applyVideoJob(t, j)
         if (j.status === 'done' || j.status === 'failed') endVideoTask(t, j.status)
       } catch (e) {
@@ -159,7 +159,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
   }
 
   // 登出（含 token 失效）時呼叫：停掉所有輪詢、清空任務，下一個帳號看不到上一個人的任務
-  function reset() {
+  function $reset() {
     epoch++
     for (const id of [...timers.keys()]) clearTimer(id)
     tasks.value = []
@@ -248,7 +248,7 @@ export const useGenerationTasksStore = defineStore('generationTasks', () => {
     createVideoTask,
     trackTask,
     restoreVideoTasks,
-    reset,
+    $reset,
     createMarketingTask,
     retryTask,
     markAllRead,

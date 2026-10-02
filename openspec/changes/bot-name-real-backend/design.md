@@ -36,7 +36,7 @@
 
 ### 決策 2：載入時機掛在 session store 的 `adopt()`，清除掛在 `discard()`
 
-`adopt()` 是登入、註冊、還原三條路徑的共同出口，在這裡 `void loadNames()` 一次（`Promise.allSettled([api.listBots(), brand.load()])`），正好對應「登入成功後」與「app 啟動有 token 時」各一次；`discard()` 是登出與 forceLogout 的共同出口，在這裡把 `bots` 清成 `[]`、`namesLoaded` 設回 `false`、brand store `profile` 設回 `null`，換帳號登入時不會殘留上一個人的名字。不新增 store：`bots` 放 session store（它本來就持有 `botId`），品牌名稱直接讀既有 brand store（`BrandSettingsView`／`HomeView` 已在用）。brand store 的 `load()` 原本只在 `profile` 已有值時跳過，擋不住「session store 與首頁同時呼叫」的兩發並行（真後端實測登入後 `GET /brand` 打了兩次），改成共用同一個進行中的請求（in-flight memo）；新增 `reset()` 給 `discard()` 用：清 `profile`、作廢進行中的請求，reset 之後才回來的舊帳號回應不寫進 `profile`。
+`adopt()` 是登入、註冊、還原三條路徑的共同出口，在這裡 `void loadNames()` 一次（`Promise.allSettled([api.listBots(), brand.load()])`），正好對應「登入成功後」與「app 啟動有 token 時」各一次；`discard()` 是登出與 forceLogout 的共同出口，在這裡把 `bots` 清成 `[]`、`namesLoaded` 設回 `false`、brand store `profile` 設回 `null`，換帳號登入時不會殘留上一個人的名字。不新增 store：`bots` 放 session store（它本來就持有 `botId`），品牌名稱直接讀既有 brand store（`BrandSettingsView`／`HomeView` 已在用）。brand store 的 `load()` 原本只在 `profile` 已有值時跳過，擋不住「session store 與首頁同時呼叫」的兩發並行（真後端實測登入後 `GET /brand` 打了兩次），改成共用同一個進行中的請求（in-flight memo）；新增 `$reset()` 給 `discard()` 用：清 `profile`、作廢進行中的請求，reset 之後才回來的舊帳號回應不寫進 `profile`。
 
 ### 決策 3：元件只讀 store
 

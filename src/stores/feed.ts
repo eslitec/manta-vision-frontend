@@ -11,7 +11,7 @@ export const useFeedStore = defineStore('feed', () => {
   const estVideos = ref(0)
   const loaded = ref(false)
 
-  let epoch = 0 // reset 一次加一：登出前發出、登出後才回來的餘額不採用（同 generationTasks）
+  let epoch = 0 // $reset 一次加一：登出前發出、登出後才回來的餘額不採用（同 generationTasks）
 
   async function refresh() {
     const mine = epoch
@@ -32,7 +32,7 @@ export const useFeedStore = defineStore('feed', () => {
   }
 
   /** 登出時清掉：錢包綁帳號，下一個帳號要重新取，進行中的舊請求回來也不採用 */
-  function reset() {
+  function $reset() {
     epoch++
     balance.value = 0
     monthlyLimit.value = null
@@ -42,5 +42,5 @@ export const useFeedStore = defineStore('feed', () => {
     loaded.value = false
   }
 
-  return { balance, monthlyLimit, monthUsed, estImages, estVideos, loaded, refresh, applyTopUp, reset }
+  return { balance, monthlyLimit, monthUsed, estImages, estVideos, loaded, refresh, applyTopUp, $reset }
 })

@@ -65,10 +65,10 @@ export const useSessionStore = defineStore('session', () => {
     session.value = null
     bots.value = []
     namesLoaded.value = false
-    brand.reset()
-    consent.reset() // 同意綁使用者：不清的話下一個帳號在同一分頁會沿用上一個人的同意狀態
-    generationTasks.reset() // 不清的話影片輪詢在登出後繼續打 401，下一個帳號也看得到上一個人的任務
-    feed.reset() // 不清的話 loaded 旗標讓下一個帳號跳過 GET /feeds，直接顯示上一個人的餘額
+    brand.$reset()
+    consent.$reset() // 同意綁使用者：不清的話下一個帳號在同一分頁會沿用上一個人的同意狀態
+    generationTasks.$reset() // 不清的話影片輪詢在登出後繼續打 401，下一個帳號也看得到上一個人的任務
+    feed.$reset() // 不清的話 loaded 旗標讓下一個帳號跳過 GET /feeds，直接顯示上一個人的餘額
     resetFolders() // 同上：圖庫會跳過 GET /folders，顯示上一個人的資料夾
     resetPaidRequests() // 上一個帳號沒定案的 Idempotency-Key 不留給下一個帳號
     localStorage.removeItem(STORAGE_KEY)
