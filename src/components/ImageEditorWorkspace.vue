@@ -445,7 +445,7 @@ import { API_ERROR_CODES, hasErrorCode } from '@/api/errors'
 import { useFeedStore } from '@/stores/feed'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
 import { downloadBlob, downloadFile } from '@/utils/download'
-import { displayMessage, hasCode, isInsufficientFeed } from '@/utils/error'
+import { displayMessage, isInsufficientFeed } from '@/utils/error'
 import {
   containLayerInBox,
   coverRect,
@@ -758,8 +758,8 @@ async function buildOutputFile(name: string): Promise<File> {
 }
 // 把捕捉到的錯誤換成使用者看得懂、且看得到（不再只有螢幕報讀器聽得到）的訊息。
 function classifySaveError(err: unknown): string {
-  if (hasCode(err, 'CROP_NO_SOURCE_IMAGE')) return t('editor.saveDialog.errorNoSourceImage')
-  if (hasCode(err, 'CROP_IMAGE_LOAD_FAILED') || hasCode(err, 'CROP_EXPORT_BLOCKED'))
+  if (hasErrorCode(err, 'CROP_NO_SOURCE_IMAGE')) return t('editor.saveDialog.errorNoSourceImage')
+  if (hasErrorCode(err, 'CROP_IMAGE_LOAD_FAILED') || hasErrorCode(err, 'CROP_EXPORT_BLOCKED'))
     return t('editor.saveDialog.errorImageAccess')
   return t('editor.saveDialog.errorGeneric')
 }
