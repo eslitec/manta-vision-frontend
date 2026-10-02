@@ -83,7 +83,7 @@
         span {{ t('video.completed') }}
       .result__actions
         AppButton(variant="outline" @click="download") {{ t('common.download') }}
-        AppButton(variant="outline" @click="startGenerate") {{ t('common.regenerate') }}
+        AppButton(variant="outline" :disabled="!canSubmit" @click="confirmOpen = true") {{ t('common.regenerate') }}
         AppButton(@click="goLibrary") {{ t('common.openLibrary') }}
       p.result__stat {{ t('video.resultStats', { cost: myTask.cost, elapsed: elapsedText(myTask) }) }}
 

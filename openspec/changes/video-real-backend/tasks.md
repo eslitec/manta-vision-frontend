@@ -27,6 +27,6 @@
 
 ## 6. 待決與歸檔
 
-- [ ] 6.1 待使用者決定重做是否二次確認：「重新生成」與任務面板「重試」目前不經確認視窗直接送出（沿用現行行為）；若要加確認，改 Requirement「送出生成前二次確認」並讓兩個入口走同一個確認視窗。
+- [x] 6.1 對齊 Requirement「送出生成前二次確認」：「重新生成」與任務面板「重試」都先開同一個 `ConfirmGenerateDialog`。`GenerateVideoView.vue` 的「重新生成」改開頁面既有的確認窗（金額＝目前檔位單價）；`generationTasks.ts` 新增 `requestRetry`（查 `GET /ai-models?modelType=video` 取原檔位單價、只開窗不送出）／`cancelRetry`／`confirmRetry`（先清狀態再送，連按只送一次），`retryTask` 改為新任務建立成功後才移除失敗那筆；`TaskCenterPanel.vue` 把確認窗放在面板 v-if 之外（面板常駐版面，任何頁面都叫得到），等面板關掉才開窗。驗證：`stores.spec.ts` 5 條（確認前不送、取消不送、確定只送一次、402 保留失敗那筆、檔位停用不開窗），拿掉確認／改回先移除時對應測試轉紅、還原後 339 全綠；mock 冒煙 18/18 PASS（主按鈕、重新生成、圖庫頁開面板重試的取消／Esc／確定扣點），原版同腳本 8/18。
 - [ ] 6.2 後端 `feat/video` 合併並 `alembic upgrade head` 後，指揮官做真實付費實測（進度條平均耗時、播放、下載、失敗退點）。
 - [ ] 6.3 PR 合併後 `spectra archive video-real-backend`。
