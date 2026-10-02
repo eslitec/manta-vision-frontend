@@ -14,3 +14,4 @@
 ## 3. 收尾
 
 - [x] 3.1 對齊 Requirement「登出清除帳號範圍的快取」：`npx vitest run` 全綠（324）、`npx vue-tsc --noEmit` exit 0、`npm run lint` exit 0、`npx prettier --check` 改動檔全過、i18n 兩語系 key 差異不變。
+- [x] 3.3 對齊 Requirement「202 受理後保留冪等鍵直到輪詢定案」：後端 afbaeed 把 202 的冪等回放改為 24 小時，`real.ts` 的 `ponytail:` 註解與 design.md 的 900 秒說法同步更正（2.2 內文保留當時的事實）
