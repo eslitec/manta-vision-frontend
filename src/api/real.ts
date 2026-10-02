@@ -392,7 +392,9 @@ async function saveBrand(profile: BrandProfile): Promise<BrandProfile> {
     // 資料引用它，會變成孤兒圖片留著占空間，所以失敗時要順手刪掉剛上傳的那張。
     // 刪除本身失敗就算了（不能讓清理失敗蓋掉原本真正的錯誤），最後還是把原本的
     // 錯誤丟出去，讓呼叫端（BrandSettingsView）照原本邏輯顯示錯誤訊息。
-    if (uploadedImageId) {
+    // 等回應期間換了帳號就不清：DELETE 會帶下一個帳號的憑證（同 assertSameIdentity 的理由），
+    // 孤兒圖留著比拿別人的身分送請求好。上傳後、PUT 前就換帳號的那條路同理，也不清。
+    if (uploadedImageId && identity() === who) {
       await deleteImage(uploadedImageId).catch(() => {})
     }
     throw e

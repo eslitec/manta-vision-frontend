@@ -60,7 +60,7 @@
 
 ### Requirement: 帳號範圍的寫入在回應晚到時不得寫回
 
-品牌存檔（`PUT /brand`）與肖像同意（`PUT /users/me/consent`）送出後、回應回來前若已登出，系統 SHALL NOT 把該回應寫進 store，SHALL NOT 更動下一個帳號的存檔中旗標。品牌存檔需先上傳 Logo 時，上傳回來後系統 SHALL 確認登入身分未變，已變則 SHALL 丟出 `SESSION_CHANGED` 且 SHALL NOT 送出 `PUT /brand`。
+品牌存檔（`PUT /brand`）與肖像同意（`PUT /users/me/consent`）送出後、回應回來前若已登出，系統 SHALL NOT 把該回應寫進 store，SHALL NOT 更動下一個帳號的存檔中旗標。品牌存檔需先上傳 Logo 時，上傳回來後系統 SHALL 確認登入身分未變，已變則 SHALL 丟出 `SESSION_CHANGED` 且 SHALL NOT 送出 `PUT /brand`。`PUT /brand` 失敗時系統 SHALL 刪除這次新上傳的 Logo（避免孤兒圖），但登入身分已變時 SHALL NOT 送出該刪除請求。
 
 #### Scenario: 品牌存檔的晚到回應
 
@@ -71,6 +71,11 @@
 
 - **WHEN** 品牌存檔的 Logo 上傳尚未回應時登入身分改變
 - **THEN** 不送出 `PUT /brand`，呼叫端收到 `SESSION_CHANGED`
+
+#### Scenario: 品牌存檔失敗時清掉剛上傳的 Logo
+
+- **WHEN** 新上傳 Logo 後 `PUT /brand` 失敗
+- **THEN** 以同一個身分送出 `DELETE /images/{剛上傳的 imageId}`，呼叫端收到原本的錯誤；若 `PUT /brand` 回應前登入身分已改變，則不送出刪除
 
 #### Scenario: 肖像同意的晚到回應
 

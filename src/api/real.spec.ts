@@ -622,6 +622,43 @@ describe('品牌設定（brand）', () => {
     expect(calls.map((c) => c.url)).toEqual(['/upload'])
   })
 
+  it('saveBrand 新上傳 Logo 後 PUT /brand 失敗：刪掉剛上傳的孤兒圖，丟回原本的錯誤', async () => {
+    const calls = stubRoutes({
+      '/upload': { status: 201, data: { ...WIRE_IMAGE, imageId: 'img_new_logo' } },
+      '/brand': { status: 422, data: { code: 'VALIDATION_ERROR', message: '欄位錯誤', requestId: 'r1' } },
+      '/images/img_new_logo': { data: { deleted: true } },
+    })
+
+    await expect(
+      realApi.saveBrand({ ...BASE_PROFILE, logoName: 'logo.png', logoUrl: 'data:image/png;base64,AAAA' }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' })
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'post /upload',
+      'put /brand',
+      'delete /images/img_new_logo',
+    ])
+  })
+
+  it('saveBrand PUT /brand 途中換帳號後失敗：不拿下一個帳號的憑證刪上一個人的 Logo', async () => {
+    setAuth({ token: 'token_a', botId: 'bot_a' })
+    const calls = stubRoutes({
+      '/upload': { status: 201, data: { ...WIRE_IMAGE, imageId: 'img_new_logo' } },
+      '/brand': { status: 500, data: { code: 'INTERNAL_ERROR', message: '壞了', requestId: 'r1' }, delay: 10_000 },
+      '/images/img_new_logo': { data: { deleted: true } },
+    })
+
+    const a = expect(
+      realApi.saveBrand({ ...BASE_PROFILE, logoName: 'logo.png', logoUrl: 'data:image/png;base64,AAAA' }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_ERROR' })
+    await vi.advanceTimersByTimeAsync(1000)
+    clearAuth()
+    setAuth({ token: 'token_b', botId: 'bot_b' })
+    await vi.advanceTimersByTimeAsync(20_000)
+    await a
+
+    expect(calls.map((c) => c.url)).toEqual(['/upload', '/brand'])
+  })
+
   it('saveBrand 的 logoUrl 是空字串（使用者清空 Logo）時，logoImageId 明確送 null', async () => {
     const calls = stubRoutes({ '/brand': { data: WIRE_BRAND } })
 

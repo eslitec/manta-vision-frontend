@@ -10,6 +10,7 @@
 
 - [x] 2.3 對齊 Requirement「付費請求綁定送出當下的登入身分」（codex 第二輪）：`src/api/real.ts` 的 `postPaid`／`pollGeneration` 在每個 HTTP await 回來後（成功與失敗）再 `assertSameIdentity`，不符不動 `openKeys`；新增 `closeKey(op, key)` 只刪本次的 key；`runGeneration` 擷取身分後傳給 `postPaid` 與 `pollGeneration`，後者不再自行擷取；驗證：`real.spec.ts` 的「A 晚到的 200 不刪 B 的 key」「A 晚到的 202 不用 B 的憑證輪詢」「A 輪詢晚到的 done／failed 不刪 B 的 key」綠燈，`real.ts` 換回修正前版本時四條轉紅。
 - [x] 2.4 對齊 Requirement「帳號範圍的寫入在回應晚到時不得寫回」：`src/stores/brand.ts` 的 `save()` 與 `src/stores/consent.ts` 的 `give()` 送出前記 epoch、`reset()` 遞增，回來時不符不寫回（brand 的 `reset()` 一併放掉 `saving`）；`src/api/real.ts` 的 `saveBrand` 在 Logo 上傳後 `assertSameIdentity`；驗證：`stores.spec.ts` 的「save 送出後換帳號」「give 送出後登出」與 `real.spec.ts` 的「saveBrand 上傳 Logo 途中換帳號」綠燈，三個檔換回修正前版本時三條轉紅。
+- [x] 2.5 對齊 Requirement「帳號範圍的寫入在回應晚到時不得寫回」（合併上游 `9ce55ad` 之後）：`src/api/real.ts` 的 `saveBrand` 保留上游的「`PUT /brand` 失敗刪孤兒 Logo」，刪除前加 `identity() === who`；驗證：`real.spec.ts` 新增「PUT /brand 失敗刪孤兒圖」「PUT 途中換帳號後失敗不刪」兩條綠燈；拿掉刪除時前者轉紅、拿掉身分判斷時後者轉紅。
 
 ## 3. 收尾
 
