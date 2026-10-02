@@ -106,9 +106,16 @@ export function isApiError(error: unknown): error is ApiError {
   return error instanceof ApiError
 }
 
-/** `hasErrorCode(e, 'TOKEN_EXPIRED')`——比 `e instanceof ApiError && e.code === …` 短 */
+/**
+ * 判斷錯誤是不是某個錯誤碼——全專案唯一的一份，同時認得兩種來源：
+ * - 真後端擲的 `ApiError`：比 `code`（`message` 是給人看的文案，不比）
+ * - 假後端（mock.ts）與純前端擲的 `new Error(CODE)`：碼放在 `message`
+ *
+ * 切換資料來源時呼叫端不必改，就是靠這裡吸收掉差異。
+ */
 export function hasErrorCode(error: unknown, code: ApiErrorCode): boolean {
-  return isApiError(error) && error.code === code
+  if (isApiError(error)) return error.code === code
+  return error instanceof Error && error.message === code
 }
 
 /** 取某個欄位的錯誤訊息，沒有就回空陣列——樣板可以直接 v-for */
