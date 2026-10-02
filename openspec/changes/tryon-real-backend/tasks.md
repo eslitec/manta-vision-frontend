@@ -25,7 +25,7 @@
 
 ## 4. 審查修正
 
-- [x] 4.1 對齊 Requirement「肖像同意讀寫後端」，落實設計決策「同意：後端為真相，403 時本機狀態回退」的補充：`src/stores/consent.ts` 加 `reset()`、進行中請求共用一發、`give()` 已同意不重打；`src/stores/session.ts` `discard()` 呼叫 `consent.reset()`；`TryOnView.vue` 頂部提示改 `consentLoaded && !consented`、`onModelUpload`／`onGenerate` 先 `await consentStore.load()`、`acknowledge()` try/catch 把錯誤顯示在視窗內 `consentErr`、`closeConsent()` 重設 `ackChecked`。驗證：`stores.spec.ts`「登出清掉肖像同意狀態」「已同意時 give 不重打 PUT」「並行的 load 共用同一發」「reset 之後才回來的舊回應不採用」全綠；先讓它紅：拿掉 `consent.reset()` → 第一條紅、拿掉 `give()` 的守衛 → 第二條紅
+- [x] 4.1 對齊 Requirement「肖像同意讀寫後端」，落實設計決策「同意：後端為真相，403 時本機狀態回退」的補充：`src/stores/consent.ts` 加 `$reset()`、進行中請求共用一發、`give()` 已同意不重打；`src/stores/session.ts` `discard()` 呼叫 `consent.$reset()`；`TryOnView.vue` 頂部提示改 `consentLoaded && !consented`、`onModelUpload`／`onGenerate` 先 `await consentStore.load()`、`acknowledge()` try/catch 把錯誤顯示在視窗內 `consentErr`、`closeConsent()` 重設 `ackChecked`。驗證：`stores.spec.ts`「登出清掉肖像同意狀態」「已同意時 give 不重打 PUT」「並行的 load 共用同一發」「reset 之後才回來的舊回應不採用」全綠；先讓它紅：拿掉 `consent.$reset()` → 第一條紅、拿掉 `give()` 的守衛 → 第二條紅
 - [x] 4.2 對齊 Requirement「顯示飼料消耗」：`GET /ai-models?modelType=tryon` 回空清單時 `errorMsg = t('errors.loadFailed')`。驗證：vue-tsc／lint 通過（無獨立測試：view 層無測試框架）
 - [x] 4.3 落實設計決策「服飾選擇不列模特照」：`ImagePickerDialog` 加 `excludeSources` prop（預設空），試穿頁帶 `['tryonModel']`。驗證：vue-tsc 通過；其他四個呼叫端不帶＝行為不變
 - [x] 4.4 落實設計決策「價格與採用事件」修正：`mock.ts` 的 `tryOn` 不再 `imageGenerations.add`；design.md 採用率敘述改正；`TryOnView.vue` 下載處註解同步。驗證：`mock.spec.ts`「試穿結果的存入／下載不算採用」全綠；先讓它紅：加回 `imageGenerations.add` → 紅

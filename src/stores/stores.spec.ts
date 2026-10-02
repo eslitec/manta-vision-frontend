@@ -132,12 +132,12 @@ describe('brand store', () => {
     expect(brand.profile?.name).toBe('日安選物')
   })
 
-  it('reset 之後才回來的舊回應不寫進 profile', async () => {
+  it('$reset 之後才回來的舊回應不寫進 profile', async () => {
     let resolveOld!: (v: unknown) => void
     getBrand.mockReturnValueOnce(new Promise((r) => (resolveOld = r)))
     const brand = useBrandStore()
     const pending = brand.load()
-    brand.reset()
+    brand.$reset()
     resolveOld({ name: '上一個帳號' })
     await pending
     expect(brand.profile).toBeNull()
@@ -150,7 +150,7 @@ describe('brand store', () => {
     const brand = useBrandStore()
     await brand.load()
     const pendingA = brand.save()
-    brand.reset() // A 登出
+    brand.$reset() // A 登出
     expect(brand.saving).toBe(false)
     await brand.load() // B 登入
     let resolveB!: (v: unknown) => void
@@ -204,12 +204,12 @@ describe('consent store', () => {
     expect(consent.loaded).toBe(true)
   })
 
-  it('reset 之後才回來的舊回應不採用，之後重新載入', async () => {
+  it('$reset 之後才回來的舊回應不採用，之後重新載入', async () => {
     let resolve!: (v: { consented: boolean }) => void
     getConsent.mockReturnValueOnce(new Promise((r) => (resolve = r)))
     const consent = useConsentStore()
     const p = consent.load()
-    consent.reset()
+    consent.$reset()
     resolve({ consented: true })
     await p
     expect(consent.consented).toBe(false)
@@ -225,7 +225,7 @@ describe('consent store', () => {
     giveConsent.mockReturnValueOnce(new Promise((r) => (resolve = r)))
     const consent = useConsentStore()
     const pending = consent.give()
-    consent.reset()
+    consent.$reset()
     resolve(undefined)
     await pending
     expect(consent.consented).toBe(false)
@@ -681,12 +681,12 @@ describe('generationTasks store：影片任務（#21～#23）', () => {
     expect(getVideoJob.mock.calls.map((c) => c[0]).sort()).toEqual(['vt_1', 'vt_old'])
   })
 
-  it('restoreVideoTasks 回來前已登出（reset）：上一個帳號的任務不併入、不輪詢', async () => {
+  it('restoreVideoTasks 回來前已登出（$reset）：上一個帳號的任務不併入、不輪詢', async () => {
     const s = useGenerationTasksStore()
     let resolve!: (jobs: unknown[]) => void
     listVideoJobs.mockReturnValue(new Promise((r) => (resolve = r)))
     const p = s.restoreVideoTasks()
-    s.reset()
+    s.$reset()
     resolve([job({ id: 'vt_prev', status: 'processing' })])
     await p
     expect(s.tasks).toEqual([])
@@ -694,12 +694,12 @@ describe('generationTasks store：影片任務（#21～#23）', () => {
     expect(polls()).toBe(0)
   })
 
-  it('createVideoTask 回來前已登出（reset）：丟 SESSION_CHANGED，不把任務塞回清單、不輪詢', async () => {
+  it('createVideoTask 回來前已登出（$reset）：丟 SESSION_CHANGED，不把任務塞回清單、不輪詢', async () => {
     const s = useGenerationTasksStore()
     let resolve!: (job: unknown) => void
     createVideoJob.mockReturnValue(new Promise((r) => (resolve = r)))
     const p = s.createVideoTask(REQ, 'v')
-    s.reset()
+    s.$reset()
     resolve({ id: 'vt_prev', status: 'pending', progress: 0, cost: 45 })
     await expect(p).rejects.toMatchObject({ code: 'SESSION_CHANGED' })
     expect(s.tasks).toEqual([])
@@ -715,7 +715,7 @@ describe('generationTasks store：影片任務（#21～#23）', () => {
     warn.mockRestore()
   })
 
-  it('登出（session.discard → reset）清空任務並停止所有輪詢', async () => {
+  it('登出（session.discard → $reset）清空任務並停止所有輪詢', async () => {
     const s = useGenerationTasksStore()
     getVideoJob.mockResolvedValue(job())
     await s.createVideoTask(REQ, 'v')
@@ -726,5 +726,26 @@ describe('generationTasks store：影片任務（#21～#23）', () => {
     expect(s.tasks).toEqual([])
     await vi.advanceTimersByTimeAsync(30000)
     expect(polls()).toBe(1)
+  })
+})
+
+describe('帳號範圍的 store 以 Pinia 慣例 $reset() 重設', () => {
+  // setup store 不會自動有 $reset（Pinia 開發模式呼叫會直接丟錯），要 store 自己定義並 return
+  it('brand／consent／feed／generationTasks 都自備 $reset，舊名 reset 不再存在', () => {
+    const stores = [useBrandStore(), useConsentStore(), useFeedStore(), useGenerationTasksStore()]
+    for (const s of stores) {
+      expect(() => s.$reset()).not.toThrow()
+      expect('reset' in s).toBe(false)
+    }
+  })
+
+  it('feed.$reset 清掉餘額與 loaded', async () => {
+    getFeed.mockResolvedValue({ balance: 50, monthlyLimit: 100, monthUsed: 5, estImages: 1, estVideos: 0 })
+    const feed = useFeedStore()
+    await feed.refresh()
+    expect(feed.loaded).toBe(true)
+    feed.$reset()
+    expect(feed.balance).toBe(0)
+    expect(feed.loaded).toBe(false)
   })
 })

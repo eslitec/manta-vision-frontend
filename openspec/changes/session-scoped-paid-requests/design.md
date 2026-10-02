@@ -32,7 +32,7 @@
 
 ### 清理集中在 session.discard，各自以 epoch 丟棄晚到回應
 
-`feed.reset()` 與 `resetFolders()` 各自把 epoch 加一並清空狀態；`refresh()`／`loadFolders()` 在 await 前記下 epoch、回來時不符就不寫。沿用 `generationTasks` 既有寫法，不另立共用抽象（只有兩處）。
+`feed.$reset()` 與 `resetFolders()` 各自把 epoch 加一並清空狀態；`refresh()`／`loadFolders()` 在 await 前記下 epoch、回來時不符就不寫。沿用 `generationTasks` 既有寫法，不另立共用抽象（只有兩處）。
 
 ### 付費流程以「token＋botId」當身分，而不是 session epoch
 

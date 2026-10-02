@@ -35,7 +35,7 @@
 
 ### 同意：後端為真相，403 時本機狀態回退
 
-掛載時 `consentStore.load()`（`GET /users/me/consent`，`loaded` 後不重打；進行中的請求共用同一發，同 brand store）；視窗「我知道了」→ `PUT`（store 的 `give()` 在已同意時不重打——從「查看條款」開的視窗按「我知道了」不會覆寫後端 `updatedAt`；PUT 失敗視窗留著、錯誤顯示在視窗內 `p.err`）。頂部同意提示只在 `loaded && !consented` 顯示，上傳／生成前先 `await load()`，避免已同意的人在 GET 回來前被當成未同意（提示閃一下、選的檔案白選）；GET 失敗時 `loaded` 留 `false`，提示不顯示，動作時再問一次。同意綁使用者不綁機器人，session store `discard()` 一併 `consent.reset()`（`consented=false`、`loaded=false`、丟掉進行中的請求），否則同一分頁換帳號會沿用上一個人的同意狀態、`POST /upload` 又沒有同意閘門。`POST /tryon` 回 403 `CONSENT_REQUIRED` 時把 `consented` 設回 `false` 並開視窗，不當成生成失敗——本機快取可能過期（換帳號、後端資料被改）。前端的同意檢查仍對兩種來源都做（沿用既有要求「生成前需完成肖像同意」），後端只對 `upload` 來源守門，內建模特多一道前端檢查無害。
+掛載時 `consentStore.load()`（`GET /users/me/consent`，`loaded` 後不重打；進行中的請求共用同一發，同 brand store）；視窗「我知道了」→ `PUT`（store 的 `give()` 在已同意時不重打——從「查看條款」開的視窗按「我知道了」不會覆寫後端 `updatedAt`；PUT 失敗視窗留著、錯誤顯示在視窗內 `p.err`）。頂部同意提示只在 `loaded && !consented` 顯示，上傳／生成前先 `await load()`，避免已同意的人在 GET 回來前被當成未同意（提示閃一下、選的檔案白選）；GET 失敗時 `loaded` 留 `false`，提示不顯示，動作時再問一次。同意綁使用者不綁機器人，session store `discard()` 一併 `consent.$reset()`（`consented=false`、`loaded=false`、丟掉進行中的請求），否則同一分頁換帳號會沿用上一個人的同意狀態、`POST /upload` 又沒有同意閘門。`POST /tryon` 回 403 `CONSENT_REQUIRED` 時把 `consented` 設回 `false` 並開視窗，不當成生成失敗——本機快取可能過期（換帳號、後端資料被改）。前端的同意檢查仍對兩種來源都做（沿用既有要求「生成前需完成肖像同意」），後端只對 `upload` 來源守門，內建模特多一道前端檢查無害。
 
 視窗內容改顯示品牌設定的 `portraitConsent`（brand store `load()` 已在空值時補 i18n 預設文案；store 還沒載入前 computed 也 fallback 同一段），`white-space: pre-line` 保留換行；拿掉寫死的四條條款與「下載條款 PDF」。
 

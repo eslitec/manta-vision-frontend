@@ -12,7 +12,7 @@ export const useBrandStore = defineStore('brand', () => {
   // 進行中的 GET /brand：session store（登入／還原）與首頁會同時呼叫 load()，
   // 只看 profile 有沒有值擋不住兩發並行，所以共用同一個進行中的請求。
   let inflight: Promise<void> | null = null
-  let epoch = 0 // reset 一次加一：登出前送出、登出後才回來的存檔回應不寫回（同 feed store）
+  let epoch = 0 // $reset 一次加一：登出前送出、登出後才回來的存檔回應不寫回（同 feed store）
 
   function load(force = false): Promise<void> {
     if (profile.value && !force) return Promise.resolve()
@@ -20,7 +20,7 @@ export const useBrandStore = defineStore('brand', () => {
       const request: Promise<void> = api
         .getBrand()
         .then((loaded) => {
-          if (inflight !== request) return // reset() 之後才回來的舊帳號回應，不能寫進來
+          if (inflight !== request) return // $reset() 之後才回來的舊帳號回應，不能寫進來
           // 真後端從沒設定過就回空字串／null；沒有預設文案的話合規頁的兩個
           // textarea 會是空的，使用者容易誤以為欄位壞掉。用跟畫面一致的
           // i18n 預設文案補上，只在「真的沒有值」時才補，不覆蓋既有設定。
@@ -37,7 +37,7 @@ export const useBrandStore = defineStore('brand', () => {
   }
 
   /** 登出時清掉：下一個帳號登入時要重新取，進行中的舊請求回來也不採用 */
-  function reset() {
+  function $reset() {
     epoch++
     profile.value = null
     inflight = null
@@ -60,5 +60,5 @@ export const useBrandStore = defineStore('brand', () => {
     }
   }
 
-  return { profile, saving, load, save, reset }
+  return { profile, saving, load, save, $reset }
 })

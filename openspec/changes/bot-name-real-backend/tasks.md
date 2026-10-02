@@ -1,7 +1,7 @@
 ## 1. 資料層
 
-- [x] 1.1 落地設計決策「決策 1：名稱優先序與空白期」與「決策 2：載入時機掛在 session store 的 `adopt()`，清除掛在 `discard()`」：`src/stores/session.ts` 新增 `bots`、`namesLoaded`、`botName`（computed）；`adopt()` 觸發 `Promise.allSettled([api.listBots(), brand.load()])` 並用遞增序號擋過期回應；`discard()` 清 `bots`、`namesLoaded` 並呼叫 brand store `reset()`；`src/stores/brand.ts` 的 `load()` 共用進行中的請求、新增 `reset()`。驗證：`npx vue-tsc --noEmit` exit 0
-- [x] 1.2 `src/stores/stores.spec.ts` 補測試：名稱優先序（brand name → botName → 預設「我的品牌」）、載入前為空字串、API 失敗仍退回預設且不 reject、登出清空 `bots` 與 brand profile；brand store 並行 `load()` 只打一次 `getBrand`、`reset()` 後的舊回應不寫入。驗證：`npx vitest run src/stores` 全綠；把 `botName` 的 brand 優先改壞、把 in-flight 去重拿掉後各至少一條轉紅，cp 快照還原後轉綠
+- [x] 1.1 落地設計決策「決策 1：名稱優先序與空白期」與「決策 2：載入時機掛在 session store 的 `adopt()`，清除掛在 `discard()`」：`src/stores/session.ts` 新增 `bots`、`namesLoaded`、`botName`（computed）；`adopt()` 觸發 `Promise.allSettled([api.listBots(), brand.load()])` 並用遞增序號擋過期回應；`discard()` 清 `bots`、`namesLoaded` 並呼叫 brand store `$reset()`；`src/stores/brand.ts` 的 `load()` 共用進行中的請求、新增 `$reset()`。驗證：`npx vue-tsc --noEmit` exit 0
+- [x] 1.2 `src/stores/stores.spec.ts` 補測試：名稱優先序（brand name → botName → 預設「我的品牌」）、載入前為空字串、API 失敗仍退回預設且不 reject、登出清空 `bots` 與 brand profile；brand store 並行 `load()` 只打一次 `getBrand`、`$reset()` 後的舊回應不寫入。驗證：`npx vitest run src/stores` 全綠；把 `botName` 的 brand 優先改壞、把 in-flight 去重拿掉後各至少一條轉紅，cp 快照還原後轉綠
 
 ## 2. 畫面與 i18n
 
