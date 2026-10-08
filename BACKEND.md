@@ -23,12 +23,12 @@ export const api = mockApi   // ← 後端就緒後改成打 http 的實作
 | --- | --- | --- |
 | `GET /models` | `listModels` | 圖生圖可用模型清單＋每模型 `costPerImage`（單張飼料） |
 | `GET /feed` | `getFeed` | 帳號共用錢包餘額 |
-| `GET /images` | `listImages` | 依 bot_id 的素材清單（含 `folders` 字串陣列） |
+| `GET /images` | `listImages` | 依 bot_id 的素材清單（含 `folderId`；1:N 單一歸屬） |
 | `POST /images`（上傳） | `uploadImage(file, folder?)` | **multipart/form-data**（欄位 `file`）；存 R2、回素材（source=上傳）；`folder` 未帶則進「未分類」 |
 | `POST /images/edit` | `editImage` | 去背／修圖：非破壞、產 source=編輯產物 新素材 |
 | `GET /folders` | `listFolders` | 依 bot_id 的資料夾清單（字串陣列） |
 | `POST /folders` | `createFolder` | 新增資料夾（同名去重）；回傳最新清單 |
-| `PATCH /images/folders` | `addToFolder(assetIds, folder)` | 把既有素材加入資料夾（**多重歸屬**、去重，不影響原本歸屬） |
+| `PATCH /images/folders` | `moveToFolder(assetIds, folder)` | 把選取素材**移至**資料夾（1:N＝替換 `folderId`、離開原資料夾）；另有移出＝`folderId` 設回未分類 |
 | `POST /images/save` | `saveGenerated` | 存入圖庫（選用）：生成結果落地成 source=AI 生成 素材、記錄來源鏈 |
 | `POST /generate/image` | `generateImages` | 依 `modelId` 路由各大模型、依 模型×張數 扣飼料；有 `referenceId` 走 img2img；帶進階參數 `referenceStrength`／`negativePrompt`／`seed`（見下方） |
 | `POST /prompt/enhance` | `enhancePrompt` | AI 輔助描述：把口語擴寫成結構化 prompt（後端接 LLM；支援中文） |
@@ -47,7 +47,7 @@ export const api = mockApi   // ← 後端就緒後改成打 http 的實作
 - **飼料計費**：生成前檢查餘額、生成後扣點（各模組費率不同）；**生成失敗要退點**；月上限＋80% 告警；上限用罄擋下旗下所有機器人。（ADR-0001）
 - **生成執行**：**只有圖生影非同步**（任務佇列＋狀態機＋完成推播通知中心）；其他同步。若某模組穩定超過 120 秒，改非同步。（ADR-0002，待 Mavis 再確認）
 - **採用**：下載 or 存入圖庫任一都算採用（去重）；**只有圖生圖有採用概念**。
-- **素材維度**：`來源`（tag：上傳／物件素材／AI 生成／編輯產物／影片）與 `folders`（使用者歸檔）是**兩個獨立維度**，可同時過濾；勿混用。資料夾為**多對多**（一張素材可同屬多個資料夾，像相簿／標籤），後端建議用關聯表。素材來源可為「本地上傳」或「從既有素材庫加入」，兩者都只是把某資料夾名稱加進該素材的 `folders`。
+- **素材維度**：`來源`（tag：上傳／物件素材／AI 生成／編輯產物／影片）與 `folderId`（使用者歸檔）是**兩個獨立維度**，可同時過濾；勿混用。資料夾為 **1:N**（一張素材同時只屬於一個資料夾；`folderId` 未設＝未分類）。「移至資料夾」＝替換 `folderId`、離開原資料夾；「移出資料夾」＝`folderId` 設回未分類，素材仍保留在圖庫。不需要多對多關聯表。
 - **品牌設定**：只有行銷 PO 文帶入。
 - **租戶**：帳號:機器人＝1:1（現在），獨立表＋bot_id 預留 1:N。（ADR-0003）
 

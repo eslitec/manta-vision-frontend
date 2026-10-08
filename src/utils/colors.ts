@@ -38,12 +38,24 @@ function satLight({ r, g, b }: RGB): { s: number; l: number } {
   return { s, l }
 }
 
+/** 一個品牌重點色，附帶它在「可計數像素」中的占比 */
+export interface DominantColor {
+  hex: string
+  /** 0..1；分母是不透明且非近白的像素數，相近色已併入代表色，因此各色不一定加總為 1 */
+  share: number
+}
+
 /**
- * 純函式：吃 RGBA 像素陣列，回傳前 N 個「品牌重點色」（hex）。
- * 略過透明像素與近白背景；量化到 8³ 桶；評分＝面積(開根號抑制)×飽和度權重×明度權重，
- * 讓鮮豔色優先於大面積淡色；最後去掉太相近的色。
+ * 純函式：吃 RGBA 像素陣列，回傳前 N 個「品牌重點色」與各自的像素占比。
+ *
+ * 「挑哪些色」與「怎麼排序」是兩件事，分開處理：
+ * - **挑選**用評分＝面積(開根號抑制)×飽和度權重×明度權重，讓小面積的鮮豔品牌色不會被
+ *   大面積的淡色背景擠掉；相近色（距離 ≤ 48）併入已選中的代表色，占比才有意義。
+ * - **排序**則單純依像素占比由大到小，對齊設計稿 MV-08b `tip`「偵測結果依 Logo 像素占比排序」。
+ *
+ * 略過透明像素與近白背景；量化到 8³ 桶。
  */
-export function dominantColors(data: Uint8ClampedArray | number[], max = 6): string[] {
+export function dominantColorShares(data: Uint8ClampedArray | number[], max = 6): DominantColor[] {
   const buckets = new Map<number, RGB & { n: number }>()
   let total = 0
   for (let i = 0; i < data.length; i += 4) {
@@ -75,20 +87,29 @@ export function dominantColors(data: Uint8ClampedArray | number[], max = 6): str
       const satWeight = 0.25 + 0.75 * s // 飽和度加權（留 0.25 底，灰階圖仍有結果）
       const lightWeight = 1 - Math.abs(l - 0.5) // 太黑／太白略降權
       const score = Math.sqrt(v.n) * satWeight * lightWeight
-      return { c, score }
+      return { c, n: v.n, score }
     })
     .sort((a, b) => b.score - a.score)
 
-  const picked: RGB[] = []
-  for (const { c } of scored) {
-    if (picked.every((p) => dist(p, c) > 48)) picked.push(c) // 去掉太相近的
-    if (picked.length >= max) break
+  const picked: { c: RGB; n: number }[] = []
+  for (const { c, n } of scored) {
+    const near = picked.find((p) => dist(p.c, c) <= 48)
+    // 太相近的色不另立一項，改把像素數併進代表色，否則占比會被拆散而失真
+    if (near) near.n += n
+    else if (picked.length < max) picked.push({ c, n })
   }
-  return picked.map(toHex)
+  return picked
+    .sort((a, b) => b.n - a.n) // 挑選看評分，呈現順序看占比
+    .map((p) => ({ hex: toHex(p.c), share: total ? p.n / total : 0 }))
+}
+
+/** 只要色碼時用這個；排序與挑選規則與 `dominantColorShares` 完全相同 */
+export function dominantColors(data: Uint8ClampedArray | number[], max = 6): string[] {
+  return dominantColorShares(data, max).map((color) => color.hex)
 }
 
 /** 載入圖片檔為可繪製的來源（優先 createImageBitmap，退回 <img>，SVG 亦可） */
-async function loadImage(file: File): Promise<CanvasImageSource & { width: number; height: number }> {
+async function loadImage(file: Blob): Promise<CanvasImageSource & { width: number; height: number }> {
   if (typeof createImageBitmap === 'function') {
     try {
       return await createImageBitmap(file)
@@ -109,8 +130,11 @@ async function loadImage(file: File): Promise<CanvasImageSource & { width: numbe
   }
 }
 
-/** DOM：把圖片畫到小畫布取樣，回傳品牌重點色 hex 陣列 */
-export async function extractColors(file: File, max = 6): Promise<string[]> {
+/**
+ * DOM：把圖片畫到小畫布取樣，回傳品牌重點色與各自的像素占比。
+ * 收 `Blob` 而不只是 `File`，這樣「重新偵測」可以直接把已存的 data URL 轉回 blob 再跑一次。
+ */
+export async function extractColors(file: Blob, max = 6): Promise<DominantColor[]> {
   const img = await loadImage(file)
   const target = 120 // 縮小取樣，兼顧速度與代表性
   const scale = Math.min(1, target / Math.max(img.width, img.height))
@@ -121,5 +145,5 @@ export async function extractColors(file: File, max = 6): Promise<string[]> {
   if (!ctx) return []
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
   const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height)
-  return dominantColors(data, max)
+  return dominantColorShares(data, max)
 }

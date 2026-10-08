@@ -25,11 +25,14 @@ export interface GeneratedImage {
   savedAssetId?: string // 存入圖庫後的素材 id
 }
 
+// 輸出內容類型：文案＋配圖／只要文案／只要配圖，三者飼料成本不同（見 MarketingPostView OUTPUT_TYPE_OPTIONS）
+export type PostOutputType = 'both' | 'textOnly' | 'imageOnly'
 export interface GeneratePostReq {
   productImageId?: string // 商品圖＝產圖時的「錨」（去背後合成，商品本身不被改）
   intro: string // 商品描述＝主題來源
   applyBrand: boolean // 套用品牌設定（色票／Logo／語氣，由後端依 bot_id 讀取）
   ratio?: string // 版位比例（'1:1'｜'4:5'｜'9:16'｜'16:9'），影響構圖與輸出
+  outputType: PostOutputType // 輸出內容類型；決定回傳內容與扣款數（5／2／3 顆）
 }
 export interface GeneratedPost {
   posterUrl?: string
@@ -38,7 +41,7 @@ export interface GeneratedPost {
 }
 
 // ── 非同步任務（圖生影）──
-export type JobStatus = 'queued' | 'processing' | 'done' | 'failed'
+export type JobStatus = 'pending' | 'processing' | 'succeeded' | 'failed'
 export type VideoModelTier = 'standard' | 'advanced' | 'pro'
 export const VIDEO_MODEL_TIERS: { key: VideoModelTier; label: string; multiplier: number }[] = [
   { key: 'standard', label: '標準', multiplier: 1 },
@@ -54,6 +57,7 @@ export interface VideoJobReq {
 export interface VideoJob {
   id: string
   status: JobStatus
+  progress: number // 0..100，由後端任務狀態 API 回傳
   cost: number
   resultUrl?: string
   error?: string
@@ -61,7 +65,7 @@ export interface VideoJob {
 
 // ── 背景生成任務（跨頁面，圖生圖／圖生影共用；驅動頂部工具列「任務」按鈕與任務中心面板）──
 export type GenerationTaskKind = 'image' | 'video'
-export type GenerationTaskStatus = 'queued' | 'processing' | 'done' | 'failed'
+export type GenerationTaskStatus = 'pending' | 'processing' | 'succeeded' | 'failed'
 export interface GenerationTask {
   id: string
   kind: GenerationTaskKind
@@ -115,6 +119,51 @@ export interface BrandProfile {
   logoUrl?: string // Logo 圖片來源（mock 為 data URL；後端就緒後改存 R2 URL）
 }
 
+// ── 圖片編輯與 AI 修圖（MV-09 / MV-09b）──
+export type EditorToolKey = 'remove' | 'object' | 'fade' | 'text' | 'crop'
+export type RetouchOptionKey = 'removeObjects' | 'repair' | 'lighting' | 'upscale'
+export type RetouchMethod = 'quick' | 'command'
+
+/** 編輯器價目表。前端不得自行寫死金額，一律以這份為準 */
+export interface EditorPricing {
+  /** 編輯畫布各工具的單次成本；0 代表不扣飼料 */
+  tools: Record<EditorToolKey, number>
+  /** AI 修圖各修飾項目的成本 */
+  retouchOptions: Record<RetouchOptionKey, number>
+  /** 指令式修圖的基本費 */
+  commandBase: number
+}
+
+/** 編輯畫布套用一次 AI 工具的結果（成本由後端算，不信任前端傳來的金額） */
+export interface AppliedEditTool {
+  tool: EditorToolKey
+  cost: number
+}
+
+export interface RetouchReq {
+  method: RetouchMethod
+  options: RetouchOptionKey[]
+  instruction?: string
+}
+
+export interface RetouchResult {
+  method: RetouchMethod
+  /** 後端實際採用的項目（會濾掉與該修圖方式不相符的選項） */
+  options: RetouchOptionKey[]
+  cost: number
+}
+
 export type AdoptionKind = 'download' | 'save'
 
 export type { Asset }
+
+// ── 飼料儲值（MV「儲值」彈窗，mock-only）──
+// 套餐識別碼；套餐的顆數與顯示文字定義在 TopUpDialog.vue 的常數陣列，這裡只約束 id 格式。
+export type FeedPackageId = 'pkg-500' | 'pkg-1500' | 'pkg-3000'
+/**
+ * 模擬儲值：輸入套餐 id，回傳更新後的飼料餘額。
+ * 只在 `src/api/mock.ts` 實作，`src/api/real.ts` 不新增對應實作（真後端目前沒有付款端點，
+ * 見 openspec/changes/add-feed-topup-dialog design.md 決策 5）——呼叫端一律用
+ * `api.topUpFeed?.(...)` 選擇性呼叫，避免真後端環境下呼叫到不存在的方法。
+ */
+export type TopUpFeedFn = (packageId: string) => Promise<{ balance: number }>

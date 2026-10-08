@@ -56,3 +56,9 @@ openspec/.vector-search.db*
 # 本機臨時備份與機器本機設定（勿進版控）
 openspec/_backup-changes-*/
 .claude/settings.local.json
+
+# 編輯器（Linux FUSE 掛載）刪除開啟中檔案時留下的暫存檔
+.fuse_hidden*
+
+# 掛載環境不允許刪檔，待人工清除的檔案暫置於此
+_to_delete/

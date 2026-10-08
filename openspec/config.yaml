@@ -2,12 +2,82 @@ schema: spec-driven
 
 # Project context (optional)
 # This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  產品：Manta Vision（MantaGO 旗下的 AI 影像生成／編輯前端）。
+  以「飼料」為點數單位，AI 類工具執行當下即扣款，純幾何操作（裁切、旋轉）不扣。
+  編輯一律非破壞：改動另存為新素材（source tag `edit`），原圖保留、來源鏈可回溯。
+
+  技術棧：Vue 3 + TypeScript + Vite。SFC 的 template 使用 Pug，樣式寫在 SFC 內
+  （少量共用樣式在 src/assets/scss/）。狀態管理 Pinia，路由 vue-router，
+  多語系 vue-i18n。測試 Vitest。後端目前以 mock 為主（src/api/mock）。
+
+  指令：
+    npm run dev          開發伺服器
+    npm run build        vue-tsc --noEmit 型別檢查 + vite build（改完務必跑過）
+    npm run lint         ESLint
+    npm run format       Prettier（src/）
+    npm test             Vitest
+
+  慣例：
+    - 樣式單位：字體、元件尺寸、間距、定位偏移用 rem（16px baseline 換算）；
+      border、radius、shadow、breakpoint、outline、SVG 幾何值維持 px。
+    - line-height 一律寫成無單位比例（22px ÷ 16px → 1.375），不寫死 px。
+    - 多語系：新增 UI 字串必須同時補 src/lang/en.ts 與 src/lang/zh-Hant.ts，
+      兩邊 key 結構一致，不可只改一邊。
+    - 圖示：多色／多路徑插畫用 src/components/icons/ 底下的行內 SVG 元件；
+      單色線稿圖示可用 @tabler/icons-webfont（i.ti.ti-*）。
+    - 按鈕一律用共用的 AppButton，不要再造獨立按鈕元件。
+    - commit 遵循 Conventional Commits，標題與 body 寫繁體中文；
+      對齊設計稿的改動要在 body 註明 Figma node id。
+
+  設計依據：Figma「MantaGO draft」，fileKey ysYFocN2TtBSeJHdGS5d7R。
+    - 數值一律用 Figma MCP 的 get_design_context 取得，不靠截圖目測。
+    - 清單／選項類 UI 要與設計稿逐項一致，不多不少。
+    - 色碼直接抄設計稿的值，不要用「看起來很接近」的既有變數替代。
+
+  頁面代號：MV-00 首頁工作台、MV-01 圖庫管理、MV-02 圖生圖、MV-03 行銷 PO 文、
+  MV-04 圖生影片、MV-05 AI 試穿、MV-06 飼料用量、MV-07 AI 表現指標、
+  MV-08 品牌資訊維護、MV-09 圖片編輯與 AI 修圖。
+
+  spec 檔語言：**採繁體中文描述 + 英文規範關鍵字**（SHALL / SHALL NOT，
+  以及 Requirement / Scenario / WHEN / THEN 等結構關鍵字）。
+  這是明知官方建議而做的決定，請勿「修正」為全英文。理由：
+    1. spectra-propose 與 spectra-ingest 的 SKILL.md 寫「spec 必須用英文，
+       因為它使用規範性語言（SHALL/MUST）」——該理由本專案已經滿足，
+       規範動詞與結構關鍵字本來就是英文，中文的只有描述性文字。
+    2. spectra validate --all --strict 對 14 個中文 spec 全部通過，
+       analyze 也能正確讀出中文 Requirement 標題，工具並不強制。
+    3. 決定性理由：analyze 的 coverage 配對是拿 Requirement 標題去比對
+       tasks.md 的文字（見下方，2026-08-20 已實測確認）。locale 是 zh-TW
+       所以 tasks 寫中文；若 spec 改英文而 tasks 維持中文，標題就不可能
+       逐字出現在任務裡，coverage 配對會變成結構性無解。
+
+  撰寫規格文件的慣例（2026-08-20 全面 analyze 後訂定，用來消除既有的
+  56 個「Requirement has no matching task」與 67 個「Scenario has no
+  concrete examples」告警，新文件請一開始就照做）：
+    - spec.md 的每個 Requirement，tasks.md 都要有至少一個任務**逐字包含
+      該 Requirement 的完整標題字串**，analyze 才配對得到。
+      **已實測確認**：sync-mv-09-design 原本 4 個 Requirement 全部回報
+      「has no matching task」，把 4 個任務改寫成
+      「對齊 Requirement「<標題原文>」：<原本的任務描述>」之後，
+      Coverage 立刻變成 Clean。注意是「完整標題逐字出現」，只有部分詞語
+      重疊不算——例如標題「非破壞編輯，另存為新素材」對上原本的任務
+      「非破壞編輯提示：另存為新素材，不覆寫原圖」就配不上，因為中間
+      插了「提示：」把字串切斷了。
+    - spec.md 的每個 Scenario 底下要加 `##### Example:` 區塊，寫具體的
+      GIVEN / WHEN / THEN 資料（實際數值、實際文案），不要只寫抽象敘述。
+      加了 Example 的 Scenario 確實不再被回報，但實測時 7 個 Scenario
+      只有 1 個有 Example、卻只回報 5 個 SUGGEST（預期 6），代表還有
+      一個尚未釐清的判定條件。照做即可，不必為了湊數字鑽研。
+    - 規範語句用 SHALL / SHALL NOT，避免 may、should、可能、盡量。
+    - design.md 的每個設計決策標題，也要有對應任務引用，否則會被回報
+      「Design topic not referenced in tasks」。
+    - proposal.md 的 Capabilities 段落，只有真正要新增或修改的 capability
+      才用反引號標示。說明性文字提到其他 change 的 capability 時不要加
+      反引號，否則 analyze 會判定本 change 宣告了該 capability 卻缺 spec 檔
+      （mv-01、mv-02 就是這樣各產生一個 CRITICAL）。
+    - 提到 BEM 修飾詞時寫完整 class（`.folders__item--folder`），不要只寫
+      `--folder`，否則 drift 的 anchor 掃描會誤判成 CLI flag。
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.

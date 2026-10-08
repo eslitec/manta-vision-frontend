@@ -13,7 +13,6 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@tabler/icons-webfont": "^3.0.0",
     "@vueuse/core": "^11.0.0",
     "axios": "^1.7.0",
     "pinia": "^3.0.0",
