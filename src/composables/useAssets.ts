@@ -1,5 +1,6 @@
 import { ref } from 'vue'
-import type { Asset, BatchResult, Folder, ImageCounts, ImageListQuery } from '@/types/asset'
+import type { Asset, BatchResult, Folder, ImageCounts, ImageListQuery, UploadSource } from '@/types/asset'
+import type { GenerationRef } from '@/types/api'
 import { api } from '@/api'
 
 // 圖庫素材的存取層，圖庫頁與「從圖庫選擇」彈窗共用。
@@ -18,13 +19,24 @@ import { api } from '@/api'
 const folders = ref<Folder[]>([])
 const unfiledCount = ref(0)
 const foldersLoaded = ref(false)
+let foldersEpoch = 0 // resetFolders 一次加一：登出前發出、登出後才回來的清單不採用
 
 async function loadFolders(force = false) {
   if (foldersLoaded.value && !force) return
+  const mine = foldersEpoch
   const res = await api.listFolders()
+  if (mine !== foldersEpoch) return
   folders.value = res.items
   unfiledCount.value = res.unfiledCount
   foldersLoaded.value = true
+}
+
+/** 登出時呼叫（session store 的 discard）：資料夾綁機器人，下一個帳號要重新取 */
+export function resetFolders(): void {
+  foldersEpoch++
+  folders.value = []
+  unfiledCount.value = 0
+  foldersLoaded.value = false
 }
 
 // 新增資料夾
@@ -64,7 +76,7 @@ export function useAssets() {
   const assets = ref<Asset[]>([])
   const total = ref(0)
   const page = ref(1)
-  const counts = ref<ImageCounts>({ all: 0, upload: 0, aiGenerate: 0, edit: 0, object: 0, video: 0 })
+  const counts = ref<ImageCounts>({ all: 0, upload: 0, aiGenerate: 0, edit: 0, object: 0, video: 0, builtin: 0 })
   const loading = ref(false)
 
   async function load(query: ImageListQuery = {}) {
@@ -82,9 +94,15 @@ export function useAssets() {
 
   // 上傳素材（來源＝上傳）；可指定落到哪個資料夾。
   // sourceImageId：編輯器「另存為新素材」帶原圖 id 時才有值，後端依此標 source=edit、
-  // derivedFrom 指回原圖（非破壞性）。
-  async function upload(file: File, folderId?: string, sourceImageId?: string) {
-    return api.uploadImage(file, folderId, sourceImageId)
+  // derivedFrom 指回原圖（非破壞性）。source：試穿頁的模特照帶 'tryonModel'，不帶＝upload。
+  async function upload(
+    file: File,
+    folderId?: string,
+    sourceImageId?: string,
+    imageName?: string,
+    source?: UploadSource,
+  ) {
+    return api.uploadImage(file, folderId, sourceImageId, imageName, source)
   }
 
   // 批次把選取素材移至資料夾（1:N＝替換歸屬，會離開原資料夾）；後端沒有批次端點，逐筆呼叫 PUT /images/{id}
@@ -103,8 +121,8 @@ export function useAssets() {
   }
 
   // 生成結果「存入圖庫」（選用）→ 落地成 AI 生成素材
-  async function saveGenerated(name: string) {
-    return api.saveGenerated(name)
+  async function saveGenerated(name: string, from: GenerationRef, folderId?: string) {
+    return api.saveGenerated(name, from, folderId)
   }
 
   // 編輯器採非破壞式儲存：後端建立新的「編輯產物」，原素材不會被覆寫。

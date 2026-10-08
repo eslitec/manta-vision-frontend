@@ -64,8 +64,6 @@ Teleport(to="body")
         small.saveAssetDialog__hint {{ t('editor.saveDialog.folderHint') }}
 
       .saveAssetDialog__options
-        AppCheckbox(v-model="keepLayers")
-          span.saveAssetDialog__optionText {{ t('editor.saveDialog.keepLayers') }}
         AppCheckbox(v-model="alsoDownload")
           span.saveAssetDialog__optionText {{ t('editor.saveDialog.alsoDownload') }}
 
@@ -106,7 +104,7 @@ const props = defineProps<{
   error?: string
 }>()
 const emit = defineEmits<{
-  (event: 'save', payload: { name: string; folder: string; keepLayers: boolean; alsoDownload: boolean }): void
+  (event: 'save', payload: { name: string; folder: string; alsoDownload: boolean }): void
 }>()
 const open = defineModel<boolean>('open', { required: true })
 const { t } = useI18n()
@@ -115,7 +113,6 @@ const maxNameLength = 60
 const dialogRef = ref<HTMLElement | null>(null)
 const name = ref('')
 const folder = ref('')
-const keepLayers = ref(true)
 const alsoDownload = ref(false)
 const showNameError = ref(false)
 const uid = crypto.randomUUID()
@@ -140,7 +137,6 @@ watch(open, (isOpen) => {
   if (!isOpen) return
   name.value = props.defaultName
   folder.value = resolveDefaultFolder()
-  keepLayers.value = true
   alsoDownload.value = false
   showNameError.value = false
 })
@@ -157,7 +153,6 @@ const submit = () => {
   emit('save', {
     name: trimmedName,
     folder: folder.value,
-    keepLayers: keepLayers.value,
     alsoDownload: alsoDownload.value,
   })
 }

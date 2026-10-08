@@ -8,8 +8,12 @@
 /** 素材媒體型態 */
 export type MediaType = 'image' | 'video'
 
-/** 素材來源；'ai' 改名為 'aiGenerate' 對齊後端 camelCase 列舉值（ImageSource.api_value） */
-export type AssetSource = 'upload' | 'aiGenerate' | 'edit' | 'object' | 'tryon'
+/** 素材來源；'ai' 改名為 'aiGenerate' 對齊後端 camelCase 列舉值（ImageSource.api_value）。
+ *  'tryonModel'＝試穿頁上傳的模特照（`POST /upload` 帶 `source=tryonModel`；counts 算進 upload 格） */
+export type AssetSource = 'upload' | 'aiGenerate' | 'edit' | 'object' | 'tryon' | 'tryonModel' | 'builtin'
+
+/** `POST /upload` 可指定的來源（後端 UploadSource 白名單）；不帶＝upload */
+export type UploadSource = 'object' | 'tryonModel'
 
 export interface Asset {
   id: string // 後端 imageId
@@ -18,12 +22,15 @@ export interface Asset {
   dim: string // 尺寸顯示文字（由 width×height 格式化而成，見 utils/dimensions.ts）；
   // 舊資料或 Pillow 解不開的檔案後端會回 null，這裡正規化成空字串
   // （AssetCard 對空字串的處理等同沒有這行 meta）
+  width?: number // 後端 width／height 的數字本體，編輯器原圖資訊用；量不出來時後端回 null，這裡正規化成 undefined
+  height?: number
   type: MediaType // 後端 mediaType
   folderId?: string // 後端 folderId；未歸檔時後端回 null，這裡一律正規化成 undefined
   editable?: boolean // 是否保留可再編輯的圖層資訊（編輯產物專用；純前端概念，後端無對應欄位）
   referencedBy?: number // 後端目前只有布林值 isInUse；這裡用 0/1 表示，沿用既有「> 0 視為被引用」的判斷
   url?: string // 後端 url；mock 沒有真實檔案來源，留空
   createdAt?: string // 後端 createdAt（ISO 字串）
+  category?: Material['category'] // 只有 source='builtin'（內建素材投影）才有值；使用者自己的圖後端回 null
 }
 
 /** 使用者歸檔的資料夾（對齊後端 FolderResponse；後端明確表示不存在「系統資料夾」概念） */
@@ -47,6 +54,7 @@ export interface ImageCounts {
   edit: number
   object: number
   video: number
+  builtin: number
 }
 
 export interface ImageListResponse {
@@ -98,7 +106,7 @@ export interface BatchResult {
 export const UNFILED_FOLDER = '未分類'
 
 /** CATEGORY_TAGS 只會用到 ImageCounts 的這幾個桶（'all' 不是分類，'upload' 走上傳按鈕不走這份清單） */
-export type CategoryTag = keyof Omit<ImageCounts, 'all' | 'upload'>
+export type CategoryTag = keyof Omit<ImageCounts, 'all' | 'upload' | 'builtin'>
 
 // 圖庫左側「系統分類」：object／aiGenerate／edit 依 source 分類，video 依 mediaType 分類——
 // 兩個維度剛好都塞進同一份清單，用 dimension 標記該用哪個欄位比對，避免又把 video 誤當成 source。

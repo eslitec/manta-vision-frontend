@@ -17,7 +17,8 @@ Teleport(to="body")
             .task__topline
               span.task__dot.task__dot--running
               span.task__name {{ task.name }}
-              span.task__eta {{ remainingTime(task.progress) }}
+              //- 圖生圖沒有真的進度（固定 60%），推算出來的秒數會一直停在「剩 58 秒」
+              span.task__eta(v-if="task.kind === 'video'") {{ remainingTime(task) }}
             .task__progressRow
               .task__bar(role="progressbar" :aria-label="task.name" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="task.progress")
                 .task__barFill(:style="{ width: task.progress + '%' }")
@@ -26,18 +27,24 @@ Teleport(to="body")
             .task__topline
               span.task__dot.task__dot--done
               span.task__name {{ task.name }}
-            p.task__meta {{ $t('taskCenter.completed', { type: $t(`assetTypes.${task.kind}`) }) }}
+            //- 只有影片會自動入庫；其餘（圖生圖、行銷、試穿、修圖）後端 save_result 要按了才存，不能說「已存入圖庫」
+            p.task__meta(v-if="task.kind === 'video'") {{ $t('taskCenter.completed', { type: $t(`assetTypes.${task.kind}`) }) }}
+            p.task__meta(v-else) {{ $t(`taskCenter.${task.kind}Completed`) }}
           template(v-else)
             .task__topline
               span.task__dot.task__dot--failed
               span.task__name {{ task.name }}
-            p.task__meta.task__meta--failed {{ task.error || $t('taskCenter.failedDetail') }}
+            p.task__meta.task__meta--failed(:title="task.error || $t('taskCenter.failedDetail')") {{ task.error || $t('taskCenter.failedDetail') }}
         .task__action
-          button(v-if="task.status === 'done'" @click="view") {{ $t('common.view') }}
-          button(v-else-if="task.status === 'failed'" @click="tasksStore.retryTask(task.id)") {{ $t('common.retry') }}
+          button(v-if="task.status === 'done' && task.kind === 'video'" @click="view") {{ $t('common.view') }}
+          //- 只有影片能從面板重試（retryTask 只處理影片）：其餘任務的結果只活在各自頁面，面板重做會扣點卻看不到結果。
+          //- 重新整理後還原的影片沒有原始參數（videoReq），按了也沒作用，不給鈕
+          button(v-else-if="task.status === 'failed' && task.kind === 'video' && task.videoReq" @click="retry(task)") {{ $t('common.retry') }}
     .taskpanel__foot
       p {{ t('taskCenter.notePrimary') }}
       p {{ t('taskCenter.notePolicy') }}
+//- 放在面板 v-if 之外：開確認窗時面板先關（兩個對話框同時開會互搶焦點），面板元件常駐版面，任何頁面都叫得到
+ConfirmGenerateDialog(v-model:open="retryConfirmOpen" :cost="retryConfirm?.cost ?? 0" :model-label="retryConfirm?.modelLabel" @confirm="tasksStore.confirmRetry()")
 </template>
 
 <script setup lang="ts">
@@ -45,26 +52,48 @@ import { useRouter } from 'vue-router'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import ConfirmGenerateDialog from '@/components/ConfirmGenerateDialog.vue'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
+import { displayMessage } from '@/utils/error'
 import { IconClose, IconImagePlaceholder, IconPlayCircle } from '@/components/icons'
+import type { GenerationTask, GenerationTaskKind } from '@/types/api'
 
 const open = defineModel<boolean>('open', { required: true })
 const dialogRef = ref<HTMLElement | null>(null)
 
 const tasksStore = useGenerationTasksStore()
-const { tasks } = storeToRefs(tasksStore)
+const { tasks, retryConfirm } = storeToRefs(tasksStore)
 const router = useRouter()
 const { t } = useI18n()
 
 const close = () => (open.value = false)
 useAccessibleDialog(open, dialogRef, close)
-const remainingTime = (progress: number) => {
-  const totalSeconds = Math.max(0, Math.round(((100 - progress) / 100) * 145))
+// 後端回的 etaSeconds 優先；沒有（pending 前的瞬間、mock）才用進度推估
+const remainingTime = (task: GenerationTask) => {
+  const totalSeconds = task.etaSeconds ?? Math.max(0, Math.round(((100 - task.progress) / 100) * 145))
+  // 跑得比該檔平均久時後端 eta 會停在 0：不要一直顯示「約剩 0 秒」
+  if (totalSeconds <= 0) return t('common.takingLonger')
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
 
   return minutes ? t('common.remainingMinutesSeconds', { minutes, seconds }) : t('common.remainingSeconds', { seconds })
+}
+// 重試會再扣一次飼料：先查價開確認窗（與生成頁主按鈕同一個），確定才送出。
+// 等面板關掉才開窗：查價是 async，兩個對話框若分兩輪 flush 開關，確認窗會先記下「#app 已 inert」，關窗後還原成 inert、整頁點不動
+const retryConfirmOpen = computed({
+  get: () => !!retryConfirm.value && !open.value,
+  set: (v) => {
+    if (!v) tasksStore.cancelRetry()
+  },
+})
+const retry = async (task: GenerationTask) => {
+  try {
+    await tasksStore.requestRetry(task.id)
+    close()
+  } catch (e) {
+    task.error = displayMessage(e, t('errors.loadFailed'))
+  }
 }
 const view = () => {
   router.push('/library')
@@ -156,8 +185,10 @@ const view = () => {
   }
 }
 
+// 列表是會捲動的直向 flex：不加 flex-shrink: 0 的話任務多時每列被壓回 min-height，較長的說明會疊到下一列
 .task {
   @include flex(flex-start, center, 0.625rem);
+  flex-shrink: 0;
   min-height: 3.5rem;
   padding: 0.5rem;
   border-radius: 8px;
@@ -264,8 +295,7 @@ const view = () => {
     color: #606692;
     font-size: 0.75rem;
     line-height: normal;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    // 不設行數上限：完成說明的重點在句尾（「請到○○頁按○○」），手機寬度與英文介面兩行放不下，截掉就等於沒說
 
     &--failed {
       color: #ff6148;

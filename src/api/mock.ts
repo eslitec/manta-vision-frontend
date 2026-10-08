@@ -1,5 +1,6 @@
 import type {
   AiModel,
+  AiModelType,
   AppliedEditTool,
   Asset,
   Bot,
@@ -11,26 +12,52 @@ import type {
   GeneratedImage,
   GeneratedPost,
   GenerateImageReq,
+  FeedSummary,
   GeneratePostReq,
+  GenerationRef,
   ImageCounts,
   ImageListQuery,
   ImageListResponse,
+  Inspiration,
   Material,
   MaterialListResponse,
   Metrics,
+  PeriodParams,
   RetouchReq,
   RetouchResult,
   Session,
+  TryOnReq,
+  UsageQuery,
   UsageSummary,
   VideoJob,
   VideoJobReq,
 } from '@/types/api'
-import { VIDEO_MODEL_TIERS } from '@/types/api'
+import type { UploadSource } from '@/types/asset'
+import { formatDimensions } from '@/utils/dimensions'
 
 // ⚠️ 這是「假後端」：所有資料在記憶體中，讓前端功能可端到端運作。
 // 之後把每個函式改成呼叫 http（api/http.ts）即可，介面不變。
 
 const delay = (ms = 500) => new Promise((r) => setTimeout(r, ms))
+
+// 期間參數 → 含頭含尾的本地日期區間（同後端 period.py 的語意：month 是日曆月、30d／90d 是滾動區間）
+function isoDate(date: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+function addDays(iso: string, days: number) {
+  const [y, m, d] = iso.split('-').map(Number)
+  return isoDate(new Date(y, m - 1, d + days))
+}
+function daysBetween(from: string, to: string) {
+  return Math.max(1, Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1)
+}
+function periodWindow(params: PeriodParams): { from: string; to: string } {
+  const today = isoDate(new Date())
+  if (params.period === 'custom') return { from: params.startDate ?? today, to: params.endDate ?? today }
+  if (params.period === 'month') return { from: today.slice(0, 8) + '01', to: today }
+  return { from: addDays(today, 1 - (params.period === '30d' ? 30 : 90)), to: today }
+}
 let seq = 100
 const uid = (p: string) => `${p}_${++seq}`
 
@@ -77,43 +104,67 @@ const db = {
       name: '春季主視覺_01',
       source: 'upload',
       dim: '1024×768',
+      width: 1024,
+      height: 768,
       type: 'image',
       folderId: 'folder_spring',
       referencedBy: 2,
+      // 底圖與物件都給一張真圖（比照試穿模特的 picsum），mock 模式才走得到「物件圖層真的顯示、
+      // 另存合成上傳」這條路徑；其他素材維持沒有 url、退回佔位圖示
+      url: 'https://picsum.photos/seed/mvspring1/1024/768',
     },
     {
       id: 'a2',
       name: '商品_去背_白T',
       source: 'object',
       dim: '1024×768',
+      width: 1024,
+      height: 768,
       type: 'image',
       folderId: 'folder_product',
       referencedBy: 1,
+      url: 'https://picsum.photos/seed/mvobj1/400/400',
     },
     {
       id: 'a3',
       name: '生成_木質桌面情境',
       source: 'aiGenerate',
       dim: '1024×768',
+      width: 1024,
+      height: 768,
       type: 'image',
       folderId: 'folder_result',
     },
-    { id: 'a4', name: '春季主視覺_調色版', source: 'edit', dim: '1024×768', type: 'image', folderId: 'folder_spring' },
-    { id: 'a5', name: '門市外觀', source: 'upload', dim: '1024×768', type: 'image' },
+    {
+      id: 'a4',
+      name: '春季主視覺_調色版',
+      source: 'edit',
+      dim: '1024×768',
+      width: 1024,
+      height: 768,
+      type: 'image',
+      folderId: 'folder_spring',
+    },
+    { id: 'a5', name: '門市外觀', source: 'upload', dim: '1024×768', width: 1024, height: 768, type: 'image' },
     {
       id: 'a6',
       name: '商品_去背_帆布袋',
       source: 'object',
       dim: '1024×768',
+      width: 1024,
+      height: 768,
       type: 'image',
       folderId: 'folder_product',
       referencedBy: 1,
+      url: 'https://picsum.photos/seed/mvobj2/400/400',
     },
     {
       id: 'a7',
       name: '生成_野餐情境',
       source: 'aiGenerate',
       dim: '1024×768',
+      width: 1024,
+      height: 768,
       type: 'image',
       folderId: 'folder_result',
     },
@@ -122,6 +173,8 @@ const db = {
       name: '夏季宣傳_短影片',
       source: 'aiGenerate',
       dim: '1080×1920',
+      width: 1080,
+      height: 1920,
       type: 'video',
       folderId: 'folder_result',
     },
@@ -153,25 +206,44 @@ const db = {
   users: new Map<string, { password: string; displayName: string }>([
     [DEMO_USERNAME, { password: DEMO_PASSWORD, displayName: 'Mavis' }],
   ]),
+  // 已採用（存入圖庫或下載）的結果，key 為 generationId/resultId：模擬後端「同一張只算一次採用」
+  adoptedResults: new Set<string>(),
+  // 圖生圖的 generationId：採用率只算 type='generate'（後端 metrics_calc），行銷海報的下載不計
+  imageGenerations: new Set<string>(),
+  // 修圖的 generationId：存入圖庫時同後端標 source=edit
+  editGenerations: new Set<string>(),
   jobs: new Map<
     string,
-    { req: VideoJobReq; created: number; cost: number; failed?: boolean; failedChecked?: boolean }
+    { req: VideoJobReq; name: string; created: number; cost: number; failed?: boolean; failedChecked?: boolean }
   >(),
 }
 
-// 編輯器價目表（對齊 MV-09 工具列與 MV-09b 修飾項目的設計稿標價）
+// 編輯畫布價目表（對齊 MV-09 工具列的設計稿標價）；AI 修圖改讀 MOCK_MODELS 的 imageEdit
 const EDITOR_PRICING: EditorPricing = {
   tools: { remove: 8, object: 0, fade: 0, text: 0, crop: 0 },
-  retouchOptions: { removeObjects: 8, repair: 8, lighting: 0, upscale: 5 },
-  commandBase: 16,
 }
-const COMMAND_RETOUCH_OPTIONS = ['lighting', 'upscale']
 
-// 行銷 PO 文輸出類型的飼料成本，對齊前端 MarketingPostView 的 OUTPUT_TYPE_OPTIONS 顯示顆數
-const POST_OUTPUT_TYPE_COST: Record<GeneratePostReq['outputType'], number> = {
-  both: 5,
-  textOnly: 2,
-  imageOnly: 3,
+// 價格對齊後端 ai_models（migration 20260910b／20260910c）；真後端一律讀 GET /ai-models
+const MOCK_MODELS: AiModel[] = [
+  { modelKey: 'imageStandard', name: '標準', modelType: 'image', costFeeds: 8 },
+  { modelKey: 'imageAdvanced', name: '進階', modelType: 'image', costFeeds: 12 },
+  { modelKey: 'imagePro', name: '專業', modelType: 'image', costFeeds: 24 },
+  { modelKey: 'marketingImage', name: '行銷海報圖', modelType: 'marketing', costFeeds: 5 },
+  { modelKey: 'marketingText', name: '行銷文案', modelType: 'marketing', costFeeds: 0 },
+  { modelKey: 'tryonStandard', name: '標準', modelType: 'tryon', costFeeds: 12 },
+  { modelKey: 'imageEdit', name: '修圖', modelType: 'edit', costFeeds: 8 },
+  { modelKey: 'videoStandard', name: '標準', modelType: 'video', costFeeds: 45 },
+  { modelKey: 'videoAdvanced', name: '進階', modelType: 'video', costFeeds: 90 },
+  { modelKey: 'videoPro', name: '專業', modelType: 'video', costFeeds: 180 },
+]
+const priceOf = (modelKey: string) => MOCK_MODELS.find((m) => m.modelKey === modelKey)?.costFeeds
+
+// 後端的採用＝存入圖庫或下載過，同一張只算一次
+function markAdopted(from: GenerationRef) {
+  const key = `${from.generationId}/${from.id}`
+  if (!db.imageGenerations.has(from.generationId) || db.adoptedResults.has(key)) return
+  db.adoptedResults.add(key)
+  db.adoptedGen += 1
 }
 
 function deduct(cost: number) {
@@ -192,7 +264,8 @@ const FEED_TOPUP_AMOUNTS: Record<string, number> = {
 // 圖庫／資料夾常數，對齊後端 app/services/images.py、app/services/folders.py
 const MAX_UPLOAD_MB = 10
 const MAX_FOLDERS_PER_BOT = 200
-const SUPPORTED_UPLOAD_FORMATS = ['jpg', 'jpeg', 'png', 'webp']
+// 選圖彈窗的檔案選擇 accept 也用這一份（picker-direct-upload design.md 決策 5）
+export const SUPPORTED_UPLOAD_FORMATS = ['jpg', 'jpeg', 'png', 'webp']
 
 // 內建素材（GET /materials；不分機器人，全平台共用）
 // model 類別：真後端目前仍是空的（見 proposal.md Non-Goals），這裡先補上 mock 資料
@@ -251,17 +324,39 @@ const MATERIALS: Material[] = [
   },
 ]
 
+// 內建素材投影成圖庫素材（對齊後端 GET /images 把全域 materials 合併進來的形狀）：
+// id＝materialId、source='builtin'、沒有資料夾、不可被引用、一律是圖片
+function materialAsAsset(m: Material): Asset {
+  return {
+    id: m.materialId,
+    name: m.materialName,
+    source: 'builtin',
+    dim: formatDimensions(m.width, m.height),
+    width: m.width ?? undefined,
+    height: m.height ?? undefined,
+    type: 'image',
+    url: m.url,
+    category: m.category,
+  }
+}
+
 // 依 source／mediaType 兩個維度統計整個圖庫（不受目前查詢條件篩選；對齊後端 count_by_bucket）
+// all 含內建素材、object 含內建的物件類素材
 function countByBucket(): ImageCounts {
-  const counts: ImageCounts = { all: 0, upload: 0, aiGenerate: 0, edit: 0, object: 0, video: 0 }
+  const counts: ImageCounts = { all: 0, upload: 0, aiGenerate: 0, edit: 0, object: 0, video: 0, builtin: 0 }
+  for (const m of MATERIALS) {
+    counts.all += 1
+    counts.builtin += 1
+    if (m.category === 'object') counts.object += 1
+  }
   for (const a of db.assets) {
     counts.all += 1
     if (a.type === 'video') {
       counts.video += 1
       continue
     }
-    // 後端把 tryon 併入 aiGenerate 桶（左側欄沒有「試穿」分類）
-    const bucket = a.source === 'tryon' ? 'aiGenerate' : a.source
+    // 後端把 tryon 併入 aiGenerate 桶、模特照併入 upload 桶（左側欄沒有這兩個分類）
+    const bucket = a.source === 'tryon' ? 'aiGenerate' : a.source === 'tryonModel' ? 'upload' : a.source
     counts[bucket] += 1
   }
   return counts
@@ -273,23 +368,22 @@ function folderById(folderId: string): Folder | undefined {
 }
 
 export const mockApi = {
-  // GET /models
-  async listModels(): Promise<AiModel[]> {
+  // GET /ai-models（同類型由便宜到貴）
+  async listModels(modelType?: AiModelType): Promise<AiModel[]> {
     await delay(200)
-    return [
-      { id: 'nano-banana', name: 'Nano Banana', provider: 'Google Gemini 2.5 Flash Image', costPerImage: 4 },
-      { id: 'flux-1', name: 'FLUX.1', provider: 'Black Forest Labs', costPerImage: 8 },
-      { id: 'dalle-3', name: 'DALL·E 3', provider: 'OpenAI', costPerImage: 6 },
-      { id: 'sdxl', name: 'Stable Diffusion XL', provider: 'Stability AI', costPerImage: 3 },
-      { id: 'midjourney', name: 'Midjourney', provider: 'Midjourney v6', costPerImage: 8 },
-      { id: 'ideogram', name: 'Ideogram 2.0', provider: 'Ideogram', costPerImage: 5 },
-    ]
+    return MOCK_MODELS.filter((m) => !modelType || m.modelType === modelType)
   },
 
-  // GET /feed
-  async getFeed() {
+  // GET /feeds（估算用固定單價 8／45；真後端依 ai_models 最便宜檔位算）
+  async getFeed(): Promise<FeedSummary> {
     await delay(150)
-    return { balance: db.feedBalance }
+    return {
+      balance: db.feedBalance,
+      monthlyLimit: db.monthlyLimit,
+      monthUsed: db.monthlyUsed,
+      estImages: Math.floor(db.feedBalance / 8),
+      estVideos: Math.floor(db.feedBalance / 45),
+    }
   },
 
   // POST /feed/topup（mock-only：模擬儲值，見 add-feed-topup-dialog design.md 決策 5）
@@ -302,13 +396,19 @@ export const mockApi = {
   },
 
   // GET /images（對齊後端分頁：{ total, page, items, counts }；counts 是整個圖庫的統計，不受這裡的篩選影響）
+  // 不帶 source ＝ 使用者的圖 ∪ 內建素材（內建排在後面，對齊後端 createdAt DESC、內建素材最舊）；
+  // source=builtin 只回內建；source=object 另含內建的物件類素材（與 counts.object 一致）；
+  // 帶 folderId（含未分類）或 mediaType=video 都不含內建。
   async listImages(query: ImageListQuery = {}): Promise<ImageListResponse> {
     await delay(250)
     const page = query.page ?? 1
     const pageSize = query.pageSize ?? 8
-    const filtered = db.assets.filter((a) => {
+    const includeBuiltin = query.folderId === undefined && query.mediaType !== 'video'
+    const pool = includeBuiltin ? [...db.assets, ...MATERIALS.map(materialAsAsset)] : db.assets
+    const filtered = pool.filter((a) => {
       if (query.mediaType && a.type !== query.mediaType) return false
-      if (query.source && a.source !== query.source) return false
+      if (query.source && a.source !== query.source && !(query.source === 'object' && a.category === 'object'))
+        return false
       if (query.folderId === null && a.folderId !== undefined) return false
       if (typeof query.folderId === 'string' && a.folderId !== query.folderId) return false
       if (query.q && !a.name.includes(query.q)) return false
@@ -395,9 +495,16 @@ export const mockApi = {
 
   // POST /upload（上傳；落到指定資料夾，未指定則進「未分類」）
   // sourceImageId：編輯器「另存為新素材」帶原圖 id 時才有值——跟真後端一樣，來源改標
-  // source=edit，且用 object URL 讓假資料模式下縮圖也看得到真的裁切結果，不是永遠佔位圖示；
-  // 一般上傳（不帶 sourceImageId）維持原本行為不變。
-  async uploadImage(file: File, folderId?: string, sourceImageId?: string): Promise<Asset> {
+  // source=edit。一律用 object URL 當 url（真後端一律回網址）：假資料模式下縮圖看得到真的圖，
+  // 選圖彈窗裡剛上傳的圖也能直接當編輯器底圖／物件（picker-direct-upload design.md 決策 6）。
+  // source：同真後端，'tryonModel'／'object' 照標，有 sourceImageId 時被 edit 蓋過。
+  async uploadImage(
+    file: File,
+    folderId?: string,
+    sourceImageId?: string,
+    imageName?: string,
+    source?: UploadSource,
+  ): Promise<Asset> {
     await delay(400)
     if (file.size > MAX_UPLOAD_MB * 1024 * 1024) throw new Error('FILE_TOO_LARGE')
     const extension = file.name.split('.').pop()?.toLowerCase() ?? ''
@@ -405,12 +512,14 @@ export const mockApi = {
     // TODO: 後端就緒後把 file blob 上傳到 R2、回傳真實 URL 與尺寸；目前僅用檔名建立素材
     const a: Asset = {
       id: uid('a'),
-      name: file.name,
-      source: sourceImageId ? 'edit' : 'upload',
+      name: imageName || file.name,
+      source: sourceImageId ? 'edit' : (source ?? 'upload'),
       dim: '1024×768',
+      width: 1024,
+      height: 768,
       type: 'image',
       folderId,
-      ...(sourceImageId ? { url: URL.createObjectURL(file) } : {}),
+      url: URL.createObjectURL(file),
     }
     db.assets.unshift(a)
     return a
@@ -428,14 +537,10 @@ export const mockApi = {
     return [{ botId: 'bot_demo', botName: '日安選物' }]
   },
 
-  // GET /editor/pricing — 編輯器價目表（MV-09 工具列與 MV-09b 修飾項目共用同一份）
+  // GET /editor/pricing — 編輯畫布工具列的價目表
   async getEditorPricing(): Promise<EditorPricing> {
     await delay(120)
-    return {
-      tools: { ...EDITOR_PRICING.tools },
-      retouchOptions: { ...EDITOR_PRICING.retouchOptions },
-      commandBase: EDITOR_PRICING.commandBase,
-    }
+    return { tools: { ...EDITOR_PRICING.tools } }
   },
 
   // POST /images/edit/tool — 編輯畫布套用一次 AI 工具，在執行當下就扣款。
@@ -447,17 +552,20 @@ export const mockApi = {
     return { tool, cost }
   },
 
-  // POST /images/retouch — AI 修圖。成本一律由這裡依價目表計算，不採用前端傳來的金額。
+  // POST /edit — AI 修圖（同真後端：固定 imageEdit 單價、勾幾項都一樣；指令與選項都空 → NOTHING_TO_DO 不扣點；
+  // 回一張結果，圖用 picsum 依素材 id 取一張假圖）
   async retouchImage(req: RetouchReq): Promise<RetouchResult> {
+    if (!req.options.length && !req.instruction?.trim()) throw new Error('NOTHING_TO_DO')
+    const cost = priceOf('imageEdit') ?? 0
+    deduct(cost)
+    db.totalGen += 1
+    db.generatedThisMonth += 1
+    db.successGen += 1
     await delay(900)
-    // 指令式修圖只開放光線校正與放大兩個加購項，其餘一律忽略
-    const allowed = req.method === 'command' ? COMMAND_RETOUCH_OPTIONS : Object.keys(EDITOR_PRICING.retouchOptions)
-    const options = req.options.filter((key) => allowed.includes(key))
-    const cost =
-      (req.method === 'command' ? EDITOR_PRICING.commandBase : 0) +
-      options.reduce((total, key) => total + (EDITOR_PRICING.retouchOptions[key] ?? 0), 0)
-    if (cost > 0) deduct(cost)
-    return { method: req.method, options, cost }
+    const generationId = uid('gen')
+    db.editGenerations.add(generationId)
+    const url = `https://picsum.photos/seed/${req.imageId}-${generationId}/400/300`
+    return { id: uid('r'), generationId, url, adopted: false, method: req.method, options: req.options, cost }
   },
 
   // POST /images/edit（另存編輯產物，非破壞→新素材）
@@ -470,6 +578,8 @@ export const mockApi = {
       name,
       source: 'edit',
       dim: '1024×768',
+      width: 1024,
+      height: 768,
       type: 'image',
       folderId: opts?.folder || undefined,
       editable: opts?.keepLayers ?? false,
@@ -487,52 +597,72 @@ export const mockApi = {
     return base ? `${base}，${extras.join('、')}` : extras.join('、')
   },
 
-  // POST /generate/image
-  async generateImages(req: GenerateImageReq, costPerImage: number): Promise<GeneratedImage[]> {
-    const cost = costPerImage * req.count
-    deduct(cost)
-    db.totalGen += req.count
-    db.imgGen += req.count // 圖生圖才計入採用率分母
-    db.generatedThisMonth += req.count
-    db.successGen += req.count
+  // POST /generate（依 modelKey 單價扣點；帶 regenOf 時同後端一律只生一張）
+  async generateImages(req: GenerateImageReq): Promise<GeneratedImage[]> {
+    const price = priceOf(req.modelKey)
+    if (price === undefined) throw new Error('MODEL_NOT_ALLOWED')
+    const n = req.regenOf ? 1 : req.count
+    deduct(price * n)
+    db.totalGen += n
+    db.imgGen += n // 圖生圖才計入採用率分母
+    db.generatedThisMonth += n
+    db.successGen += n
     await delay(900)
-    return Array.from({ length: req.count }, () => ({ id: uid('g'), adopted: false }))
+    const generationId = uid('gen')
+    db.imageGenerations.add(generationId)
+    return Array.from({ length: n }, () => ({ id: uid('r'), generationId, url: '', adopted: false }))
   },
 
-  // POST /generate/post（依 outputType 分流回傳內容與扣款：文案＋配圖 5 顆／只要文案 2 顆／只要配圖 3 顆）
+  // POST /marketing/image＋POST /marketing/text（依 outputType 扣 marketingImage／marketingText 的價格）
   async generatePost(req: GeneratePostReq): Promise<GeneratedPost> {
-    const cost = POST_OUTPUT_TYPE_COST[req.outputType]
-    deduct(cost)
+    const wantImage = req.outputType !== 'textOnly'
+    const wantText = req.outputType !== 'imageOnly'
+    deduct((wantImage ? (priceOf('marketingImage') ?? 0) : 0) + (wantText ? (priceOf('marketingText') ?? 0) : 0))
     db.totalGen += 1
     db.generatedThisMonth += 1
     db.successGen += 1
     await delay(1000)
-    const tags = req.applyBrand ? db.brand.hashtags.slice(0, 3) : ['#新品', '#日常']
-    const copy =
-      '🌿 春天就是要換上最舒服的自己\n\n全新純棉系列，透氣不悶熱，五種溫柔色調任你搭配。現在下單享春夏限時 8 折，把好天氣穿在身上 ☀'
-    if (req.outputType === 'textOnly') return { copy, hashtags: tags }
-    if (req.outputType === 'imageOnly') return { posterUrl: 'mock://poster', copy: '', hashtags: [] }
-    return { posterUrl: 'mock://poster', copy, hashtags: tags }
+    const post: GeneratedPost = { hashtags: [] }
+    if (wantImage) post.poster = { id: uid('r'), generationId: uid('gen'), url: '', adopted: false }
+    if (wantText) {
+      post.copy =
+        '🌿 春天就是要換上最舒服的自己\n\n全新純棉系列，透氣不悶熱，五種溫柔色調任你搭配。現在下單享春夏限時 8 折，把好天氣穿在身上 ☀'
+      post.hashtags = req.useBrand ? db.brand.hashtags.slice(0, 3) : ['#新品', '#日常']
+    }
+    return post
   },
 
-  // POST /generate/video → 建立非同步任務；扣款依生成模型倍率（標準×1／進階×2／專業×4）
+  // GET /inspirations
+  async listInspirations(): Promise<Inspiration[]> {
+    await delay(150)
+    return [
+      { id: 'insp_1', name: '極簡白底', url: '' },
+      { id: 'insp_2', name: '節慶紅金', url: '' },
+    ]
+  },
+
+  // POST /video（#21）→ 預扣該檔單價、建立非同步任務、立刻回 pending
   async createVideoJob(req: VideoJobReq): Promise<VideoJob> {
-    const tier = VIDEO_MODEL_TIERS.find((t) => t.key === req.modelTier)
-    const cost = 45 * (tier ? tier.multiplier : 1)
+    const cost = MOCK_MODELS.find((m) => m.modelKey === req.modelKey && m.modelType === 'video')?.costFeeds
+    if (cost === undefined) throw new Error('MODEL_NOT_ALLOWED') // 同後端：不是影片檔位一律 400
     deduct(cost)
     db.totalGen += 1
     const id = uid('job')
-    db.jobs.set(id, { req, created: Date.now(), cost })
+    const name = req.taskName || `圖生影_${new Date().toISOString().slice(0, 16)}`
+    db.jobs.set(id, { req, name, created: Date.now(), cost })
     await delay(300)
-    return { id, status: 'pending', progress: 0, cost }
+    return { id, name, status: 'pending', progress: 0, cost }
   },
 
-  // GET /generate/video/:id → 查任務狀態（demo 用短時間模擬 1–2 分鐘；processing 階段有小機率模擬模型逾時失敗，讓失敗／重試／退款流程可被實際觸發與測試）
+  // GET /video/{taskId}（#22）→ demo 用短時間模擬 1–2 分鐘；processing 階段有小機率模擬上游失敗（退回預扣），
+  // 讓失敗流程可被實際觸發。done 時同後端自動入庫（圖庫多一支影片，只塞一次）。
+  // ponytail: mock 沒有影片檔，resultUrl 留空（同圖生圖 mock 結果的 url: ''）；播放與下載由真後端 e2e 驗
   async getVideoJob(id: string): Promise<VideoJob> {
     await delay(200)
     const j = db.jobs.get(id)
-    if (!j) return { id, status: 'failed', progress: 0, cost: 0, error: 'NOT_FOUND' }
-    if (j.failed) return { id, status: 'failed', progress: 0, cost: j.cost, error: 'MODEL_TIMEOUT' }
+    if (!j) throw new Error('NOT_FOUND')
+    const base = { id, name: j.name }
+    if (j.failed) return { ...base, status: 'failed', progress: 0, cost: 0, error: 'upstreamError' }
     const elapsed = Date.now() - j.created
     let status: VideoJob['status'] = 'pending'
     let progress = Math.min(10, Math.round((elapsed / 1500) * 10))
@@ -541,75 +671,114 @@ export const mockApi = {
       progress = 100
     } else if (elapsed > 1500) {
       status = 'processing'
-      progress = Math.min(99, 10 + Math.round(((elapsed - 1500) / 3500) * 90))
+      progress = Math.min(95, 10 + Math.round(((elapsed - 1500) / 3500) * 90))
       if (!j.failedChecked) {
         j.failedChecked = true
         if (Math.random() < 0.12) {
           j.failed = true
-          return { id, status: 'failed', progress, cost: j.cost, error: 'MODEL_TIMEOUT' }
+          db.feedBalance += j.cost // 上游失敗釋放預留
+          db.monthlyUsed -= j.cost
+          return { ...base, status: 'failed', progress: 0, cost: 0, error: 'upstreamError' }
         }
       }
     }
     if (status === 'done') {
-      db.successGen += 1
-      return { id, status, progress, cost: j.cost, resultUrl: 'mock://video' }
+      if (!db.assets.some((a) => a.id === id)) {
+        db.successGen += 1
+        db.assets.unshift({ id, name: j.name, source: 'aiGenerate', dim: '', type: 'video' })
+      }
+      return { ...base, status, progress, cost: j.cost, durationMs: elapsed }
     }
-    return { id, status, progress, cost: j.cost }
+    return { ...base, status, progress, cost: j.cost, etaSeconds: Math.max(0, Math.round((5000 - elapsed) / 1000)) }
   },
 
-  // POST /generate/tryon
-  async tryOn(): Promise<{ ok: true }> {
-    deduct(15)
+  // GET /video?limit=10（#23）→ 新到舊最多 10 筆
+  async listVideoJobs(): Promise<VideoJob[]> {
+    await delay(150)
+    const ids = [...db.jobs.keys()].reverse().slice(0, 10)
+    return Promise.all(ids.map((id) => mockApi.getVideoJob(id)))
+  },
+
+  // POST /tryon（同真後端：固定檔位 tryonStandard、回一張結果；結果圖用 picsum 依模特 id 取一張假圖）。
+  // 不登記進 imageGenerations：採用率只算 type='generate'（後端 metrics_calc），試穿的存入／下載不計
+  async tryOn(req: TryOnReq): Promise<GeneratedImage> {
+    deduct(priceOf('tryonStandard') ?? 0)
     db.totalGen += 1
     db.generatedThisMonth += 1
     db.successGen += 1
     await delay(1000)
-    return { ok: true }
+    const generationId = uid('g')
+    return { id: uid('r'), generationId, url: `https://picsum.photos/seed/${req.modelRefId}/400/500`, adopted: false }
   },
 
-  // 存入圖庫（選用）→ 生成結果落地成 AI 生成素材，並記錄採用
-  async saveGenerated(name: string): Promise<Asset> {
+  // POST /generations/{id}/save → 生成結果落地成 AI 生成素材；同後端，存入圖庫本身就算採用。
+  async saveGenerated(name: string, from: GenerationRef, folderId?: string): Promise<Asset> {
     await delay(300)
-    const a: Asset = { id: uid('a'), name, source: 'aiGenerate', dim: '1024×768', type: 'image' }
+    const a: Asset = {
+      id: uid('a'),
+      name,
+      source: db.editGenerations.has(from.generationId) ? 'edit' : 'aiGenerate',
+      folderId: folderId || undefined,
+      dim: '1024×768',
+      width: 1024,
+      height: 768,
+      type: 'image',
+    }
     db.assets.unshift(a)
+    markAdopted(from)
     return a
   },
 
-  // 記錄採用（下載或存入圖庫皆算；同張只算一次由呼叫端去重）
-  async recordAdoption(): Promise<void> {
+  // POST /generations/{id}/events（下載）→ 記錄採用；同一張重送不重複計
+  async recordAdoption(from: GenerationRef): Promise<void> {
     await delay(100)
-    db.adoptedGen += 1
+    markAdopted(from)
   },
 
-  // GET /usage
-  async getUsage(): Promise<UsageSummary> {
+  // GET /feeds/usage（同後端：byModule 與 daily 由 groupBy 二選一，另一個回 null；缺日補 0 由這裡做）
+  // 每日用量是固定波形的示意值，只保證形狀與真後端一致
+  async getUsage(params: UsageQuery): Promise<UsageSummary> {
     await delay(300)
-    const percent = Math.round((db.monthlyUsed / db.monthlyLimit) * 100)
+    const period = periodWindow(params)
+    const days = daysBetween(period.from, period.to)
+    const daily = Array.from({ length: days }, (_, i) => ({ date: addDays(period.from, i), used: 20 + ((i * 7) % 41) }))
+    const totalUsed = daily.reduce((sum, d) => sum + d.used, 0)
+    const shares: [string, number, number | null, number][] = [
+      ['generate', 0.42, 18, 12],
+      ['marketingImage', 0.15, 4, 10],
+      ['marketingText', 0.095, null, 3],
+      ['video', 0.223, 62, 45],
+      ['tryon', 0.112, -9, 15],
+    ]
+    const byModule = shares.map(([type, share, vsLastMonthPct, avgPerGen]) => ({
+      type,
+      used: Math.round(totalUsed * share),
+      sharePct: Math.round(share * 1000) / 10,
+      vsLastMonthPct,
+      avgPerGen,
+    }))
     return {
-      used: db.monthlyUsed,
-      remaining: db.feedBalance,
-      monthlyLimit: db.monthlyLimit,
-      percent,
-      generatedThisMonth: db.generatedThisMonth,
-      daily: [22, 30, 26, 40, 52, 44, 58, 66, 60, 74, 82, 70, 92, 78],
-      byModule: [
-        { label: '圖生圖', value: 1580, color: '#467AE8' },
-        { label: '行銷 PO 文', value: 920, color: '#7F77DD' },
-        { label: '圖生影', value: 840, color: '#EA903A' },
-        { label: 'AI 試穿', value: 420, color: '#54C14F' },
-      ],
+      period,
+      totalUsed,
+      dailyAvg: Math.round(totalUsed / days),
+      vsLastMonthPct: 12,
+      byModule: params.groupBy === 'module' ? byModule : null,
+      daily: params.groupBy === 'day' ? daily : null,
     }
   },
 
-  // GET /metrics（採用率等只算圖生圖）
-  async getMetrics(): Promise<Metrics> {
+  // GET /metrics（採用率等只算圖生圖；分母為 0 時同後端回 null）
+  async getMetrics(params: PeriodParams): Promise<Metrics> {
     await delay(300)
     return {
+      period: periodWindow(params),
       // 成功率＝全模組；採用率／平均重生成／每採用成本＝只算圖生圖
-      successRate: Math.round((db.successGen / Math.max(1, db.totalGen)) * 1000) / 10,
-      adoptionRate: Math.round((db.adoptedGen / Math.max(1, db.imgGen)) * 1000) / 10,
-      avgRegen: db.regenBeforeAdopt,
+      successRate: db.totalGen ? Math.round((db.successGen / db.totalGen) * 1000) / 10 : null,
+      adoptionRate: db.imgGen ? Math.round((db.adoptedGen / db.imgGen) * 1000) / 10 : null,
+      avgRegenerate: db.regenBeforeAdopt,
       costPerAdopted: 6.1,
+      vsLastPeriod: { successRate: 1.8, adoptionRate: 4.2, avgRegenerate: -0.3, costPerAdopted: null },
+      monthGenerated: db.generatedThisMonth,
     }
   },
 

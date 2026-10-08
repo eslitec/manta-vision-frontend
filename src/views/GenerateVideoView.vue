@@ -24,17 +24,17 @@
         .step
           .step__head
             span.step__title {{ t('video.steps.model') }}
-            span.step__hint {{ t('video.modelHint') }}
+            span.step__hint {{ t('video.modelHint', { count: prices.videoStandard ?? '…' }) }}
           .models
             ModelOption(
-              v-for="tier in modelTiers"
+              v-for="tier in tierCards"
               :key="tier.key"
               :name="$t(`modelTiers.${tier.key}.label`)"
               :multiplier="tier.multiplier"
-              :cost="$t('units.feedPerVideo', { count: 45 * tier.multiplier })"
+              :cost="$t('units.feedPerVideo', { count: tier.cost })"
               :description="$t(`video.modelDescriptions.${tier.key}`)"
-              :selected="modelTier === tier.key"
-              @click="modelTier = tier.key"
+              :selected="modelKey === tier.modelKey"
+              @click="modelKey = tier.modelKey"
             )
       span.video__fade(aria-hidden="true")
       span.video__scrollbarHint(:class="{ isCompact: !!myTask }" aria-hidden="true")
@@ -49,8 +49,8 @@
           .cost__value
             button.cost__feedBtn(type="button" :aria-label="t('feedBadge.topup')" @click="topUpOpen = true")
               IconFeedBottleSmall.cost__icon
-            span {{ t('units.feed', { count: estCost }) }}
-        AppButton(:disabled="busy" @click="confirmOpen = true")
+            span {{ t('units.feed', { count: estCost ?? '…' }) }}
+        AppButton(:disabled="!canSubmit" @click="confirmOpen = true")
           IconAddObject
           span {{ t('video.generate') }}
 
@@ -59,7 +59,8 @@
     .preview__box
       template(v-if="myTask?.status === 'failed'")
         IconAlertTriangleFilled
-        span.preview__hint {{ t('common.generationFailed') }}
+        span.preview__hint {{ myTask.error || t('common.generationFailed') }}
+      video.preview__video(v-else-if="myTask?.status === 'done' && myTask.resultUrl" :src="myTask.resultUrl" controls playsinline)
       template(v-else)
         IconMovie
         span.preview__hint(v-if="!myTask") {{ t('video.previewHint') }}
@@ -82,17 +83,17 @@
         span {{ t('video.completed') }}
       .result__actions
         AppButton(variant="outline" @click="download") {{ t('common.download') }}
-        AppButton(variant="outline" @click="startGenerate") {{ t('common.regenerate') }}
+        AppButton(variant="outline" :disabled="!canSubmit" @click="confirmOpen = true") {{ t('common.regenerate') }}
         AppButton(@click="goLibrary") {{ t('common.openLibrary') }}
       p.result__stat {{ t('video.resultStats', { cost: myTask.cost, elapsed: elapsedText(myTask) }) }}
 
   ImagePickerDialog(v-model:open="pickerOpen" :title="t('video.pickerTitle')" @select="onPick")
-  ConfirmGenerateDialog(v-model:open="confirmOpen" :cost="estCost" :model-label="modelLabelText" @confirm="startGenerate")
+  ConfirmGenerateDialog(v-model:open="confirmOpen" :cost="estCost ?? 0" :model-label="modelLabelText" @confirm="startGenerate")
   TopUpDialog(v-model:open="topUpOpen")
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
@@ -107,13 +108,16 @@ import {
   IconImagePlaceholder,
   IconMovie,
 } from '@/components/icons'
+import { api } from '@/api'
+import { useFeedStore } from '@/stores/feed'
 import { useGenerationTasksStore } from '@/stores/generationTasks'
-import { isInsufficientFeed } from '@/utils/error'
-import { VIDEO_MODEL_TIERS } from '@/types/api'
-import type { Asset, GenerationTask, VideoModelTier } from '@/types/api'
+import { displayMessage, isInsufficientFeed } from '@/utils/error'
+import { downloadFile } from '@/utils/download'
+import type { Asset, GenerationTask, VideoTemplate } from '@/types/api'
 
 const router = useRouter()
 const tasksStore = useGenerationTasksStore()
+const feed = useFeedStore()
 const { t } = useI18n()
 
 const sourceImage = ref<Asset | null>(null)
@@ -122,33 +126,56 @@ const topUpOpen = ref(false)
 const confirmOpen = ref(false)
 const errorMsg = ref('')
 const myTaskId = ref<string | null>(null)
+const submitting = ref(false)
 
-const templates = computed(() => [
-  { key: 'cameraMove', name: t('video.templates.cameraMove') },
-  { key: 'productSpin', name: t('video.templates.productSpin') },
-  { key: 'textEntrance', name: t('video.templates.textEntrance') },
-  { key: 'zoomBreathing', name: t('video.templates.zoomBreathing') },
-])
-const template = ref('cameraMove')
+// 模板 key 就是契約值（後端 schemas/video.py），同時當 i18n 鍵
+const TEMPLATE_KEYS: VideoTemplate[] = ['cameraPan', 'rotate', 'textIn', 'zoomBreath']
+const templates = computed(() => TEMPLATE_KEYS.map((key) => ({ key, name: t(`video.templates.${key}`) })))
+const template = ref<VideoTemplate>('cameraPan')
 const ratios = ['9:16', '1:1', '16:9']
 const ratio = ref('9:16')
-const modelTiers = VIDEO_MODEL_TIERS
-const modelTier = ref<VideoModelTier>('standard')
-const estCost = computed(() => {
-  const t = modelTiers.find((x) => x.key === modelTier.value)
-  return 45 * (t ? t.multiplier : 1)
+// 三個檔位對應後端 modelKey；單價一律讀 GET /ai-models?modelType=video，倍率＝該檔單價 ÷ 標準檔單價（同圖生圖頁）。
+// key 只用來查 i18n（modelTiers.standard…），選取狀態直接存 modelKey
+const videoTiers = [
+  { key: 'standard', modelKey: 'videoStandard' },
+  { key: 'advanced', modelKey: 'videoAdvanced' },
+  { key: 'pro', modelKey: 'videoPro' },
+] as const
+const modelKey = ref<string>('videoStandard')
+const prices = ref<Partial<Record<string, number>>>({})
+const tierCards = computed(() => {
+  const base = prices.value.videoStandard
+  return videoTiers.flatMap((tier) => {
+    const cost = prices.value[tier.modelKey]
+    // 後端停用的檔位不會回傳，就不顯示
+    return cost === undefined ? [] : [{ ...tier, cost, multiplier: base ? cost / base : 1 }]
+  })
 })
+// 價格沒載入、或選的檔位被後端停用時是 undefined：生成鈕停用，不送出一筆畫面上說 0 顆、實際照價扣的請求
+const estCost = computed(() => prices.value[modelKey.value])
 const modelLabelText = computed(() => {
-  const tier = modelTiers.find((x) => x.key === modelTier.value)
+  const tier = tierCards.value.find((x) => x.modelKey === modelKey.value)
   return tier
-    ? `${t(`modelTiers.${tier.key}.label`)}（×${tier.multiplier}）・${t('units.feedPerVideo', { count: estCost.value })}`
+    ? `${t(`modelTiers.${tier.key}.label`)}（×${tier.multiplier}）・${t('units.feedPerVideo', { count: tier.cost })}`
     : ''
+})
+
+onMounted(async () => {
+  try {
+    const models = await api.listModels('video')
+    prices.value = Object.fromEntries(models.map((m) => [m.modelKey, m.costFeeds]))
+    // 預設的標準檔被後端停用時改選第一張卡，不然選中的是一張看不到的卡
+    if (estCost.value === undefined && tierCards.value[0]) modelKey.value = tierCards.value[0].modelKey
+  } catch (e: unknown) {
+    errorMsg.value = displayMessage(e, t('errors.loadFailed'))
+  }
 })
 
 // 這頁只呈現「這次瀏覽時自己送出的任務」；任務本身在背景持續追蹤，離開頁面不受影響，
 // 完整的任務清單（含離開此頁後仍在跑的任務）另外在頂部工具列的任務中心面板查看。
 const myTask = computed(() => tasksStore.tasks.find((t) => t.id === myTaskId.value))
 const busy = computed(() => myTask.value?.status === 'pending' || myTask.value?.status === 'processing')
+const canSubmit = computed(() => !busy.value && !submitting.value && !!sourceImage.value && estCost.value !== undefined)
 
 const previewTitle = computed(() =>
   myTask.value?.status === 'done'
@@ -172,10 +199,12 @@ const statusLabel = computed(() =>
         phase: t(`video.phases.${GEN_PHASES[genStep.value - 1]}`),
       }),
 )
-// 剩餘時間估算：以總長約 110 秒推估（mock）；後端就緒後改用真實 ETA
+// 剩餘時間：後端回的 etaSeconds（依該檔平均耗時估算）；沒有才退回以總長約 110 秒推估
 const etaText = computed(() => {
   if (myTask.value?.status !== 'processing') return ''
-  const remain = Math.max(5, Math.round(((100 - (myTask.value.progress ?? 0)) / 100) * 110))
+  const remain = myTask.value.etaSeconds ?? Math.max(5, Math.round(((100 - (myTask.value.progress ?? 0)) / 100) * 110))
+  // 跑得比該檔平均久時後端 eta 會停在 0：不要一直顯示「約剩 0 秒」
+  if (remain <= 0) return t('common.takingLonger')
   const m = Math.floor(remain / 60)
   const s = remain % 60
   return m > 0
@@ -187,33 +216,46 @@ const onPick = (a: Asset) => {
 }
 
 async function startGenerate() {
+  const source = sourceImage.value
+  if (busy.value || submitting.value || !source || estCost.value === undefined) return
   errorMsg.value = ''
+  submitting.value = true
   try {
     const id = await tasksStore.createVideoTask(
-      {
-        sourceImageId: sourceImage.value?.id,
-        template: template.value,
-        ratio: ratio.value,
-        modelTier: modelTier.value,
-      },
+      { sourceImageId: source.id, modelKey: modelKey.value, template: template.value, ratio: ratio.value },
       t('video.taskName', { template: t(`video.templates.${template.value}`) }),
     )
     myTaskId.value = id
   } catch (e: unknown) {
-    errorMsg.value = isInsufficientFeed(e) ? t('errors.insufficientFeed') : t('errors.submitFailed')
+    // 402 飼料不足用前端文案；其他（400 圖太小／是影片、404 圖不存在、415 讀不出圖…）顯示後端訊息
+    errorMsg.value = isInsufficientFeed(e) ? t('errors.insufficientFeed') : displayMessage(e, t('errors.submitFailed'))
+  } finally {
+    submitting.value = false
+    // 202 已預扣；失敗也刷新一次，畫面上的餘額跟後端對齊。刷新本身失敗不覆蓋上面的錯誤訊息
+    await feed.refresh().catch(() => undefined)
   }
 }
 
 function elapsedText(task: GenerationTask) {
+  if (task.durationMs !== undefined) return formatElapsed(Math.round(task.durationMs / 1000))
   if (!task.doneAt) return ''
-  const sec = Math.round((task.doneAt - task.createdAt) / 1000)
+  return formatElapsed(Math.round((task.doneAt - task.createdAt) / 1000))
+}
+function formatElapsed(sec: number) {
   return t('common.minutesSeconds', {
     minutes: Math.floor(sec / 60),
     seconds: String(sec % 60).padStart(2, '0'),
   })
 }
-function download() {
-  /* TODO: VideoJob 目前只有 mock:// 假 URL，等後端提供真實檔案來源後再接上真正的下載行為 */
+async function download() {
+  const task = myTask.value
+  if (!task?.resultUrl) return // mock 沒有影片檔，跳過
+  errorMsg.value = ''
+  try {
+    await downloadFile(task.resultUrl, `${task.name}.mp4`)
+  } catch (e: unknown) {
+    errorMsg.value = displayMessage(e, t('errors.downloadFailed'))
+  }
 }
 function goLibrary() {
   router.push('/library')
@@ -498,6 +540,14 @@ function goLibrary() {
 .preview__hint {
   font-size: 0.8125rem;
   color: $gray-400;
+}
+.preview__video {
+  width: 100%;
+  height: 100%;
+  max-height: 32rem;
+  border-radius: 12px;
+  background: $black;
+  object-fit: contain;
 }
 .taskstat {
   max-width: 22.5rem;

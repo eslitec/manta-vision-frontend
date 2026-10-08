@@ -11,8 +11,14 @@
 
 串接過程發現三處前後端形狀對不上，這裡先講清楚決策，避免之後誤以為是程式碼寫錯：
 
-- **`avoidWords`**：前端是單一字串（一個 textarea），後端是陣列。決定用「、」全形頓號
+- **`avoidWords`**：前端是單一字串（一個 textarea），後端原本是陣列，決定用「、」全形頓號
   join／split，這是畫面上原本呈現「不要出現的字詞」慣用的分隔方式。
+  **補記（2026-09-19）**：後端 9/2 起 `avoidWords` 改為自由文字字串（見
+  `app/schemas/brand.py::BrandUpdate.avoid_words`／`BrandOut.avoid_words`，皆為
+  `str | None`），前後端已是同一個形狀，不再需要 join／split。`real.ts` 已於同事
+  commit `cf433ce` 同步改成原樣傳遞（`toBrand()` 用 `wire.avoidWords ?? ''`、
+  `saveBrand()` 用 `profile.avoidWords || null`，null ↔ 空字串），上面「頓號
+  join／split」是當初的決策紀錄，現已由後端形狀變更取代，保留在此作為歷史脈絡。
 - **`colors`**：前端可以透過「＋新增」無限新增色票，後端只有 `primary`／`secondary`／
   `accent` 三個具名欄位。決定固定用陣列前 3 個索引對應這三個欄位——**第 4 個以後的自訂
   色票不會存到真後端**，重新整理後會消失。這是已知限制，不在這次一併解決（UI 本身沒有
@@ -33,8 +39,8 @@
 - `src/api/real.ts`：新增 `getBrand()`／`saveBrand()`，含 `WireBrand` 型別對應、三態 PUT
   語意（不帶 key＝不動、`null`／`[]`＝明確清空、有值＝設定；`name`／`positioning`／
   `industry` 三個必填欄位一律送值，不接受清空，交由後端 422 擋）、色票固定三欄位對應、
-  avoidWords 陣列↔字串轉換、Logo 兩段式上傳的偵測與呼叫。`saveBrand()` 改回傳存檔後的
-  完整內容（不再是 `void`）。
+  avoidWords 原樣傳遞字串（後端 9/2 起為自由文字，null ↔ 空字串，見上方補記）、Logo
+  兩段式上傳的偵測與呼叫。`saveBrand()` 改回傳存檔後的完整內容（不再是 `void`）。
 - `src/api/mock.ts`：`db.brand` 補上兩個新欄位（比照 `zh-Hant.ts` 的預設文案），
   `saveBrand()` 回傳型別與行為比照 `real.ts` 調整，維持假／真後端介面一致。
 - `src/stores/brand.ts`：`load()` 時若後端回傳的合規欄位是空的，補上跟畫面一致的
@@ -46,6 +52,10 @@
 - 測試：`real.spec.ts` 新增「品牌設定（brand）」整組測試（GET 映射含 null 正規化、PUT 三態
   語意、Logo 上傳前置動作、色票索引對應）；`stores.spec.ts` 更新「save 期間切換 saving
   狀態」測試以驗證 `profile` 會被回傳值覆蓋。
+  **補記（2026-09-19）**：`real.ts` 改成 avoidWords 原樣傳遞字串後（見上方補記），
+  `real.spec.ts` 當時沒有同步更新，`WIRE_BRAND.avoidWords`／PUT body 斷言仍寫死陣列
+  （`['廉價', '瑕疵']`），兩個測試標題也還稱「併成字串」「拆成陣列」，導致 2 個測試
+  失敗。已改為字串斷言（`'廉價、瑕疵'`）與正確標題，不動 `real.ts`。
 
 ## Capabilities
 

@@ -15,7 +15,7 @@
         img.editorSourceImg(v-if="selectedAssetUrl" :src="selectedAssetUrl" :alt="selectedAssetName")
         IconImagePlaceholder(v-else)
       .sourceActions
-        AppButton(variant="outline" @click="openEditorPicker") {{ t('common.selectFromLibrary') }}
+        AppButton(variant="outline" :disabled="retouching" @click="openEditorPicker") {{ t('common.selectFromLibrary') }}
         span.uploadTip {{ t('common.orDragUpload') }}
       h3 {{ t('editor.retouch.steps.method') }}
       .methodRow
@@ -28,9 +28,6 @@
           label.option(v-for="o in retouchOptionsForMethod" :key="o.key" :class="{ isSelected: o.on }")
             AppCheckbox(v-model="o.on" :label="t(`editor.retouch.options.${o.key}.name`)")
             span.option__copy #[strong {{ t(`editor.retouch.options.${o.key}.name`) }}] #[small {{ t(`editor.retouch.options.${o.key}.hint`) }}]
-            span.option__cost(:class="{ free: o.free }")
-              IconFeedBottleSmall(v-if="!o.free")
-              b {{ o.free ? t('editor.free') : t('editor.feedShort', { count: o.cost }) }}
       template(v-else)
         h3 {{ t('editor.retouch.steps.requiredInstruction') }}
         small.optionalOptionsHint {{ t('editor.retouch.presetsHint') }}
@@ -49,12 +46,13 @@
           :placeholder="t('editor.retouch.placeholder')"
         )
         small.charCounter {{ retouchInstruction.length }} / 200
-      p.editorError(v-if="retouchError" role="alert") {{ retouchError }}
+      p.editorError(v-if="retouchPriceFailed" role="alert") {{ t('editor.retouch.priceLoadFailed') }}
+      p.editorError(v-if="retouchError" ref="retouchErrorEl" role="alert") {{ retouchError }}
       footer.panelAction
-        span {{ t('common.estimatedCost') }} #[b {{ t('units.feed', { count: estimatedRetouchCost }) }}]
+        span {{ t('common.estimatedCost') }} #[b {{ t('units.feed', { count: retouchPrice ?? '…' }) }}]
         AppButton(:disabled="!canStartRetouch || retouching" :loading="retouching" @click="startRetouch") {{ t('editor.retouch.start') }}
     section.resultPanel
-      header.resultHead #[strong {{ t('editor.retouch.result') }}] #[span {{ retouchAppliedLabel }}]
+      header.resultHead #[strong {{ t('editor.retouch.result') }}] #[span(v-if="retouchResult") {{ retouchAppliedLabel }}]
       .compare
         .compare__item
           span {{ t('editor.original') }}
@@ -68,18 +66,17 @@
             .retouchProgress(v-if="retouching")
               IconSpinnerRing.retouchProgress__spinner
               strong {{ t('editor.retouch.inProgress') }}
-              small {{ retouchStepLabel }}
               .retouchProgress__bar
-                .retouchProgress__fill(:style="{ width: `${retouchProgressPercent}%` }")
-              small.retouchProgress__eta {{ retouchTimeRemainingLabel }}
+                .retouchProgress__fill
+            img.editorSourceImg(v-else-if="retouchResult?.url" :src="retouchResult.url" :alt="t('editor.afterRetouch')")
             IconImagePlaceholder(v-else)
-          small(v-if="!retouching") {{ t('editor.consumed', { count: lastRetouchCost }) }}
-      footer.resultActions(v-if="hasSelectedAsset")
+          small(v-if="retouchResult && !retouching") {{ t('editor.consumed', { count: retouchResult.cost }) }}
+      footer.resultActions(v-if="retouchResult")
         span {{ t('editor.saveHint') }}
-        AppButton(variant="outline" @click="retouchSetupOpen = true") {{ t('editor.retouch.again') }}
-        AppButton(variant="outline") {{ t('common.download') }}
-        AppButton(:disabled="Boolean(savedAssetId)" @click="openSaveDialog") {{ savedAssetId ? t('common.saved') : t('editor.saveAsNew') }}
-        span.visuallyHidden(v-if="savedAssetId" role="status" aria-live="polite") {{ t('common.saved') }}
+        AppButton(variant="outline" :disabled="retouching || retouchPrice === undefined" @click="retouchAgain") {{ t('editor.retouch.again', { count: retouchPrice ?? '…' }) }}
+        AppButton(variant="outline" :disabled="retouching" @click="downloadRetouch") {{ t('common.download') }}
+        AppButton(:disabled="retouchSaved || retouching" @click="openSaveDialog") {{ retouchSaved ? t('common.saved') : t('editor.saveAsNew') }}
+        span.visuallyHidden(v-if="retouchSaved" role="status" aria-live="polite") {{ t('common.saved') }}
         span.visuallyHidden(v-if="saveError" role="alert") {{ t('editor.saveFailed') }}
 
   template(v-else)
@@ -103,23 +100,42 @@
         strong(v-if="hasSelectedAsset") #[IconImagePlaceholder] {{ selectedAssetName }}
         strong(v-else) {{ t('editor.emptyState.title') }}
         span(v-if="hasSelectedAsset") {{ t('editor.status', { status: tool === 'crop' ? t('editor.cropping') : t('editor.edited') }) }}
-        AppButton.canvasHead__libraryButton(variant="outline" @click="openEditorPicker") {{ t('common.selectFromLibrary') }}
+        AppButton.canvasHead__libraryButton(variant="outline" :disabled="retouching" @click="openEditorPicker") {{ tool === 'object' ? t('editor.replaceBaseImage') : t('common.selectFromLibrary') }}
         .canvasActions(v-if="hasSelectedAsset")
-          button.canvasActions__zoom(type="button" :disabled="!canZoomOut" :aria-label="t('editor.zoomOut')" @click="zoomOut")
+          button.canvasActions__btn.canvasActions__undo(
+            type="button"
+            :disabled="!editorHistory.canUndo.value"
+            :aria-label="undoLabel"
+            :title="undoLabel"
+            aria-keyshortcuts="Meta+Z Control+Z"
+            @click="undoEdit"
+          )
             IconBack
-          button.canvasActions__zoom(type="button" :disabled="!canZoomIn" :aria-label="t('editor.zoomIn')" @click="zoomIn")
+          button.canvasActions__btn.canvasActions__redo(
+            type="button"
+            :disabled="!editorHistory.canRedo.value"
+            :aria-label="redoLabel"
+            :title="redoLabel"
+            aria-keyshortcuts="Meta+Shift+Z Control+Shift+Z Control+Y Meta+Y"
+            @click="redoEdit"
+          )
             IconNext
+          span.canvasActions__divider(aria-hidden="true")
+          button.canvasActions__btn(type="button" :disabled="!canZoomOut" :aria-label="t('editor.zoomOut')" :title="t('editor.zoomOut')" @click="zoomOut")
+            span(aria-hidden="true") −
           output.canvasActions__value(aria-live="polite") {{ zoomPercent }}%
+          button.canvasActions__btn(type="button" :disabled="!canZoomIn" :aria-label="t('editor.zoomIn')" :title="t('editor.zoomIn')" @click="zoomIn")
+            span(aria-hidden="true") +
         AppButton(v-if="hasSelectedAsset" :disabled="Boolean(savedAssetId)" @click="openSaveDialog") {{ savedAssetId ? t('common.saved') : t('editor.saveAsNew') }}
         span.visuallyHidden(v-if="savedAssetId" role="status" aria-live="polite") {{ t('common.saved') }}
         span.visuallyHidden(v-if="saveError" role="alert") {{ t('editor.saveFailed') }}
-      .canvas
+      .canvas(@pointerdown="deselectObjectLayer")
         .artboard(ref="artboardRef" :class="{cropping: tool==='crop'}" :style="artboardZoomStyle")
           .canvasEmpty(v-if="!originalLayer")
             IconImagePlaceholder
             span.canvasEmpty__hint {{ t('editor.emptyState.canvasHint') }}
           template(v-else-if="originalLayer.visible")
-            img.editorSourceImg(v-if="selectedAssetUrl" :src="selectedAssetUrl" :alt="selectedAssetName")
+            img.editorSourceImg(v-if="selectedAssetUrl" :src="selectedAssetUrl" :alt="selectedAssetName" @load="onSourceImgLoad")
             IconImagePlaceholder(v-else)
           .textObject(
             v-for="textLayer in textLayers"
@@ -135,8 +151,9 @@
               :tabindex="tool === 'crop' ? -1 : 0"
               :aria-label="t('editor.textContent')"
               :aria-multiline="false"
-              :contenteditable="tool !== 'crop' && editingTextKey === textLayer.key ? 'true' : 'false'"
+              :contenteditable="tool !== 'crop' && editingTextKey === textLayer.key ? 'plaintext-only' : 'false'"
               @dblclick.stop="beginTextEdit(textLayer.key)"
+              @focus="selectLayer(textLayer.key)"
               @keydown="handleTextKeydown($event, textLayer.key)"
               @blur="finishTextEdit(textLayer.key)"
             ) {{ textLayer.content }}
@@ -172,14 +189,15 @@
             v-for="objectLayer in objectLayers"
             v-show="objectLayer.visible"
             :key="objectLayer.key"
-            :class="{ isSelected: tool !== 'crop' && selectedLayerKey === objectLayer.key, isDragging: objectLayer.dragging, isCropPreview: tool === 'crop' }"
+            :class="{ isSelected: tool !== 'crop' && selectedLayerKey === objectLayer.key, isDragging: objectLayer.dragging, isCropPreview: tool === 'crop', hasImage: Boolean(objectLayer.url) }"
             :style="objectLayerStyle(objectLayer)"
             :tabindex="tool === 'crop' ? -1 : 0"
             :aria-label="objectLayer.label"
             @pointerdown.stop="startObjectDrag($event, objectLayer)"
             @focus="selectLayer(objectLayer.key)"
           )
-            IconImagePlaceholder
+            img.objectObject__img(v-if="objectLayer.url" :src="objectLayer.url" :alt="objectLayer.label" draggable="false")
+            IconImagePlaceholder(v-else)
             template(v-if="tool !== 'crop' && selectedLayerKey === objectLayer.key")
               button.objectResizeHandle.objectResizeHandle--nw(type="button" :aria-label="t('editor.resizeObject')" @pointerdown.stop="startObjectResize($event, objectLayer, 'nw')" @keydown="handleObjectResizeKeydown($event, objectLayer)")
               button.objectResizeHandle.objectResizeHandle--ne(type="button" :aria-label="t('editor.resizeObject')" @pointerdown.stop="startObjectResize($event, objectLayer, 'ne')" @keydown="handleObjectResizeKeydown($event, objectLayer)")
@@ -197,7 +215,7 @@
             .objectSelection__handle.objectSelection__handle--se
             span.objectSelection__tip {{ t('editor.addObject.selectionTip') }}
           .cropFrame(v-if="tool === 'crop'" :style="cropFrameStyle" :class="{ isDragging: cropDragging }" @pointerdown="startCropMove")
-            .cropAppliedBadge(v-if="ratio !== 'custom'") {{ t('editor.cropApplied.badge', { ratio: cropRatioLabel, width: cropOutputDimensions.width, height: cropOutputDimensions.height }) }}
+            .cropAppliedBadge(v-if="ratio !== 'custom' && cropOutputDimensions") {{ t('editor.cropApplied.badge', { ratio: cropRatioLabel, width: cropOutputDimensions.width, height: cropOutputDimensions.height }) }}
             button.cropHandle.cropHandle--nw(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'nw')")
             button.cropHandle.cropHandle--ne(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'ne')")
             button.cropHandle.cropHandle--sw(type="button" :aria-label="t('editor.resizeCrop')" @pointerdown.stop="startCropResize($event, 'sw')")
@@ -211,10 +229,39 @@
           AppButton(variant="outline" size="compact" @click="undoAppliedCrop") {{ t('editor.cropApplied.undo') }}
           AppButton(variant="outline" size="compact" @click="recropCustom") {{ t('editor.cropApplied.recrop') }}
           AppButton(size="compact" :disabled="Boolean(savedAssetId)" @click="openSaveDialog") {{ savedAssetId ? t('common.saved') : t('editor.saveAsNew') }}
-        p(:style="canvasHintStyle") {{ tool === 'crop' ? t('editor.cropInstructionDynamic', cropOutputDimensions) : t('editor.selectionInstruction') }}
-      footer.canvasFoot {{ t('editor.nonDestructive') }}
+        p(v-if="canvasHint" :style="canvasHintStyle") {{ canvasHint }}
+      footer.canvasFoot
+        span {{ t('editor.nonDestructive') }}
+        .shortcutHelp(v-if="hasSelectedAsset" ref="shortcutHelpEl")
+          output.shortcutHelp__status {{ clipboardHintVisible ? t('editor.shortcuts.clipboardReady', { keys: keysLabel('V') }) : '' }}
+          button.shortcutHelp__trigger(type="button" :aria-expanded="shortcutsOpen" aria-controls="editorShortcuts" @click="shortcutsOpen = !shortcutsOpen")
+            kbd {{ isMac ? '⌘' : 'Ctrl' }}
+            span {{ t('editor.shortcuts.trigger') }}
+          .shortcutHelp__panel#editorShortcuts(v-if="shortcutsOpen")
+            strong {{ t('editor.shortcuts.title') }}
+            dl
+              template(v-for="row in shortcutRows" :key="row.id")
+                dt {{ t(`editor.shortcuts.actions.${row.id}`) }}
+                dd: kbd(v-for="k in row.keys" :key="k") {{ k }}
+            small {{ t('editor.shortcuts.note') }}
     aside.layers(v-if="tool!=='crop'")
-      h3 {{ t('editor.layers') }} #[button(:aria-label="t('editor.duplicateLayer')" :disabled="!canDuplicateSelectedLayer" @click="duplicateSelectedLayer"): IconAddObject]
+      h3 {{ t('editor.layers') }}
+        button(
+          type="button"
+          :aria-label="t('editor.duplicateLayer')"
+          :title="t('editor.withShortcut', { action: t('editor.duplicateLayer'), keys: keysLabel('D') })"
+          :disabled="!canDuplicateSelectedLayer"
+          @click="duplicateSelectedLayer"
+        )
+          IconAddObject
+        button.layers__delete(
+          type="button"
+          :aria-label="t('editor.deleteLayer')"
+          :title="t('editor.withShortcut', { action: t('editor.deleteLayer'), keys: 'Delete' })"
+          :disabled="!canDuplicateSelectedLayer"
+          @click="deleteSelectedLayer"
+        )
+          IconDelete
       .layer(
         v-for="layer in layers"
         :key="layer.key"
@@ -253,7 +300,11 @@
           IconLayerSort.layer__sort
       .properties(v-if="selectedTextLayer")
         h3 {{ t('editor.textProperties') }}
-        input.properties__text(v-model="selectedTextLayer.content" :aria-label="t('editor.textContent')")
+        input.properties__text(
+          v-model="selectedTextLayer.content"
+          :aria-label="t('editor.textContent')"
+          @input.capture="markMerge('text:' + selectedTextLayer.key)"
+        )
         .fontRow
           .fontSelect(ref="fontSelectEl")
             button.fontSelect__trigger(
@@ -289,10 +340,16 @@
                 span.fontMenu__noteMain {{ t('editor.fontNoteLicense') }}
                 span.fontMenu__noteSub {{ t('editor.fontNoteUpload') }}
           label.colorPicker(:aria-label="t('editor.textColor')" :style="{ '--selected-color': selectedTextLayer.color }")
-            input(v-model="selectedTextLayer.color" type="color" :title="t('editor.textColor')")
+            input(
+              v-model="selectedTextLayer.color"
+              type="color"
+              :title="t('editor.textColor')"
+              @input.capture="markMerge('color:' + selectedTextLayer.key)"
+            )
         small.properties__settings {{ t('editor.textSettings') }}
       .objectGenerator(v-if="tool === 'object'")
         h3 {{ t('editor.addObject.title') }}
+        AppButton(variant="outline" @click="openObjectPicker") {{ selectedObjectLayer ? t('editor.addObject.replaceImage') : t('editor.addObject.pickFromLibrary') }}
         textarea.objectGenerator__desc(
           v-model="objectDescription"
           maxlength="200"
@@ -331,7 +388,7 @@
       .ratioRow
         button(v-for="option in ratioOptions" :key="option.id" :class="{active:ratio===option.id}" :aria-pressed="ratio === option.id" @click="applyCropRatio(option.id)") {{ option.label }}
       button.custom(:class="{ active: ratio === 'custom' }" :aria-pressed="ratio === 'custom'" @click="ratio = 'custom'") {{ t('editor.custom') }}
-      p {{ ratio === 'custom' ? t('editor.dimensionsDynamic', cropOutputDimensions) : t('editor.croppedToDynamic', { width: cropOutputDimensions.width, height: cropOutputDimensions.height, origWidth: ORIGINAL_IMAGE_DIMENSIONS.width, origHeight: ORIGINAL_IMAGE_DIMENSIONS.height }) }}
+      p(v-if="cropOutputDimensions") {{ t(ratio === 'custom' ? 'editor.dimensionsDynamic' : 'editor.croppedToDynamic', cropOutputDimensions) }}
       h3.channelPreviewsTitle {{ ratio === 'custom' ? t('editor.channelPreviews') : t('editor.channelPreviewsApplied') }}
       .previews
         .preview(v-for="p in previews" :key="p.name")
@@ -339,7 +396,7 @@
           strong {{ p.name }}
           small(:class="{ warn: p.warn && ratio === 'custom', full: !p.warn }") {{ p.warn ? (ratio === 'custom' ? t('editor.croppedWarning') : t('editor.paddedNote')) : t('editor.fullyVisible') }}
       p.cropNote {{ t('editor.cropNote') }}
-  ImagePickerDialog(v-model:open="editorPickerOpen" :title="editorPickerTitle" :subtitle="t('editor.sourcePickerSubtitle')" @select="selectEditorAsset")
+  ImagePickerDialog(v-model:open="editorPickerOpen" :mode="editorPickerMode" :title="editorPickerTitle" :subtitle="editorPickerSubtitle" @select="selectEditorAsset")
   SaveAssetDialog(
     v-model:open="saveDialogOpen"
     :default-name="suggestedAssetName"
@@ -355,6 +412,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { onBeforeRouteLeave } from 'vue-router'
+import { useEventListener } from '@vueuse/core'
 import AppButton from '@/components/AppButton.vue'
 import AppCheckbox from '@/components/AppCheckbox.vue'
 import ImagePickerDialog from '@/components/ImagePickerDialog.vue'
@@ -364,6 +423,7 @@ import { useAssets } from '@/composables/useAssets'
 import { usePointerDrag } from '@/composables/usePointerDrag'
 import { usePercentDrag } from '@/composables/usePercentDrag'
 import { useDismissableMenu } from '@/composables/useDismissableMenu'
+import { pickSelection, useEditorHistory, type HistoryEntry } from '@/composables/useEditorHistory'
 import {
   IconAiSparkle,
   IconSpinnerRing,
@@ -376,19 +436,30 @@ import {
   IconBack,
   IconCheckCircle,
   IconChevronDown,
+  IconDelete,
   IconNext,
   IconRefresh,
 } from '@/components/icons'
 import { api } from '@/api'
+import { API_ERROR_CODES, hasErrorCode } from '@/api/errors'
 import { useFeedStore } from '@/stores/feed'
-import { hasCode, isInsufficientFeed } from '@/utils/error'
-import { downloadBlob } from '@/utils/download'
-import type { AppliedEditTool, EditorPricing, RetouchOptionKey } from '@/types/api'
+import { useGenerationTasksStore } from '@/stores/generationTasks'
+import { downloadBlob, downloadFile } from '@/utils/download'
+import { displayMessage, isInsufficientFeed } from '@/utils/error'
+import {
+  containLayerInBox,
+  coverRect,
+  layerRectInSource,
+  percentPointInSource,
+  percentRectInSource,
+} from '@/utils/composite'
+import type { AppliedEditTool, EditorPricing, RetouchOptionKey, RetouchReq, RetouchResult } from '@/types/api'
 import type { Asset } from '@/types/asset'
 const props = defineProps<{ mode: string }>()
 const { t } = useI18n()
-const { saveEdited, folders, loadFolders, upload } = useAssets()
+const { saveEdited, saveGenerated, folders, loadFolders, upload } = useAssets()
 const feed = useFeedStore()
+const tasksStore = useGenerationTasksStore()
 
 // 價目表一律問後端，前端不寫死金額（CLAUDE.md：前端不得硬寫範例數字）
 const pricing = ref<EditorPricing | null>(null)
@@ -400,16 +471,29 @@ const topUpOpen = ref(false)
 const applyingTool = ref('')
 const toolError = ref('')
 const retouching = ref(false)
+// 修圖操作（送出、下載）的錯誤；價格載入失敗另外記在 retouchPriceFailed，換素材、下載時不會被清掉
 const retouchError = ref('')
+const retouchPriceFailed = ref(false)
+// AI 修圖單價：後端 /edit 固定用 imageEdit、每次一個價，勾幾項都一樣（GET /ai-models?modelType=edit）。
+// 載入前是 undefined：預估顯示「…」、開始修圖停用
+const retouchPrice = ref<number>()
+// 修圖結果只活在這個元件裡；修圖中離開（換頁、重新整理、LibraryView 切回素材庫分頁）後端照樣扣點
+onBeforeRouteLeave(() => !retouching.value || window.confirm(t('common.leaveWhileGenerating')))
+useEventListener(window, 'beforeunload', (e) => {
+  if (retouching.value) e.preventDefault()
+})
+defineExpose({ retouching })
 onMounted(async () => {
   if (!feed.loaded) feed.refresh()
-  try {
-    const next = await api.getEditorPricing()
-    pricing.value = next
-    retouchOptions.value.forEach((option) => {
-      option.cost = next.retouchOptions[option.key] ?? 0
-      option.free = option.cost === 0
+  api
+    .listModels('edit')
+    .then((models) => {
+      retouchPrice.value = models.find((m) => m.modelKey === 'imageEdit')?.costFeeds
+      retouchPriceFailed.value = retouchPrice.value === undefined
     })
+    .catch(() => (retouchPriceFailed.value = true))
+  try {
+    pricing.value = await api.getEditorPricing()
   } catch {
     // 價目表載不到時維持 0，畫面不顯示金額，但不擋住其他操作
   }
@@ -422,9 +506,18 @@ watch(tool, (value) => {
   if (value !== 'remove') toolError.value = ''
 })
 const editorPickerOpen = ref(false)
-// 「加入物件」對齊 Figma（1141:906）後改成 AI 生成流程，不再是從圖庫挑素材疊圖，
-// 所以這顆 picker 現在只服務「選擇要編輯的素材」一種用途。
-const editorPickerTitle = computed(() => t('editor.sourcePickerTitle'))
+// 同一顆 picker 服務兩種用途：'asset'＝選擇要編輯的底圖（換掉整張圖）；'object'＝從圖庫挑一張圖
+// 以物件圖層疊到畫布上（產品決策，推翻 d58051a「加入物件只走文字描述生成」）。物件模式列
+// source=object（含內建物件），選到的圖只用 url 畫在畫布上、不送後端，所以內建素材在這裡可選。
+const editorPickerMode = ref<'asset' | 'object'>('asset')
+const editorPickerTitle = computed(() => {
+  if (editorPickerMode.value !== 'object') return t('editor.sourcePickerTitle')
+  return selectedObjectLayer.value ? t('editor.objectReplacePickerTitle') : t('editor.objectPickerTitle')
+})
+const editorPickerSubtitle = computed(() => {
+  if (editorPickerMode.value !== 'object') return t('editor.sourcePickerSubtitle')
+  return selectedObjectLayer.value ? t('editor.addObject.replacePickerSubtitle') : t('editor.addObject.pickerSubtitle')
+})
 // 尚未從圖庫選定素材時，名稱與網址都 SHALL 維持真的空字串，不能用示範資料頂替
 // （decision 1，fix-editor-empty-state-before-asset-selected）——畫面上是否顯示
 // 標題／圖層／工具列一律看這兩個 ref 是否有值，不是看它們「看起來像不像」有值。
@@ -433,8 +526,21 @@ const selectedAssetUrl = ref('')
 // 「另存為新素材」要真的把裁切結果傳給後端（POST /upload 帶 sourceImageId）才能讓後端
 // 標成 source=edit、非破壞性關聯回原圖，所以要記住目前選的是圖庫裡哪一張真實素材。
 const selectedAssetId = ref('')
+// 原圖真尺寸：先用後端量好的 width／height（Asset.width／height）當初值，主畫布 <img> 載入後一律
+// 改用 naturalWidth／naturalHeight 覆蓋——瀏覽器的 naturalWidth 與 canvas 都套 EXIF 方向，後端
+// Pillow 量的是未轉正的檔頭尺寸，手機直拍的 JPEG 兩者寬高會互換；buildOutputFile 用的是同一個
+// 網址載入後的 natural 尺寸，顯示端跟著它才會等於實際輸出。兩者都沒有就是 null，
+// 畫布徽章／提示與側欄尺寸文字一律不顯示，不再拿 Figma 稿上寫死的尺寸頂替。
+const originalDimensions = ref<{ width: number; height: number } | null>(null)
+const onSourceImgLoad = (event: Event) => {
+  const { naturalWidth, naturalHeight } = event.target as HTMLImageElement
+  if (naturalWidth && naturalHeight) originalDimensions.value = { width: naturalWidth, height: naturalHeight }
+}
 const savingAsset = ref(false)
+// 編輯畫布另存後的素材 id；修圖結果另存與否記在 retouchSaved（兩個分頁共用同一個元件，狀態不能混用）
 const savedAssetId = ref('')
+const retouchSaved = ref(false)
+const alreadySaved = () => (props.mode === 'retouch' ? retouchSaved.value : Boolean(savedAssetId.value))
 const saveError = ref(false)
 // 使用者反饋：另存失敗時畫面完全沒有反應——SaveAssetDialog 之前沒有任何顯示失敗原因的地方，
 // 只有一個 visuallyHidden 的 aria-live alert（螢幕報讀器聽得到，肉眼看不到）。這裡補一個
@@ -442,19 +548,43 @@ const saveError = ref(false)
 const saveErrorMessage = ref('')
 const saveDialogOpen = ref(false)
 const openEditorPicker = () => {
+  editorPickerMode.value = 'asset'
+  editorPickerOpen.value = true
+}
+const openObjectPicker = () => {
+  editorPickerMode.value = 'object'
   editorPickerOpen.value = true
 }
 // 空狀態判斷（decision 5，fix-editor-empty-state-before-asset-selected）：
 // selectedAssetUrl 已經是既有、正確代表「有沒有真的選定素材」的 ref（見上方
 // selectedAssetUrl 宣告處的說明），沿用它，不重複定義語意相同的旗標。
 const hasSelectedAsset = computed(() => Boolean(selectedAssetUrl.value))
-const selectEditorAsset = (asset: Asset) => {
+const selectEditorAsset = async (asset: Asset) => {
+  if (editorPickerMode.value === 'object') {
+    const url = asset.url ?? ''
+    // 有選取的物件圖層（含 AI 生成的佔位）＝更換它的圖片：只換 url 與名稱，位置／縮放／順序／顯示／鎖定都保留
+    // （「已儲存」狀態由 layersFingerprint 看 url 變化自動重置）
+    const target = selectedObjectLayer.value
+    if (target) {
+      // 佔位換成圖片時把 scale 換算成同樣的畫面寬度，不讓圖層突然變大
+      if (!target.url) target.scale *= PLACEHOLDER_WIDTH_PERCENT / OBJECT_LAYER_WIDTH_PERCENT
+      target.url = url
+      target.label = t('editor.objectLayerDynamic', { name: asset.name })
+      return
+    }
+    addObjectLayer(asset.name, url, await imageAspect(url, asset))
+    return
+  }
   selectedAssetName.value = asset.name
   selectedAssetUrl.value = asset.url ?? ''
   selectedAssetId.value = asset.id
+  originalDimensions.value = asset.width && asset.height ? { width: asset.width, height: asset.height } : null
   savedAssetId.value = ''
-  // 換了來源素材＝重新開始，先前的扣款紀錄不再屬於這張圖
+  // 換了來源素材＝重新開始，先前的扣款紀錄與修圖結果不再屬於這張圖
   usedTools.value = []
+  retouchResult.value = null
+  lastRetouchReq = undefined
+  retouchError.value = ''
   toolError.value = ''
   // 原圖圖層只在真的選定素材後才存在（decision 2）：第一次選定時新增一筆，
   // 之後在同一次編輯工作階段重新選擇別的素材，就地更新這一筆而不是疊加新的。
@@ -464,6 +594,8 @@ const selectEditorAsset = (asset: Asset) => {
     layers.push({ key: 'original', type: 'original', visible: true, locked: true })
   }
   selectedLayerKey.value = 'original'
+  // 換底圖＝清空上一步／下一步（D5）：舊圖的扣款紀錄已清掉，不能讓人 undo 回舊底圖再扣一次
+  editorHistory.reset(docJson.value, 'original')
 }
 const suggestedAssetName = computed(() => {
   if (props.mode === 'retouch') return `${selectedAssetName.value}_${t('editor.saveDialog.suffixes.retouch')}`
@@ -471,14 +603,14 @@ const suggestedAssetName = computed(() => {
   return `${selectedAssetName.value}_${t(`editor.saveDialog.suffixes.${suffixKey}`)}`
 })
 const openSaveDialog = () => {
-  if (savingAsset.value || savedAssetId.value) return
+  if (savingAsset.value || alreadySaved()) return
   saveError.value = false
   saveErrorMessage.value = ''
   loadFolders() // 讓「存放位置」下拉能列出使用者資料夾
   saveDialogOpen.value = true
 }
 
-type SaveAssetPayload = { name: string; folder: string; keepLayers: boolean; alsoDownload: boolean }
+type SaveAssetPayload = { name: string; folder: string; alsoDownload: boolean }
 
 // MOCK：目前編輯器沒有真實影像位元組，因此以 canvas 產生一張佔位 PNG 供實際下載；
 // 後端就緒後把這裡改成下載素材的真實 URL 即可。
@@ -501,55 +633,123 @@ function downloadEditedCopy(name: string) {
   }, 'image/png')
 }
 
-// 使用者反饋：裁切完「另存為新素材」，回圖庫選圖器（GET /images 打真後端）卻找不到
-// 剛存的那張。追下去發現 saveEdited() 呼叫的是 mock 版 editImage——realApi 沒有覆寫它，
-// 切到真後端模式時新素材只寫進瀏覽器本機的假資料，根本沒送到真後端，圖庫當然找不到。
-// 後端已經有對應的正式路徑（見 manta-vision-backend docs/api/v7.md §4 POST /upload）：
-// 帶 sourceImageId 時後端會標 source=edit、derivedFrom 指回原圖（非破壞性）。
-// 這裡先只補「裁切」這個工具：真的用 canvas 把目前的取景範圍畫成真正的圖檔，再打真的
-// 上傳 API。背景移除／加入物件／文字這三個工具還沒有真正的像素合成邏輯，暫時維持原本
-// saveEdited()（mock）的另存行為，留到之後再一起補上真後端。
+// 「另存為新素材」真的把畫布合成成圖檔、上傳到真後端（POST /upload 帶 sourceImageId → 後端標
+// source=edit、derivedFrom 指回原圖，非破壞；見 manta-vision-backend docs/api/v7.md §4）。之前只有
+// 裁切走真上傳、其他工具走 mock editImage；現在物件圖層有真圖（url）、文字圖層有字型／顏色／位置，
+// 三者都能合成，所以只要底圖有 url 就走真上傳。
 //
-// 取景範圍換算：畫布用 object-fit: cover 顯示原圖（4:3 置中裁切滿版），所以 cropRect 的
-// 百分比是相對「原圖被 cover 裁掉後、實際塞進 4:3 框的那塊範圍」，不是相對整張原圖——
-// 這裡先算出那塊 cover 範圍在原圖座標系裡的實際位置，使用者的裁切框才是這塊範圍裡的子區域。
-async function buildCroppedFile(name: string): Promise<File> {
+// 座標換算（純函式在 utils/composite.ts）：畫布用 object-fit: cover 顯示原圖（4:3 置中裁切滿版），
+// cropRect 與圖層的百分比都是相對「原圖被 cover 裁掉後實際顯示的那塊」，先算出那塊在原圖像素裡的
+// 位置（coverRect），再把百分比換進去。輸出範圍：裁切工具下＝裁切框（先裁再疊，框外的圖層自然被
+// 裁掉），其餘工具＝畫布顯示區（所見即所得）。buildOutputFile（實際輸出）與 cropOutputDimensions
+// （畫面顯示的尺寸）共用 cropSourceRect，兩邊數字才會一致。
+const ARTBOARD_ASPECT = 4 / 3
+// 圖庫選來的物件圖層在畫布上的寬度＝底圖顯示寬的 40%（scale = 1 時），畫面（objectLayerStyle）與合成共用。
+const OBJECT_LAYER_WIDTH_PERCENT = 40
+// AI 生成佔位物件（沒有 url）在 scale = 1 時的畫面寬度百分比。
+const PLACEHOLDER_WIDTH_PERCENT = 24
+// 文字圖層在畫布上的字級（rem，見 textLayerStyle），合成時換算成原圖像素。
+const TEXT_LAYER_BASE_REM = 1.25
+function cropSourceRect(naturalWidth: number, naturalHeight: number) {
+  return percentRectInSource(cropRect, coverRect({ width: naturalWidth, height: naturalHeight }, ARTBOARD_ASPECT))
+}
+// 不能用 new Image() + crossOrigin 直接載圖：畫布／選圖彈窗的 <img> 沒帶 crossorigin，已經用
+// 不帶 Origin 的請求把圖放進快取，而 R2 對這種請求不回 CORS 標頭也不回 Vary: Origin，
+// 之後的 CORS 請求會重用那份快取而失敗（實測）。比照 utils/download.ts：跳過快取重抓成 Blob，
+// 再用同源的 blob: 網址餵給 Image，canvas 就不會被污染。底圖與物件圖層都走這條。
+async function loadImageForCanvas(url: string): Promise<HTMLImageElement> {
+  let blob: Blob
+  try {
+    const response = await fetch(url, { mode: 'cors', cache: 'reload' })
+    if (!response.ok) throw new Error('CROP_IMAGE_LOAD_FAILED')
+    blob = await response.blob()
+  } catch {
+    throw new Error('CROP_IMAGE_LOAD_FAILED')
+  }
+  const img = new Image()
+  const blobUrl = URL.createObjectURL(blob)
+  try {
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve()
+      img.onerror = () => reject(new Error('CROP_IMAGE_LOAD_FAILED'))
+      img.src = blobUrl
+    })
+  } finally {
+    URL.revokeObjectURL(blobUrl)
+  }
+  return img
+}
+// 字型策略：先請瀏覽器把該字型載進來（Google Fonts 走 display=swap 延遲載入，畫布上顯示過不代表
+// 已經載完），載不到就退回系統 sans-serif 並在 console 留紀錄——寧可字型不對，也不要整張存不下來。
+// load／check 要帶「要畫的文字」：Noto Sans／Serif TC 依 unicode-range 切成上百片，不帶文字只會
+// 等到含空白字元的那一片，check 為真也不代表這幾個中文字的字形已載入。
+// ponytail: load() 加 3 秒上限——實測（headless Chrome）Google Fonts 的可變字型多個字重共用同一個
+// woff2，部分 FontFace 會卡在 status='loading' 永不結束（沒有任何網路請求在飛），fonts.load()
+// 跟著永不 resolve，另存會轉圈到天荒地老；逾時就走下面的 check → 退回系統字型。
+const FONT_LOAD_TIMEOUT_MS = 3000
+async function resolveCanvasFont(family: string, weight: number, sizePx: number, text: string): Promise<string> {
+  const spec = `${weight} ${sizePx}px ${family}`
+  try {
+    await Promise.race([
+      document.fonts.load(spec, text),
+      new Promise((resolve) => setTimeout(resolve, FONT_LOAD_TIMEOUT_MS)),
+    ])
+    if (document.fonts.check(spec, text)) return spec
+  } catch {
+    // 走下方 fallback
+  }
+  console.warn(`[editor] 字型「${family}」尚未載入，另存時改用系統字型`)
+  return `${weight} ${sizePx}px sans-serif`
+}
+async function buildOutputFile(name: string): Promise<File> {
   const sourceUrl = selectedAssetUrl.value
   if (!sourceUrl) throw new Error('CROP_NO_SOURCE_IMAGE')
-  const img = new Image()
-  img.crossOrigin = 'anonymous'
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve()
-    // 常見原因：原圖伺服器（R2／CDN）沒有針對匿名跨網域讀取開放 CORS——單純 <img> 顯示不需要
-    // CORS，但畫進 canvas 再匯出就會被瀏覽器擋下，img 會直接觸發 onerror（不會是 onload 後
-    // canvas 才失敗）。
-    img.onerror = () => reject(new Error('CROP_IMAGE_LOAD_FAILED'))
-    img.src = sourceUrl
-  })
-  const ARTBOARD_ASPECT = 4 / 3
-  const naturalWidth = img.naturalWidth
-  const naturalHeight = img.naturalHeight
-  let coverX = 0
-  let coverY = 0
-  let coverWidth = naturalWidth
-  let coverHeight = naturalHeight
-  if (naturalWidth / naturalHeight > ARTBOARD_ASPECT) {
-    coverWidth = naturalHeight * ARTBOARD_ASPECT
-    coverX = (naturalWidth - coverWidth) / 2
-  } else {
-    coverHeight = naturalWidth / ARTBOARD_ASPECT
-    coverY = (naturalHeight - coverHeight) / 2
-  }
-  const sx = coverX + (cropRect.x / 100) * coverWidth
-  const sy = coverY + (cropRect.y / 100) * coverHeight
-  const sWidth = (cropRect.width / 100) * coverWidth
-  const sHeight = (cropRect.height / 100) * coverHeight
+  const img = await loadImageForCanvas(sourceUrl)
+  const cover = coverRect({ width: img.naturalWidth, height: img.naturalHeight }, ARTBOARD_ASPECT)
+  const out = tool.value === 'crop' ? percentRectInSource(cropRect, cover) : cover
   const canvas = document.createElement('canvas')
-  canvas.width = Math.max(1, Math.round(sWidth))
-  canvas.height = Math.max(1, Math.round(sHeight))
+  canvas.width = Math.max(1, Math.round(out.width))
+  canvas.height = Math.max(1, Math.round(out.height))
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('canvas-context-unavailable')
-  ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height)
+  // 原圖圖層解鎖後可被取消勾選（畫布只剩物件／文字）；跟其他圖層一樣隱藏就不畫，PNG 底保持透明。
+  if (originalLayer.value?.visible !== false) {
+    ctx.drawImage(img, out.x, out.y, out.width, out.height, 0, 0, canvas.width, canvas.height)
+  }
+  // 畫布上文字的字級是 rem（不隨畫布寬度縮放），換成原圖像素要拿「目前畫布顯示寬」當比例尺；
+  // clientWidth 是 padding box（不含 .artboard 的 1px 邊框，圖層的百分比定位就是相對它），
+  // 且不受 zoom 的 transform: scale 影響，量到的就是未縮放的版面寬。
+  const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+  const artboardWidth = artboardRef.value?.clientWidth || 520
+  const sourcePxPerArtboardPx = cover.width / artboardWidth
+  // layers[0] 在最上層（見 layerZIndex），所以從尾端往前畫；原圖已當底圖畫過、隱藏的圖層不畫。
+  for (const layer of [...layers].reverse()) {
+    if (!layer.visible || layer.type === 'original') continue
+    if (layer.type === 'object') {
+      const objectLayer = layer as ObjectEditorLayer
+      if (!objectLayer.url) continue // AI 生成（mock）的物件沒有真圖，畫不了
+      const objectImg = await loadImageForCanvas(objectLayer.url)
+      const rect = layerRectInSource(
+        objectLayer,
+        OBJECT_LAYER_WIDTH_PERCENT * objectLayer.scale,
+        objectImg.naturalWidth / objectImg.naturalHeight,
+        cover,
+      )
+      // ponytail: .objectObject 帶 1px 邊框，畫布上的 <img> 比這個矩形窄 2 畫布 px（520px 畫布約 0.4%），
+      // 肉眼看不出；要歸零就把 .hasImage 的邊框改成 outline。
+      ctx.drawImage(objectImg, rect.x - out.x, rect.y - out.y, rect.width, rect.height)
+    } else {
+      const textLayer = layer as TextEditorLayer
+      const font = fontOptions.find((option) => option.id === textLayer.fontId) ?? fontOptions[0]
+      const sizePx = TEXT_LAYER_BASE_REM * textLayer.scale * rootPx * sourcePxPerArtboardPx
+      ctx.font = await resolveCanvasFont(font.family, font.weight, sizePx, textLayer.content)
+      ctx.fillStyle = textLayer.color
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      const center = percentPointInSource(textLayer, cover)
+      ctx.fillText(textLayer.content, center.x - out.x, center.y - out.y)
+    }
+  }
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
   // canvas 被跨網域圖片「污染」時，toBlob 不一定會拋錯，很多瀏覽器只是靜靜回 null——
   // 這裡當作另一種「跨網域讀取被擋」來分類，跟上面 img.onerror 給使用者一樣的錯誤訊息。
@@ -558,8 +758,8 @@ async function buildCroppedFile(name: string): Promise<File> {
 }
 // 把捕捉到的錯誤換成使用者看得懂、且看得到（不再只有螢幕報讀器聽得到）的訊息。
 function classifySaveError(err: unknown): string {
-  if (hasCode(err, 'CROP_NO_SOURCE_IMAGE')) return t('editor.saveDialog.errorNoSourceImage')
-  if (hasCode(err, 'CROP_IMAGE_LOAD_FAILED') || hasCode(err, 'CROP_EXPORT_BLOCKED'))
+  if (hasErrorCode(err, 'CROP_NO_SOURCE_IMAGE')) return t('editor.saveDialog.errorNoSourceImage')
+  if (hasErrorCode(err, 'CROP_IMAGE_LOAD_FAILED') || hasErrorCode(err, 'CROP_EXPORT_BLOCKED'))
     return t('editor.saveDialog.errorImageAccess')
   return t('editor.saveDialog.errorGeneric')
 }
@@ -567,27 +767,42 @@ function downloadRealFile(file: File) {
   downloadBlob(file, file.name)
 }
 const saveAsNewAsset = async (payload: SaveAssetPayload) => {
-  if (savingAsset.value || savedAssetId.value) return
+  if (savingAsset.value || alreadySaved()) return
   savingAsset.value = true
   saveError.value = false
   saveErrorMessage.value = ''
   try {
-    // 只有「裁切」工具、且目前載入的是圖庫裡的真實素材（有 url）時，才有真的像素可以裁切、
-    // 上傳到真後端；demo 素材沒有真實圖檔來源，或其他三個工具，維持原本 mock 的另存行為。
-    if (tool.value === 'crop' && selectedAssetUrl.value) {
-      const file = await buildCroppedFile(payload.name)
-      const saved = await upload(file, payload.folder || undefined, selectedAssetId.value || undefined)
+    // AI 修圖頁存的是 /edit 的結果圖（不是畫布合成）：走 /generations/{id}/save，後端標 source=edit、
+    // derivedFrom 指回原圖；存入本身就算採用。ALREADY_SAVED＝前一發其實存進去了、回應在路上丟了，當成已存入
+    // （畫面只需要知道存過沒，所以用 retouchSaved 布林，不記素材 id）。
+    // 其餘：底圖是圖庫裡的真實素材（有 url）就把畫布（底圖＋物件圖層＋文字圖層；裁切工具下先裁）合成
+    // 一張 PNG 上傳到真後端；沒有真實圖檔來源的 demo 素材才維持原本 mock 的另存行為。
+    if (props.mode === 'retouch') {
+      const result = retouchResult.value
+      if (!result) return
+      try {
+        await saveGenerated(payload.name, result, payload.folder || undefined)
+      } catch (err) {
+        if (!hasErrorCode(err, API_ERROR_CODES.ALREADY_SAVED)) throw err
+      }
+      retouchSaved.value = true
+      result.adopted = true
+      if (payload.alsoDownload) await downloadRetouch()
+    } else if (selectedAssetUrl.value) {
+      const file = await buildOutputFile(payload.name)
+      const saved = await upload(file, payload.folder || undefined, selectedAssetId.value || undefined, payload.name)
       savedAssetId.value = saved.id
       if (payload.alsoDownload) downloadRealFile(file)
     } else {
-      const saved = await saveEdited(payload.name, { folder: payload.folder, keepLayers: payload.keepLayers })
+      const saved = await saveEdited(payload.name, { folder: payload.folder })
       savedAssetId.value = saved.id
       if (payload.alsoDownload) downloadEditedCopy(payload.name)
     }
     saveDialogOpen.value = false
   } catch (err) {
     saveError.value = true
-    saveErrorMessage.value = classifySaveError(err)
+    saveErrorMessage.value =
+      props.mode === 'retouch' ? displayMessage(err, t('editor.saveDialog.errorGeneric')) : classifySaveError(err)
   } finally {
     savingAsset.value = false
   }
@@ -602,6 +817,14 @@ const setTextObjectRef = (key: string, el: Element | ComponentPublicInstance | n
 }
 const draggingTextKey = ref('')
 const editingTextKey = ref('')
+// 上一步／下一步的記錄閘門（editor-history-shortcuts）：指標按住中（拖曳／縮放／裁切框）不記，放開才記一步；
+// pendingMergeKey＝這一個事件的改值要不要跟上一步合併（連續打字、色盤、方向鍵），只活在設定它的那個事件裡。
+const pointerActive = ref(false)
+let pendingMergeKey = ''
+// 模板 @input.capture 用：必須在 v-model 寫值之前設好，否則 watch 先記完（v-model 的 listener 先於 @input）
+const markMerge = (key: string) => {
+  pendingMergeKey = key
+}
 const zoomPercent = ref(80)
 const zoomMin = 40
 const zoomMax = 160
@@ -655,8 +878,17 @@ const textLayerStyle = (layer: TextEditorLayer) => {
   }
 }
 const retouchSetupOpen = ref(false)
+// 手機版設定面板預設收起，錯誤訊息在面板裡：出錯就展開並捲到眼前，不然使用者看不到
+const retouchErrorEl = ref<HTMLElement | null>(null)
+async function revealRetouchError() {
+  retouchSetupOpen.value = true
+  await nextTick()
+  retouchErrorEl.value?.scrollIntoView({ block: 'nearest' })
+}
+watch(retouchError, (message) => {
+  if (message) revealRetouchError()
+})
 const retouchMethod = ref<'quick' | 'command'>('quick')
-const commandRetouchBaseCost = computed(() => pricing.value?.commandBase ?? 0)
 const retouchInstruction = ref('')
 // 對齊 Figma（1140:768 row_presets）：點選常用指令快速帶入文字，仍可自行編輯／接續輸入。
 const COMMAND_PRESET_KEYS = [
@@ -676,86 +908,82 @@ const applyCommandPreset = (label: string) => {
     ? `${retouchInstruction.value}、${label}`.slice(0, 200)
     : label
 }
-const lastRetouchCost = ref(16)
-const lastRetouchKeys = ref(['removeObjects', 'repair'])
-const lastRetouchMethod = ref<'quick' | 'command'>('quick')
 const retouchSelections: Record<'quick' | 'command', string[]> = {
   quick: ['removeObjects', 'repair'],
   command: [],
 }
 watch(
   () => props.mode,
-  () => {
+  (mode) => {
     tool.value = 'remove'
     retouchSetupOpen.value = false
+    // 修圖等待中切到別的分頁、錯誤在那時回來（402、內容被擋已扣點）：切回來仍要看得到
+    if (mode === 'retouch' && retouchError.value) revealRetouchError()
   },
 )
-// 對齊 Figma（1311:580／1311:814／1311:820）修圖結果面板的 loading_box。
-// 步驟文字（stepLabel）仍用實際選取的項目模擬逐步進度；但進度條與「約剩 X 秒」
-// 兩者要對得上同一份時間軸，所以改成共用同一個估計總秒數：每步驟抓 9 秒，
-// 對齊 Figma 範例「步驟 2/3・約剩 18 秒」（還剩 2 步 × 9 秒）。進度條寬度＝
-// 已過秒數 ÷ 估計總秒數，從 0% 開始隨秒數真的慢慢變滿，不是原本那種只依
-// 步驟數跳格子（例如只選 2 個項目時，進度條會直接從 50% 起跳，看起來像是
-// 「已經做了一半」而非「才剛開始」）。
-// mock 本身 900ms 就回來，這組秒數只是先把畫面感覺做出來——等後端 /edit
-// 真的接上、有實際生成耗時後，要換成後端回傳（或至少量測過）的秒數，不能
-// 一直用這個猜的常數。
-const RETOUCH_SECONDS_PER_STEP = 9
-const retouchStepIndex = ref(0)
-const retouchTotalSeconds = ref(1)
-const retouchSecondsRemaining = ref(0)
-const retouchStepNames = computed(() =>
-  retouchMethod.value === 'quick'
-    ? retouchOptionsForMethod.value.filter((option) => option.on).map((option) => t(`editor.retouch.options.${option.key}.name`))
-    : [t('editor.retouch.command')],
-)
-const retouchStepLabel = computed(() => {
-  const names = retouchStepNames.value
-  if (!names.length) return ''
-  const current = Math.min(retouchStepIndex.value, names.length - 1)
-  return t('editor.retouch.stepLabel', { current: current + 1, total: names.length, name: names[current] })
-})
-const retouchProgressPercent = computed(() => {
-  const total = retouchTotalSeconds.value || 1
-  const elapsed = total - retouchSecondsRemaining.value
-  return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)))
-})
-const retouchTimeRemainingLabel = computed(() =>
-  t('editor.retouch.timeRemaining', { seconds: retouchSecondsRemaining.value }),
-)
-// 送出修圖：扣款與最終金額都以後端為準，畫面上的預估只是預估。
-// 送出的項目取 retouchOptionsForMethod（而非全部），否則指令式修圖會把沒收費的快速項目也列進結果。
-async function startRetouch() {
-  if (!canStartRetouch.value || retouching.value) return
+// 修圖結果＝POST /edit 的 results[0]（tempUrl 只暫存 24 小時）；換素材就清掉
+const retouchResult = ref<RetouchResult | null>(null)
+let lastRetouchReq: RetouchReq | undefined
+// 送出修圖：分頁二選一——快速修飾只送勾選項目、指令修圖只送指令（後端兩者都收，至少要有一個）。
+// 等待時間由後端決定（同步最長 80 秒，逾時 202 後再輪詢），畫面只顯示不定進度，不猜秒數。
+function startRetouch() {
+  if (!canStartRetouch.value) return
+  const quick = retouchMethod.value === 'quick'
+  return runRetouch({
+    imageId: selectedAssetId.value,
+    method: retouchMethod.value,
+    options: quick ? retouchOptions.value.filter((option) => option.on).map((option) => option.key) : [],
+    instruction: quick ? undefined : retouchInstruction.value.trim(),
+  })
+}
+// 重新修圖＝同樣條件再送一次：上一發已有結果、冪等鍵已放掉，後端當新請求再扣一次（按鈕上標價）
+const retouchAgain = () => lastRetouchReq && runRetouch(lastRetouchReq)
+const retouchFailText = (error: unknown) =>
+  isInsufficientFeed(error) ? t('errors.insufficientFeed') : displayMessage(error, t('errors.generationFailed'))
+async function runRetouch(req: RetouchReq) {
+  if (retouching.value) return
   retouching.value = true
   retouchError.value = ''
-  retouchStepIndex.value = 0
-  const totalSteps = retouchStepNames.value.length || 1
-  retouchTotalSeconds.value = totalSteps * RETOUCH_SECONDS_PER_STEP
-  retouchSecondsRemaining.value = retouchTotalSeconds.value
-  const stepTimer = setInterval(() => {
-    if (retouchStepIndex.value < totalSteps - 1) retouchStepIndex.value += 1
-  }, Math.max(200, 900 / totalSteps))
-  const secondsTimer = setInterval(() => {
-    if (retouchSecondsRemaining.value > 1) retouchSecondsRemaining.value -= 1
-  }, 1000)
+  const sourceName = selectedAssetName.value
   try {
-    const result = await api.retouchImage({
-      method: retouchMethod.value,
-      options: retouchOptionsForMethod.value.filter((option) => option.on).map((option) => option.key),
-      instruction: retouchInstruction.value.trim() || undefined,
-    })
-    lastRetouchCost.value = result.cost
-    lastRetouchKeys.value = result.options
-    lastRetouchMethod.value = result.method
+    // 任務中心記一筆（開始修圖與重新修圖都是；名稱＝「AI 修圖_素材名前 12 字」）；請求照舊，結果與錯誤原樣回到這裡
+    const result = await tasksStore.trackTask(
+      'retouch',
+      t('editor.retouch.taskName', { name: sourceName.trim().slice(0, 12) }),
+      retouchPrice.value ?? 0,
+      () => api.retouchImage(req),
+      retouchFailText,
+    )
+    // 修圖中兩個分頁的換圖按鈕都停用，照理不會發生；萬一換了圖，結果不能配到新圖上，
+    // 也不能默默丟掉（已扣點）——明講結果屬於哪張圖
+    if (req.imageId !== selectedAssetId.value) {
+      retouchError.value = t('editor.retouch.staleResult', { name: sourceName, count: result.cost })
+      return
+    }
+    retouchResult.value = result
+    lastRetouchReq = req
+    retouchSaved.value = false
     retouchSetupOpen.value = false
-    await feed.refresh()
   } catch (error) {
-    retouchError.value = isInsufficientFeed(error) ? t('errors.insufficientFeed') : t('errors.generationFailed')
+    retouchError.value = retouchFailText(error)
   } finally {
-    clearInterval(stepTimer)
-    clearInterval(secondsTimer)
     retouching.value = false
+    // 成功或失敗都刷新：內容被擋會扣點、失敗會退點。刷新本身失敗不蓋掉修圖的錯誤訊息
+    await feed.refresh().catch(() => undefined)
+  }
+}
+async function downloadRetouch() {
+  const result = retouchResult.value
+  if (!result) return
+  retouchError.value = ''
+  try {
+    if (result.url) await downloadFile(result.url) // mock 的結果若沒有檔案就跳過
+    if (!result.adopted) {
+      await api.recordAdoption(result)
+      result.adopted = true
+    }
+  } catch (error) {
+    retouchError.value = displayMessage(error, t('errors.downloadFailed'))
   }
 }
 
@@ -792,6 +1020,8 @@ type ObjectEditorLayer = EditorLayer & {
   y: number
   scale: number
   dragging: boolean
+  // 圖庫選來的圖；AI 生成（mock）沒有真圖時為空字串，畫布顯示佔位圖示、另存合成時略過
+  url: string
 }
 // 文字圖層是多實例架構（比照 ObjectEditorLayer）：內容／位置／字級／字型／顏色都是
 // 圖層自己的欄位，layers 陣列可以同時存在多筆，彼此獨立。
@@ -817,6 +1047,8 @@ const layerLabel = (layer: EditorLayer) => {
 }
 const layerDescription = (layer: EditorLayer) => {
   if (layer.type === 'original') return t(layer.locked ? 'editor.originalLocked' : 'editor.originalUnlocked')
+  // 有 url 的是圖庫選來的物件，沒有的才是 AI 生成（mock）
+  if (layer.type === 'object' && (layer as ObjectEditorLayer).url) return t('editor.layerDescriptions.objectLibrary')
   return t(`editor.layerDescriptions.${layer.type}`)
 }
 const selectLayer = (key: string) => {
@@ -832,6 +1064,15 @@ const selectedLayer = computed(() => layers.find((layer) => layer.key === select
 const selectedTextLayer = computed(() =>
   selectedLayer.value?.type === 'text' ? (selectedLayer.value as TextEditorLayer) : undefined,
 )
+// 有值時「從圖庫選擇」＝更換這個物件圖層的圖片（按鈕顯示「更換圖片」）；沒有才新增圖層到框選範圍
+const selectedObjectLayer = computed(() =>
+  selectedLayer.value?.type === 'object' ? (selectedLayer.value as ObjectEditorLayer) : undefined,
+)
+// 物件工具下點畫布空白處或框選範圍＝取消物件圖層的選取，讓下一次選圖回到「新增」。
+// 物件／文字圖層的 pointerdown 都有 .stop，點到圖層本身不會走到這裡。
+const deselectObjectLayer = () => {
+  if (tool.value === 'object' && selectedObjectLayer.value) selectedLayerKey.value = ''
+}
 const canDuplicateSelectedLayer = computed(
   () => selectedLayer.value?.type === 'object' || selectedLayer.value?.type === 'text',
 )
@@ -911,18 +1152,23 @@ const insertTextLayer = async () => {
   const layer = addTextLayer()
   await beginTextEdit(layer.key)
 }
-// 「加入物件」對齊 Figma（1141:906）：畫布上先框選範圍，右側面板輸入描述、
-// 點選常用物件預設可快速帶入描述，「生成物件」才會真的建立新圖層——
-// 不是從素材庫挑現成圖片直接疊上去。加入物件本身不扣飼料（見 editor.costNote）。
+// 「加入物件」有兩條路：(1) 從圖庫選圖（openObjectPicker → selectEditorAsset 的 object 分支）建立
+// 有真圖 url 的物件圖層；(2) AI 生成（mock，對齊 Figma 1141:906）：畫布上先框選範圍、右側面板輸入
+// 描述（常用物件預設可快速帶入），「生成物件」才建立一個佔位圖層。下面這幾個狀態只服務 (2)。
+// 加入物件本身不扣飼料（見 editor.costNote）。
 const objectSelection = reactive({ x: 43, y: 17, width: 37, height: 36 })
 const objectDescription = ref('')
 const generatingObject = ref(false)
 const OBJECT_PRESET_KEYS = ['bouquet', 'plant', 'tableware', 'shadow', 'card'] as const
-const objectPresets = computed(() => OBJECT_PRESET_KEYS.map((key) => ({ key, label: t(`editor.addObject.presets.${key}`) })))
+const objectPresets = computed(() =>
+  OBJECT_PRESET_KEYS.map((key) => ({ key, label: t(`editor.addObject.presets.${key}`) })),
+)
 const applyObjectPreset = (label: string) => {
   objectDescription.value = objectDescription.value.trim() ? `${objectDescription.value}、${label}` : label
 }
-function addObjectLayer(description: string) {
+// 圖庫選來的圖（有 url）以原始比例 aspect contain 進框選範圍、中心對齊框中心；AI 生成（mock）的佔位維持原尺寸、中心對齊框中心。
+function addObjectLayer(description: string, url = '', aspect = 1) {
+  const placed = url ? containLayerInBox(objectSelection, aspect, ARTBOARD_ASPECT) : null
   const key = `object-${crypto.randomUUID()}`
   const layer: ObjectEditorLayer = {
     key,
@@ -930,26 +1176,78 @@ function addObjectLayer(description: string) {
     visible: true,
     locked: false,
     label: t('editor.objectLayerDynamic', { name: description }),
-    x: objectSelection.x,
-    y: objectSelection.y,
-    scale: 1,
+    x: placed ? placed.x : objectSelection.x + objectSelection.width / 2,
+    y: placed ? placed.y : objectSelection.y + objectSelection.height / 2,
+    scale: placed ? placed.widthPercent / OBJECT_LAYER_WIDTH_PERCENT : 1,
     dragging: false,
+    url,
   }
   layers.unshift(layer)
   selectedLayerKey.value = key
   savedAssetId.value = ''
 }
-function duplicateSelectedLayer() {
-  const source = selectedLayer.value
-  if (!source || (source.type !== 'object' && source.type !== 'text')) return
+// 圖層的複製／剪下／貼上／原地複製／刪除／微調（editor-history-shortcuts）。剪貼簿是元件內部變數，
+// 不寫系統剪貼簿（圖層是畫布內物件，別的 App 貼不出東西）；切回素材庫卸載元件即消失。
+const PASTE_OFFSET = 3 // %
+type MovableLayer = TextEditorLayer | ObjectEditorLayer
+let layerClipboard: MovableLayer | null = null
+let nextPasteOffset = PASTE_OFFSET
+const clampPercent = (value: number) => Math.min(100, Math.max(0, value))
+// 「+」、⌘D、⌘V 共用：新 key、放到最上層、選取、清已儲存
+function insertLayerCopy(source: MovableLayer, offset = 0) {
   const key = `${source.type}-${crypto.randomUUID()}`
-  const duplicated =
-    source.type === 'object'
-      ? ({ ...(source as ObjectEditorLayer), key, dragging: false } as ObjectEditorLayer)
-      : ({ ...(source as TextEditorLayer), key } as TextEditorLayer)
-  layers.unshift(duplicated)
+  const copy = { ...source, key, x: clampPercent(source.x + offset), y: clampPercent(source.y + offset) }
+  if (copy.type === 'object') copy.dragging = false
+  layers.unshift(copy)
   selectedLayerKey.value = key
   savedAssetId.value = ''
+  return copy
+}
+function duplicateSelectedLayer() {
+  if (canDuplicateSelectedLayer.value) insertLayerCopy(selectedLayer.value as MovableLayer)
+}
+function deleteSelectedLayer() {
+  const index = layers.findIndex((layer) => layer.key === selectedLayerKey.value)
+  if (index < 0 || layers[index].type === 'original') return
+  layers.splice(index, 1)
+  selectedLayerKey.value = layers[index]?.key ?? layers[index - 1]?.key ?? ''
+  savedAssetId.value = ''
+}
+function copySelectedLayer(cut = false) {
+  if (!canDuplicateSelectedLayer.value) return
+  layerClipboard = { ...(selectedLayer.value as MovableLayer) }
+  // 剪下＝移動：剪下後第一次貼上回原位；複製後貼上錯開，否則疊在原圖層上看不出貼上成功
+  nextPasteOffset = cut ? 0 : PASTE_OFFSET
+  if (cut) deleteSelectedLayer()
+  flashClipboardHint()
+}
+function pasteLayer() {
+  if (!layerClipboard) return
+  const pasted = insertLayerCopy(layerClipboard, nextPasteOffset)
+  layerClipboard = { ...layerClipboard, x: pasted.x, y: pasted.y } // 連續貼上逐次再錯開
+  nextPasteOffset = PASTE_OFFSET
+}
+function nudgeLayer(layer: MovableLayer, dx: number, dy: number) {
+  // ponytail: 以中心點夾 0–100，物件可能半露出畫布；要跟拖曳一致就改用 usePercentDrag 的半寬高夾限
+  const x = clampPercent(layer.x + dx)
+  const y = clampPercent(layer.y + dy)
+  if (x === layer.x && y === layer.y) return
+  pendingMergeKey = `nudge:${layer.key}`
+  layer.x = x
+  layer.y = y
+}
+// 圖片寬高比以瀏覽器載入後的 naturalWidth／Height 為準——畫布上的 <img> 顯示的就是它（套 EXIF 方向；
+// mock 的 Asset.width／height 也跟實圖不符），載不到才退回後端量的尺寸，再不行當正方形。
+// 不帶 crossOrigin：與畫布 <img> 同一種請求，共用快取（見 loadImageForCanvas 的說明）。
+async function imageAspect(url: string, fallback: { width?: number; height?: number }) {
+  try {
+    const img = new Image()
+    img.src = url
+    await img.decode()
+    return img.naturalWidth / img.naturalHeight
+  } catch {
+    return fallback.width && fallback.height ? fallback.width / fallback.height : 1
+  }
 }
 // MOCK：生成物件目前沒有真的 AI 影像產出，僅模擬一段生成延遲後直接建立圖層。
 async function generateObjectFromDescription() {
@@ -974,10 +1272,9 @@ const toggleOriginalLock = () => {
   if (layer.locked) layer.visible = true
 }
 const RETOUCH_OPTION_KEYS: RetouchOptionKey[] = ['removeObjects', 'repair', 'lighting', 'upscale']
-// cost／free 由 getEditorPricing 填入，這裡只保留預設勾選狀態
-const retouchOptions = ref(RETOUCH_OPTION_KEYS.map((key, index) => ({ key, on: index < 2, free: true, cost: 0 })))
-// 對齊 Figma（1140:714 指令修圖）：指令修圖沒有可勾選的加購項目，只有一口價的基本費，
-// 所以這裡回傳空陣列——estimatedRetouchCost／送出時就只會計入 commandRetouchBaseCost。
+// 預設勾前兩項；各項不另外加價（後端 /edit 一次一個價）
+const retouchOptions = ref(RETOUCH_OPTION_KEYS.map((key, index) => ({ key, on: index < 2 })))
+// 對齊 Figma（1140:714 指令修圖）：指令修圖沒有可勾選的項目，這裡回傳空陣列。
 const retouchOptionsForMethod = computed(() => (retouchMethod.value === 'command' ? [] : retouchOptions.value))
 function setRetouchMethod(method: 'quick' | 'command') {
   if (retouchMethod.value === method) return
@@ -990,24 +1287,22 @@ function setRetouchMethod(method: 'quick' | 'command') {
     option.on = retouchSelections[method].includes(option.key)
   })
 }
-const estimatedRetouchCost = computed(
-  () =>
-    (retouchMethod.value === 'command' ? commandRetouchBaseCost.value : 0) +
-    retouchOptionsForMethod.value.reduce((total, option) => total + (option.on ? option.cost : 0), 0),
-)
+// 兩者都空後端回 400 NOTHING_TO_DO：快速修飾至少勾一項、指令修圖要有字；價格載入前不能送
 const canStartRetouch = computed(
-  () => hasSelectedAsset.value && (retouchMethod.value === 'quick' || retouchInstruction.value.trim().length > 0),
+  () =>
+    hasSelectedAsset.value &&
+    retouchPrice.value !== undefined &&
+    (retouchMethod.value === 'quick'
+      ? retouchOptions.value.some((option) => option.on)
+      : retouchInstruction.value.trim().length > 0),
 )
 const retouchAppliedLabel = computed(() => {
-  if (lastRetouchMethod.value === 'command') {
-    if (lastRetouchKeys.value.length === 0) return t('editor.retouch.commandApplied')
-    return t('editor.retouch.commandAppliedDynamic', {
-      items: lastRetouchKeys.value.map((key) => t(`editor.retouch.options.${key}.name`)).join('・'),
-    })
-  }
-  return t('editor.retouch.appliedDynamic', {
-    items: lastRetouchKeys.value.map((key) => t(`editor.retouch.options.${key}.name`)).join('・'),
-  })
+  const result = retouchResult.value
+  if (!result) return ''
+  const items = result.options.map((key) => t(`editor.retouch.options.${key}.name`)).join('・')
+  if (result.method === 'command')
+    return items ? t('editor.retouch.commandAppliedDynamic', { items }) : t('editor.retouch.commandApplied')
+  return t('editor.retouch.appliedDynamic', { items })
 })
 type CropRatioId = 'original' | 'square' | 'fourFive' | 'story' | 'wide' | 'custom'
 type CropCorner = 'nw' | 'ne' | 'sw' | 'se'
@@ -1049,6 +1344,7 @@ const objectSelectionStyle = computed(() => ({
 // 對齊 Figma 的框選（1141:1140）：只支援拖曳移動範圍，暫不支援拖角縮放
 // （四個 handle 先做視覺對齊，縮放留待有真的 AI 生成範圍需求時再補）。
 const startObjectSelectionDrag = (event: PointerEvent) => {
+  deselectObjectLayer()
   if (event.button !== 0 || !artboardRef.value) return
   event.preventDefault()
   const artboardBounds = artboardRef.value.getBoundingClientRect()
@@ -1058,11 +1354,12 @@ const startObjectSelectionDrag = (event: PointerEvent) => {
     containerBounds: artboardBounds,
     elementBounds: selectionBounds,
     startEvent: event,
-    startX: objectSelection.x,
-    startY: objectSelection.y,
+    // usePercentDrag 以中心點夾在畫布內，框選範圍存的是左上角：進出時換算中心點。
+    startX: objectSelection.x + objectSelection.width / 2,
+    startY: objectSelection.y + objectSelection.height / 2,
     onDrag: (x, y) => {
-      objectSelection.x = x
-      objectSelection.y = y
+      objectSelection.x = x - objectSelection.width / 2
+      objectSelection.y = y - objectSelection.height / 2
     },
     onEnd: () => {
       objectSelectionDragging.value = false
@@ -1094,7 +1391,7 @@ const startTextDrag = (event: PointerEvent, layer: TextEditorLayer) => {
 const objectLayerStyle = (layer: ObjectEditorLayer) => ({
   left: `${layer.x}%`,
   top: `${layer.y}%`,
-  width: `${24 * layer.scale}%`,
+  width: `${(layer.url ? OBJECT_LAYER_WIDTH_PERCENT : PLACEHOLDER_WIDTH_PERCENT) * layer.scale}%`,
   zIndex: layerZIndex(layer.key),
 })
 const startObjectDrag = (event: PointerEvent, layer: ObjectEditorLayer) => {
@@ -1138,7 +1435,10 @@ const handleObjectResizeKeydown = (event: KeyboardEvent, layer: ObjectEditorLaye
   event.preventDefault()
   const increase = event.key === 'ArrowUp' || event.key === 'ArrowRight'
   const step = event.shiftKey ? 0.1 : 0.05
-  layer.scale = Math.max(0.35, Math.min(2.5, layer.scale + (increase ? step : -step)))
+  const next = Math.max(0.35, Math.min(2.5, layer.scale + (increase ? step : -step)))
+  if (next === layer.scale) return
+  pendingMergeKey = `scale:${layer.key}`
+  layer.scale = next
 }
 const beginTextEdit = async (key: string) => {
   editingTextKey.value = key
@@ -1179,7 +1479,10 @@ const handleTextKeydown = (event: KeyboardEvent, key: string) => {
   }
 }
 const resizeTextBy = (layer: TextEditorLayer, amount: number) => {
-  layer.scale = Math.max(0.5, Math.min(3, layer.scale + amount))
+  const next = Math.max(0.5, Math.min(3, layer.scale + amount))
+  if (next === layer.scale) return
+  pendingMergeKey = `scale:${layer.key}`
+  layer.scale = next
 }
 const handleTextResizeKeydown = (event: KeyboardEvent, layer: TextEditorLayer) => {
   if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
@@ -1199,28 +1502,225 @@ const startTextResize = (event: PointerEvent, layer: TextEditorLayer, corner: Cr
   })
 }
 const cropRect = reactive({ x: 12.5, y: 0, width: 75, height: 100 })
-// 文字圖層改成多實例後，用字串化所有文字圖層目前欄位的 fingerprint 取代原本盯著
-// 五個全域 ref 的寫法，任何一筆文字圖層的內容／位置／字級／字型／顏色改變都要
-// 重新標記「有未儲存的變更」。
-const textLayersFingerprint = computed(() =>
-  textLayers.value
-    .map((layer) => `${layer.key}:${layer.content}:${layer.color}:${layer.scale}:${layer.fontId}:${layer.x}:${layer.y}`)
+// 另存會把所有圖層合成進去，所以任何圖層的內容／位置／縮放／顯示與否／順序改變都要重新標記
+// 「有未儲存的變更」，不只文字圖層；用字串化目前欄位的 fingerprint 取代逐欄位 watch。
+const layersFingerprint = computed(() =>
+  layers
+    .map((layer) => {
+      const base = `${layer.key}:${layer.visible}`
+      if (layer.type === 'text') {
+        const { content, color, scale, fontId, x, y } = layer as TextEditorLayer
+        return `${base}:${content}:${color}:${scale}:${fontId}:${x}:${y}`
+      }
+      if (layer.type === 'object') {
+        const { x, y, scale, url } = layer as ObjectEditorLayer
+        return `${base}:${x}:${y}:${scale}:${url}`
+      }
+      return base
+    })
     .join('|'),
 )
-watch(
-  [
-    textLayersFingerprint,
-    tool,
-    retouchInstruction,
-    () => retouchOptions.value.map((option) => `${option.key}:${option.on}`).join('|'),
-    () => `${cropRect.x}:${cropRect.y}:${cropRect.width}:${cropRect.height}`,
-  ],
-  () => {
-    savedAssetId.value = ''
-    saveError.value = false
-    saveErrorMessage.value = ''
-  },
+watch([layersFingerprint, tool, () => `${cropRect.x}:${cropRect.y}:${cropRect.width}:${cropRect.height}`], () => {
+  savedAssetId.value = ''
+  saveError.value = false
+  saveErrorMessage.value = ''
+})
+// ── 上一步／下一步（editor-history-shortcuts）──────────────────────────────────────────────
+// 快照＝可編輯文件（圖層含順序、裁切框、比例）的 JSON 字串；dragging 是 UI 旗標，序列化時剔除。
+// 必須宣告在 cropRect／layers／editingTextKey 之後（TDZ：提早宣告會讓頁面白屏）。
+const editorHistory = useEditorHistory() // 不叫 history，避免遮蔽 window.history
+const docJson = computed(() =>
+  JSON.stringify({ layers, cropRect, ratio: ratio.value }, (key, value) => (key === 'dragging' ? undefined : value)),
 )
+// 唯一的記錄點：文件字串變了、且沒有指標按住、沒有在編輯畫布文字時記一步。逐處呼叫必漏（變更路徑十幾條）。
+function commitHistory() {
+  const mergeKey = pendingMergeKey
+  pendingMergeKey = ''
+  if (pointerActive.value || editingTextKey.value) return
+  editorHistory.record(docJson.value, selectedLayerKey.value, mergeKey)
+}
+// 畫布上的 pointerdown 都有 .stop，一律在 capture 階段收。
+useEventListener(
+  window,
+  'pointerdown',
+  (event: PointerEvent) => {
+    // macOS ⌃點按＝右鍵：放開事件會被右鍵選單吞掉，畫布上的拖曳會卡著跟游標走、每次移動記成一步。
+    // 在這裡攔下，畫布上 7 個拖曳起點（圖層、把手、框選範圍、裁切框）都收不到，不必各自判斷
+    if (isMac && event.ctrlKey && event.button === 0 && artboardRef.value?.contains(event.target as Node)) {
+      event.stopPropagation()
+      return
+    }
+    // 編輯文字時按到畫布上別的東西：對方的 pointerdown 會 preventDefault，焦點不會離開文字框，
+    // 文字會停在編輯狀態、之後的拖曳被併進文字那一步 → 先結束編輯並記成獨立一步。
+    const editingKey = editingTextKey.value
+    const editingEl = editingKey ? textObjectRefs.get(editingKey) : undefined
+    if (editingEl && !editingEl.contains(event.target as Node)) {
+      finishTextEdit(editingKey)
+      editingEl.blur() // 隨後的 @blur → finishTextEdit 因 editingTextKey 已清而直接 return
+      commitHistory()
+    }
+    // 同理，焦點也不會離開屬性面板文字框／物件描述／面板按鈕：之後的 ⌘Z／Delete／⌘D 會被守衛 6 交給那個
+    // 輸入框、Enter 會按下那顆按鈕 → 按在畫布內（且不在焦點元素裡）就先把焦點放掉
+    const target = event.target as Node
+    const active = document.activeElement
+    if (active instanceof HTMLElement && !active.contains(target) && artboardRef.value?.contains(target)) active.blur()
+    // 只收主鍵；macOS ⌃點按是 button 0＋ctrlKey，pointerup 被右鍵選單吞掉，閘門會卡住
+    if (event.button === 0 && !(isMac && event.ctrlKey)) pointerActive.value = true
+    pendingMergeKey = ''
+  },
+  { capture: true },
+)
+for (const type of ['pointerup', 'pointercancel', 'dragend'] as const) {
+  useEventListener(
+    window,
+    type,
+    () => {
+      pointerActive.value = false
+    },
+    { capture: true },
+  )
+}
+useEventListener(
+  document,
+  'keydown',
+  () => {
+    pendingMergeKey = ''
+  },
+  { capture: true },
+)
+watch([docJson, pointerActive, editingTextKey], commitHistory)
+
+function applyHistoryEntry(entry: HistoryEntry) {
+  const prevKeys = layers.map((layer) => layer.key)
+  const prevCrop = JSON.stringify([cropRect, ratio.value])
+  const doc = JSON.parse(entry.doc) as { layers: EditorLayer[]; cropRect: typeof cropRect; ratio: string }
+  layers.splice(
+    0,
+    layers.length,
+    ...doc.layers.map((layer) => (layer.type === 'object' ? { ...layer, dragging: false } : layer)),
+  )
+  Object.assign(cropRect, doc.cropRect)
+  ratio.value = doc.ratio
+  selectedLayerKey.value = pickSelection(
+    prevKeys,
+    layers.map((layer) => layer.key),
+    selectedLayerKey.value,
+    entry.selected,
+  )
+  // 被還原掉的文字圖層若正開著字型選單，別讓它下次選到文字圖層時自己彈開
+  fontMenuOpen.value = false
+  // 裁切框只在裁切工具下看得到；還原到裁切步驟卻停在別的工具，畫面會毫無變化
+  if (tool.value !== 'crop' && JSON.stringify([cropRect, ratio.value]) !== prevCrop) tool.value = 'crop'
+}
+// 拖曳 closure 直接寫圖層物件本身，還原會替換物件 → 拖曳中／文字編輯中不執行
+const undoEdit = () => {
+  if (pointerActive.value || editingTextKey.value) return
+  const entry = editorHistory.undo()
+  if (entry) applyHistoryEntry(entry)
+}
+const redoEdit = () => {
+  if (pointerActive.value || editingTextKey.value) return
+  const entry = editorHistory.redo()
+  if (entry) applyHistoryEntry(entry)
+}
+
+// ── 鍵盤快捷鍵與提示 ───────────────────────────────────────────────────────────────────────
+const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent)
+const keysLabel = (key: string, shift = false) =>
+  isMac ? `${shift ? '⇧' : ''}⌘${key}` : `Ctrl+${shift ? 'Shift+' : ''}${key}`
+const undoLabel = computed(() => t('editor.withShortcut', { action: t('editor.undo'), keys: keysLabel('Z') }))
+const redoLabel = computed(() =>
+  t('editor.withShortcut', { action: t('editor.redo'), keys: isMac ? keysLabel('Z', true) : keysLabel('Y') }),
+)
+const shortcutRows = [
+  { id: 'undo', keys: [keysLabel('Z')] },
+  { id: 'redo', keys: isMac ? [keysLabel('Z', true), keysLabel('Y')] : [keysLabel('Y'), keysLabel('Z', true)] },
+  { id: 'copy', keys: [keysLabel('C')] },
+  { id: 'paste', keys: [keysLabel('V')] },
+  { id: 'cut', keys: [keysLabel('X')] },
+  { id: 'duplicate', keys: [keysLabel('D')] },
+  { id: 'delete', keys: ['Delete', isMac ? '⌫' : 'Backspace'] },
+  { id: 'nudge', keys: ['← ↑ → ↓'] },
+  { id: 'editText', keys: ['Enter'] },
+]
+// 一覽是不搬焦點的非 modal 清單（點外面／Esc 關），不用 useAccessibleDialog：它會把 #app 設 inert、連帶停用快捷鍵
+const shortcutsOpen = ref(false)
+const shortcutHelpEl = ref<HTMLElement | null>(null)
+useDismissableMenu(shortcutsOpen, shortcutHelpEl)
+const CLIPBOARD_HINT_MS = 2000
+const clipboardHintVisible = ref(false)
+let clipboardHintTimer: ReturnType<typeof setTimeout> | undefined
+function flashClipboardHint() {
+  clipboardHintVisible.value = true
+  clearTimeout(clipboardHintTimer)
+  clipboardHintTimer = setTimeout(() => {
+    clipboardHintVisible.value = false
+  }, CLIPBOARD_HINT_MS)
+}
+// 焦點在這些元素上時快捷鍵交給瀏覽器原生（文字框內的 ⌘Z／⌘C／⌘V）。不能「是 input 就跳過」：
+// 圖層顯示勾選是 input[type=checkbox]，點完焦點停在上面；也不能看 role：未編輯的文字圖層是 role=textbox。
+const NON_TEXT_INPUT_TYPES = ['checkbox', 'radio', 'color', 'range', 'button', 'submit', 'reset', 'file']
+function isTextEntry(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.isContentEditable || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement)
+    return true
+  return target instanceof HTMLInputElement && !NON_TEXT_INPUT_TYPES.includes(target.type)
+}
+const NUDGE_DIRECTIONS: Record<string, [number, number]> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+}
+function onEditorKeydown(event: KeyboardEvent) {
+  // ⌘⇧Z 的 key 是大寫 Z；非拉丁鍵盤配置 key 不是字母時退回實體鍵位 code
+  const key = /^[a-z]$/i.test(event.key)
+    ? event.key.toLowerCase()
+    : /^Key[A-Z]$/.test(event.code)
+      ? event.code.slice(3).toLowerCase()
+      : event.key
+  const withModifier = event.metaKey || event.ctrlKey
+  if (props.mode === 'retouch' || !hasSelectedAsset.value) return
+  // 元素層級處理器已處理（縮放把手方向鍵、圖層排序、文字 Enter／F2）、注音選字中、對話框開著（#app inert）
+  if (event.defaultPrevented || event.isComposing || document.querySelector<HTMLElement>('#app')?.inert) return
+  if (isTextEntry(event.target)) return
+  if (pointerActive.value || editingTextKey.value) {
+    // 沒攔下的 ⌘Z 會讓 macOS Chrome 執行原生 undo，焦點不在輸入框也會撤銷先前在 input 打的字
+    if (withModifier && (key === 'z' || key === 'y')) event.preventDefault()
+    return
+  }
+  // Windows AltGr＝Ctrl+Alt 是在打字元；選單開著時方向鍵／Delete 不去動圖層（看狀態不看焦點：Safari 點按鈕不給焦點）
+  if (withModifier ? event.altKey : fontMenuOpen.value || shortcutsOpen.value) return
+  const layer = canDuplicateSelectedLayer.value && tool.value !== 'crop' ? (selectedLayer.value as MovableLayer) : null
+  // 只有「畫布以外」的反白才讓給原生複製文字：開始編輯文字時的全選在結束編輯後仍殘留在畫布內
+  const selection = window.getSelection()
+  const pageTextSelected = Boolean(
+    selection && !selection.isCollapsed && !artboardRef.value?.contains(selection.anchorNode),
+  )
+  let handled = true
+  if (withModifier) {
+    if (key === 'z' && !event.shiftKey) undoEdit()
+    else if (key === 'z' || key === 'y') redoEdit()
+    else if (event.shiftKey)
+      handled = false // ⌘⇧C＝檢查元素、⌘⇧D＝全部分頁加書籤，不搶
+    else if (key === 'd') {
+      if (layer) duplicateSelectedLayer() // 沒有可複製的圖層也擋下，免得變成加書籤
+    } else if ((key === 'c' || key === 'x') && layer && !pageTextSelected) copySelectedLayer(key === 'x')
+    else if (key === 'v' && layerClipboard && tool.value !== 'crop') pasteLayer()
+    else handled = false
+  } else if ((key === 'Delete' || key === 'Backspace') && layer) deleteSelectedLayer()
+  // 只在焦點是 body 時：焦點在按鈕上的 Enter 是按下按鈕；焦點在文字圖層上時由 handleTextKeydown 處理
+  else if (key === 'Enter' && event.target === document.body && layer?.type === 'text' && layer.visible)
+    void beginTextEdit(layer.key)
+  else if (Object.hasOwn(NUDGE_DIRECTIONS, key) && layer) {
+    const [dx, dy] = NUDGE_DIRECTIONS[key]
+    const step = event.shiftKey ? 10 : 1
+    nudgeLayer(layer, dx * step, dy * step)
+  } else handled = false
+  if (handled) event.preventDefault()
+}
+// bubble 階段才看得到元素層級處理器的 defaultPrevented；元件卸載（切回素材庫）時自動移除
+useEventListener(document, 'keydown', onEditorKeydown)
 const ratioOptions = computed<Array<{ id: Exclude<CropRatioId, 'custom'>; label: string; aspect: number }>>(() => [
   { id: 'original', label: t('editor.originalRatio'), aspect: 4 / 3 },
   { id: 'square', label: '1:1', aspect: 1 },
@@ -1234,20 +1734,27 @@ const cropFrameStyle = computed(() => ({
   width: `${cropRect.width}%`,
   height: `${cropRect.height}%`,
 }))
-// 對齊 Figma（1144:631）：套用結果文字要寫「原圖 1440 × 1080」，跟 cropOutputDimensions
-// 的 'original' 分支共用同一組原圖尺寸常數，避免兩處寫死的數字之後跑掉。
-const ORIGINAL_IMAGE_DIMENSIONS = { width: 1440, height: 1080 }
+// 畫面上的裁切尺寸（畫布徽章／提示／側欄「已裁切為 … （原圖 …）」）一律從所選素材的真尺寸
+// 換算，跟 buildOutputFile 走同一套 cropSourceRect，顯示的數字就是實際另存出來的像素；
+// 原圖尺寸還不知道（見 originalDimensions）時回 null，各處不顯示那行。
 const cropOutputDimensions = computed(() => {
-  const option = ratioOptions.value.find((item) => item.id === ratio.value)
-  if (option?.id === 'original') return ORIGINAL_IMAGE_DIMENSIONS
-  if (option?.id === 'fourFive') return { width: 1080, height: 1350 }
-  if (option?.id === 'story') return { width: 1080, height: 1920 }
-  if (option?.id === 'wide') return { width: 1920, height: 1080 }
-  if (option?.id === 'square') return { width: 1080, height: 1080 }
+  const orig = originalDimensions.value
+  if (!orig) return null
+  const rect = cropSourceRect(orig.width, orig.height)
   return {
-    width: Math.round(1440 * (cropRect.width / 100)),
-    height: Math.round(1080 * (cropRect.height / 100)),
+    width: Math.max(1, Math.round(rect.width)),
+    height: Math.max(1, Math.round(rect.height)),
+    origWidth: orig.width,
+    origHeight: orig.height,
   }
+})
+const canvasHint = computed(() => {
+  if (tool.value !== 'crop') {
+    const type = selectedLayer.value?.type
+    if (type === 'text') return t('editor.selectionInstruction')
+    return type === 'object' ? t('editor.selectionInstructionObject') : ''
+  }
+  return cropOutputDimensions.value ? t('editor.cropInstructionDynamic', cropOutputDimensions.value) : ''
 })
 const applyCropRatio = (id: Exclude<CropRatioId, 'custom'>) => {
   ratio.value = id
@@ -1288,21 +1795,28 @@ const cropResizeDrag = usePointerDrag()
 // 取景範圍），而不是像自訂模式一樣寬高各自變形、也不應該把 ratio 悄悄改成「自訂」——
 // 「自訂」仍然是使用者要主動點選才會進入的無比例限制模式。
 const startCropResize = (event: PointerEvent, corner: CropCorner) => {
-  if (!artboardRef.value) return
+  if (event.button !== 0 || !artboardRef.value) return
   event.preventDefault()
   const bounds = artboardRef.value.getBoundingClientRect()
   const start = { pointerX: event.clientX, pointerY: event.clientY, ...cropRect }
-  const lockedAspect = ratio.value === 'custom' ? null : ratioOptions.value.find((item) => item.id === ratio.value)?.aspect ?? null
+  const lockedAspect =
+    ratio.value === 'custom' ? null : (ratioOptions.value.find((item) => item.id === ratio.value)?.aspect ?? null)
   const minSize = 10
   cropResizeDrag.start((moveEvent) => {
     if (lockedAspect) {
       const horizontalDirection = corner.includes('w') ? -1 : 1
       const verticalDirection = corner.includes('n') ? -1 : 1
       const growthPx =
-        ((moveEvent.clientX - start.pointerX) * horizontalDirection + (moveEvent.clientY - start.pointerY) * verticalDirection) / 2
+        ((moveEvent.clientX - start.pointerX) * horizontalDirection +
+          (moveEvent.clientY - start.pointerY) * verticalDirection) /
+        2
       const startWidthPx = (start.width / 100) * bounds.width
-      const anchorXPx = corner.includes('w') ? ((start.x + start.width) / 100) * bounds.width : (start.x / 100) * bounds.width
-      const anchorYPx = corner.includes('n') ? ((start.y + start.height) / 100) * bounds.height : (start.y / 100) * bounds.height
+      const anchorXPx = corner.includes('w')
+        ? ((start.x + start.width) / 100) * bounds.width
+        : (start.x / 100) * bounds.width
+      const anchorYPx = corner.includes('n')
+        ? ((start.y + start.height) / 100) * bounds.height
+        : (start.y / 100) * bounds.height
       const maxWidthPx = corner.includes('w') ? anchorXPx : bounds.width - anchorXPx
       const maxHeightPx = corner.includes('n') ? anchorYPx : bounds.height - anchorYPx
       const minWidthPx = Math.min(maxWidthPx, Math.max(40, bounds.width * (minSize / 100)))
@@ -1311,8 +1825,12 @@ const startCropResize = (event: PointerEvent, corner: CropCorner) => {
       const newHeightPx = newWidthPx / lockedAspect
       cropRect.width = (newWidthPx / bounds.width) * 100
       cropRect.height = (newHeightPx / bounds.height) * 100
-      cropRect.x = corner.includes('w') ? ((anchorXPx - newWidthPx) / bounds.width) * 100 : (anchorXPx / bounds.width) * 100
-      cropRect.y = corner.includes('n') ? ((anchorYPx - newHeightPx) / bounds.height) * 100 : (anchorYPx / bounds.height) * 100
+      cropRect.x = corner.includes('w')
+        ? ((anchorXPx - newWidthPx) / bounds.width) * 100
+        : (anchorXPx / bounds.width) * 100
+      cropRect.y = corner.includes('n')
+        ? ((anchorYPx - newHeightPx) / bounds.height) * 100
+        : (anchorYPx / bounds.height) * 100
       return
     }
     const dx = ((moveEvent.clientX - start.pointerX) / bounds.width) * 100
@@ -1359,6 +1877,7 @@ const startCropMove = (event: PointerEvent) => {
 }
 
 onBeforeUnmount(() => {
+  clearTimeout(clipboardHintTimer)
   artboardResizeObserver?.disconnect()
   cropResizeDrag.stop()
   cropMoveDrag.stop()
@@ -1509,7 +2028,7 @@ const previews = computed(() =>
   align-items: center;
   gap: 0.625rem;
 }
-.canvasActions__zoom {
+.canvasActions__btn {
   width: 1.5rem;
   height: 1.5rem;
   padding: 0;
@@ -1518,21 +2037,30 @@ const previews = computed(() =>
   border-radius: 50%;
   color: #606692;
 }
-.canvasActions__zoom svg {
+.canvasActions__btn svg {
   width: 1rem;
   height: 1rem;
 }
-.canvasActions__zoom:hover:not(:disabled) {
+.canvasActions__btn:hover:not(:disabled) {
   background: #eff2fa;
   color: #2e3567;
 }
-.canvasActions__zoom:focus-visible {
+.canvasActions__btn:focus-visible {
   outline: 2px solid #f2bb00;
   outline-offset: 2px;
 }
-.canvasActions__zoom:disabled {
+.canvasActions__btn:disabled {
   cursor: not-allowed;
   opacity: 0.35;
+}
+.canvasActions__btn > span {
+  font-size: 1rem;
+  line-height: 1;
+}
+.canvasActions__divider {
+  width: 1px;
+  height: 1rem;
+  background: #d2d5dd;
 }
 .canvasActions__value {
   min-width: 2rem;
@@ -1652,9 +2180,12 @@ const previews = computed(() =>
 }
 // 對齊 Figma（1141:1140 selection_marquee）：選取範圍要有淡淡的藍色底色 rgba(46,53,103,0.1)
 // 才看得出框選了哪塊區域，原本沒有底色，只有虛線框；圓角也應該是 6px，原本是 4px。
+// z-index 壓在所有圖層（layerZIndex ≥ 2）之下：原本 100 會蓋住置中加入的圖庫物件，從物件中心
+// 拖曳完全不動、只有抓框外才拖得動。現在最上層可見者接到 pointer——物件蓋到的地方拖物件，
+// 框選區其餘部分仍可拖曳，AI 生成流程的框選不受影響。
 .objectSelection {
   position: absolute;
-  z-index: 100;
+  z-index: 1;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -1787,11 +2318,21 @@ const previews = computed(() =>
   background: #eff2fa; // 對齊 Figma node 1311:820 的軌道色，不是既有的 #d2d5dd
   overflow: hidden;
 }
+// 不定進度：修圖耗時由後端決定（同步最長 80 秒、逾時再輪詢），不顯示百分比與剩餘秒數
 .retouchProgress__fill {
+  width: 40%;
   height: 100%;
   border-radius: inherit;
   background: $blue-dark-500;
-  transition: width 0.2s ease;
+  animation: retouchIndeterminate 1.2s ease-in-out infinite;
+}
+@keyframes retouchIndeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
 }
 .compare__thumb.isLoading {
   background: #fff;
@@ -1920,6 +2461,19 @@ const previews = computed(() =>
     outline: 2px solid #f2bb00;
     outline-offset: 2px;
   }
+
+  // 圖庫選來的物件：高度跟著圖片等比，不再是佔位用的正方形灰底
+  &.hasImage {
+    aspect-ratio: auto;
+    background: transparent;
+  }
+
+  &__img {
+    display: block;
+    width: 100%;
+    height: auto;
+    pointer-events: none;
+  }
 }
 .objectResizeHandle {
   position: absolute;
@@ -1977,6 +2531,86 @@ const previews = computed(() =>
   font-size: 0.75rem;
   line-height: 1.5;
   color: #606692;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  position: relative;
+}
+.shortcutHelp {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+.shortcutHelp kbd {
+  border: 1px solid #d2d5dd;
+  border-radius: 4px;
+  padding: 0 0.3125rem;
+  background: #eff2fa;
+  color: #2e3567;
+  font: inherit;
+  font-size: 0.75rem;
+}
+.shortcutHelp__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.25rem;
+  border-radius: 4px;
+  color: #606692;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.shortcutHelp__trigger:hover {
+  color: #2e3567;
+}
+.shortcutHelp__trigger:focus-visible {
+  outline: 2px solid #f2bb00;
+  outline-offset: 2px;
+}
+.shortcutHelp__panel {
+  position: absolute;
+  right: 1rem;
+  bottom: calc(100% + 0.5rem);
+  z-index: 20;
+  width: 17.5rem;
+  max-width: calc(100vw - 2rem);
+  background: #fff;
+  border: 1px solid #d2d5dd;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(46, 53, 103, 0.12);
+  padding: 0.75rem 1rem;
+  color: #2e3567;
+
+  strong {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.8125rem;
+  }
+
+  dl {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.375rem 0.75rem;
+    margin: 0;
+  }
+
+  dd {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    margin: 0;
+  }
+
+  small {
+    display: block;
+    margin-top: 0.625rem;
+    color: #606692;
+    font-size: 0.6875rem;
+  }
 }
 .layers h3,
 .cropPanel h3 {
@@ -1989,6 +2623,10 @@ const previews = computed(() =>
 .layers h3 button {
   float: right;
   font-size: 1.25rem;
+}
+.layers__delete {
+  margin-right: 0.5rem;
+  font-size: 1.125rem;
 }
 .cropPanel h3 {
   display: flex;
@@ -2825,28 +3463,6 @@ const previews = computed(() =>
 .option__copy strong {
   color: #2e3567;
   font-weight: 500;
-}
-.option__cost {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 0.25rem;
-  color: #ea903a;
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: normal;
-
-  svg {
-    width: 0.875rem;
-    height: 0.875rem;
-  }
-
-  b {
-    font-weight: inherit;
-  }
-}
-.option__cost.free {
-  color: #54c14f;
 }
 .retouchPanel textarea {
   height: 4.75rem;

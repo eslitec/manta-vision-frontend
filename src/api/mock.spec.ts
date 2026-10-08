@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GenerateImageReq } from '@/types/api'
+import type { GenerateImageReq, VideoJobReq } from '@/types/api'
 
 // mock.ts 的 db 是模組層級的可變狀態，測試間會互相污染。
 // 用 resetModules + 動態 import，讓每個測試都拿到全新、乾淨的假後端。
 type MockApi = typeof import('./mock').mockApi
+const VIDEO_REQ: VideoJobReq = { sourceImageId: 'a1', modelKey: 'videoStandard', template: 'cameraPan', ratio: '9:16' }
 let api: MockApi
 
 beforeEach(async () => {
@@ -15,8 +16,14 @@ beforeEach(async () => {
 describe('計費與扣點', () => {
   it('generateImages 依 模型單價×張數 扣飼料', async () => {
     const before = (await api.getFeed()).balance
-    const req: GenerateImageReq = { modelId: 'flux-1', prompt: 'x', count: 3 }
-    const res = await api.generateImages(req, 8)
+    const req: GenerateImageReq = {
+      modelKey: 'imageStandard',
+      imageId: 'img_1',
+      prompt: 'x',
+      count: 3,
+      useBrand: false,
+    }
+    const res = await api.generateImages(req)
     expect(res).toHaveLength(3)
     expect(res.every((r) => r.adopted === false)).toBe(true)
     expect((await api.getFeed()).balance).toBe(before - 8 * 3)
@@ -24,69 +31,102 @@ describe('計費與扣點', () => {
 
   it('餘額不足時擲出 INSUFFICIENT_FEEDS，且不扣款', async () => {
     const before = (await api.getFeed()).balance
-    const req: GenerateImageReq = { modelId: 'flux-1', prompt: 'x', count: 9999 }
-    await expect(api.generateImages(req, 8)).rejects.toThrow('INSUFFICIENT_FEEDS')
+    const req: GenerateImageReq = {
+      modelKey: 'imageStandard',
+      imageId: 'img_1',
+      prompt: 'x',
+      count: 9999,
+      useBrand: false,
+    }
+    await expect(api.generateImages(req)).rejects.toThrow('INSUFFICIENT_FEEDS')
+    expect((await api.getFeed()).balance).toBe(before)
+  })
+
+  it('generateImages 帶 regenOf 只扣一張', async () => {
+    const before = (await api.getFeed()).balance
+    const res = await api.generateImages({
+      modelKey: 'imageStandard',
+      imageId: 'img_1',
+      prompt: 'x',
+      count: 2,
+      useBrand: false,
+      regenOf: 'r_1',
+    })
+    expect(res).toHaveLength(1)
+    expect((await api.getFeed()).balance).toBe(before - 8)
+  })
+
+  it('generateImages 找不到模型時擲出 MODEL_NOT_ALLOWED，且不扣款', async () => {
+    const before = (await api.getFeed()).balance
+    await expect(
+      api.generateImages({ modelKey: 'nope', imageId: 'img_1', prompt: 'x', count: 2, useBrand: false }),
+    ).rejects.toThrow('MODEL_NOT_ALLOWED')
     expect((await api.getFeed()).balance).toBe(before)
   })
 
   it('generatePost 預設輸出類型「文案＋配圖」扣 5 顆飼料', async () => {
     const before = (await api.getFeed()).balance
-    await api.generatePost({ intro: 'x', applyBrand: true, outputType: 'both' })
+    await api.generatePost({ outputType: 'both', productDesc: 'x', useBrand: true })
     expect((await api.getFeed()).balance).toBe(before - 5)
   })
 
   it.each([
     { outputType: 'both', cost: 5 },
-    { outputType: 'textOnly', cost: 2 },
-    { outputType: 'imageOnly', cost: 3 },
+    { outputType: 'textOnly', cost: 0 },
+    { outputType: 'imageOnly', cost: 5 },
   ] as const)('generatePost outputType=$outputType 回傳對應內容並扣 $cost 顆飼料', async ({ outputType, cost }) => {
     const before = (await api.getFeed()).balance
-    const post = await api.generatePost({ intro: 'x', applyBrand: true, outputType })
+    const post = await api.generatePost({ outputType, productDesc: 'x', posterText: 'y', useBrand: true })
     expect((await api.getFeed()).balance).toBe(before - cost)
     if (outputType === 'both') {
-      expect(post.posterUrl).toBeTruthy()
-      expect(post.copy).not.toBe('')
+      expect(post.poster).toBeTruthy()
+      expect(post.copy).toBeTruthy()
     } else if (outputType === 'textOnly') {
-      expect(post.posterUrl).toBeUndefined()
-      expect(post.copy).not.toBe('')
+      expect(post.poster).toBeUndefined()
+      expect(post.copy).toBeTruthy()
     } else {
-      expect(post.posterUrl).toBeTruthy()
-      expect(post.copy).toBe('')
+      expect(post.poster).toBeTruthy()
+      expect(post.copy).toBeUndefined()
       expect(post.hashtags).toEqual([])
     }
   })
 
-  it('tryOn 固定扣 15 顆', async () => {
+  it('tryOn 扣 tryonStandard 的 12 顆並回一張帶圖的結果', async () => {
     const before = (await api.getFeed()).balance
-    await api.tryOn()
-    expect((await api.getFeed()).balance).toBe(before - 15)
+    const r = await api.tryOn({ modelSource: 'material', modelRefId: 'm1', clothImageId: 'a1' })
+    expect((await api.getFeed()).balance).toBe(before - 12)
+    expect(r.url).toContain('picsum')
+    expect(r.generationId).toBeTruthy()
+    expect((await api.listModels('tryon')).map((m) => m.costFeeds)).toEqual([12])
   })
 
-  it('createVideoJob 扣 45 顆並回傳 pending 與 0% 進度', async () => {
+  it('createVideoJob 扣標準檔 45 顆並回傳 pending 與 0% 進度、記下任務名', async () => {
     const before = (await api.getFeed()).balance
-    const job = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'standard' })
-    expect(job.status).toBe('pending')
-    expect(job.progress).toBe(0)
-    expect(job.cost).toBe(45)
+    const job = await api.createVideoJob({ ...VIDEO_REQ, taskName: '圖生影_鏡頭推移' })
+    expect(job).toMatchObject({ status: 'pending', progress: 0, cost: 45, name: '圖生影_鏡頭推移' })
     expect((await api.getFeed()).balance).toBe(before - 45)
   })
 
-  it('createVideoJob 依生成模型倍率扣款（進階×2／專業×4）', async () => {
+  it('createVideoJob 依 modelKey 的單價扣款，價格同 GET /ai-models?modelType=video', async () => {
+    expect((await api.listModels('video')).map((m) => [m.modelKey, m.costFeeds])).toEqual([
+      ['videoStandard', 45],
+      ['videoAdvanced', 90],
+      ['videoPro', 180],
+    ])
     const before = (await api.getFeed()).balance
-    const advanced = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'advanced' })
+    const advanced = await api.createVideoJob({ ...VIDEO_REQ, modelKey: 'videoAdvanced' })
     expect(advanced.cost).toBe(90)
-    const pro = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'pro' })
+    const pro = await api.createVideoJob({ ...VIDEO_REQ, modelKey: 'videoPro' })
     expect(pro.cost).toBe(180)
     expect((await api.getFeed()).balance).toBe(before - 90 - 180)
+    await expect(api.createVideoJob({ ...VIDEO_REQ, modelKey: 'imagePro' })).rejects.toThrow('MODEL_NOT_ALLOWED')
   })
 })
 
 describe('圖片編輯與 AI 修圖的扣款（MV-09 / MV-09b）', () => {
   it('價目表由後端提供，且回傳的是複本、改不到內部狀態', async () => {
     const pricing = await api.getEditorPricing()
-    expect(pricing.tools.remove).toBe(8)
-    expect(pricing.retouchOptions).toEqual({ removeObjects: 8, repair: 8, lighting: 0, upscale: 5 })
-    expect(pricing.commandBase).toBe(16)
+    expect(pricing).toEqual({ tools: { remove: 8, object: 0, fade: 0, text: 0, crop: 0 } })
     pricing.tools.remove = 999
     expect((await api.getEditorPricing()).tools.remove).toBe(8)
   })
@@ -103,29 +143,45 @@ describe('圖片編輯與 AI 修圖的扣款（MV-09 / MV-09b）', () => {
     }
   })
 
-  it('retouchImage 依價目表加總後扣款，成本不採信前端', async () => {
-    const before = (await api.getFeed()).balance
-    const res = await api.retouchImage({ method: 'quick', options: ['removeObjects', 'repair', 'lighting'] })
-    expect(res.cost).toBe(16) // 8 + 8 + 0
-    expect((await api.getFeed()).balance).toBe(before - 16)
-  })
-
-  it('指令式修圖含基本費，且只認光線校正與放大兩個加購項', async () => {
+  it('retouchImage 同真後端：一次扣 imageEdit 單價（勾幾項都一樣），回一張帶圖的結果', async () => {
+    const [edit] = await api.listModels('edit')
+    expect(edit).toMatchObject({ modelKey: 'imageEdit', costFeeds: 8 })
     const before = (await api.getFeed()).balance
     const res = await api.retouchImage({
-      method: 'command',
-      options: ['removeObjects', 'repair', 'upscale'],
-      instruction: '把背景換成純白',
+      imageId: 'img_1',
+      method: 'quick',
+      options: ['removeObjects', 'repair', 'lighting'],
     })
-    expect(res.options).toEqual(['upscale']) // 快速項目被濾掉
-    expect(res.cost).toBe(21) // 基本費 16 + 放大 5
-    expect((await api.getFeed()).balance).toBe(before - 21)
+    expect(res).toMatchObject({ method: 'quick', options: ['removeObjects', 'repair', 'lighting'], cost: 8 })
+    expect(res.url).toMatch(/^https:\/\//)
+    expect(res.generationId).toBeTruthy()
+    expect((await api.getFeed()).balance).toBe(before - 8)
   })
 
-  it('全部選免費項目時不扣款', async () => {
+  it('指令修圖同樣一個價', async () => {
     const before = (await api.getFeed()).balance
-    expect((await api.retouchImage({ method: 'quick', options: ['lighting'] })).cost).toBe(0)
+    const res = await api.retouchImage({
+      imageId: 'img_1',
+      method: 'command',
+      options: [],
+      instruction: '把背景換成純白',
+    })
+    expect(res.cost).toBe(8)
+    expect((await api.getFeed()).balance).toBe(before - 8)
+  })
+
+  it('指令與項目都空 → NOTHING_TO_DO，不扣款（同後端擋在扣點前）', async () => {
+    const before = (await api.getFeed()).balance
+    await expect(
+      api.retouchImage({ imageId: 'img_1', method: 'command', options: [], instruction: '  ' }),
+    ).rejects.toThrow('NOTHING_TO_DO')
     expect((await api.getFeed()).balance).toBe(before)
+  })
+
+  it('修圖結果存入圖庫標成編輯產物、放進所選資料夾', async () => {
+    const res = await api.retouchImage({ imageId: 'img_1', method: 'quick', options: ['repair'] })
+    const saved = await api.saveGenerated('修圖版', res, 'folder_1')
+    expect(saved).toMatchObject({ name: '修圖版', source: 'edit', folderId: 'folder_1' })
   })
 
   it('另存編輯產物不扣飼料，且不覆寫原素材', async () => {
@@ -141,10 +197,18 @@ describe('圖片編輯與 AI 修圖的扣款（MV-09 / MV-09b）', () => {
   it('餘額不足時擲出 INSUFFICIENT_FEEDS，且不扣款', async () => {
     // 先把餘額燒到接近見底，再送一筆會超支的修圖
     const { balance } = await api.getFeed()
-    const req: GenerateImageReq = { modelId: 'flux-1', prompt: 'x', count: Math.floor(balance / 8) }
-    await api.generateImages(req, 8)
+    const req: GenerateImageReq = {
+      modelKey: 'imageStandard',
+      imageId: 'img_1',
+      prompt: 'x',
+      count: Math.floor(balance / 8),
+      useBrand: false,
+    }
+    await api.generateImages(req)
     const left = (await api.getFeed()).balance
-    await expect(api.retouchImage({ method: 'command', options: ['upscale'] })).rejects.toThrow('INSUFFICIENT_FEEDS')
+    await expect(api.retouchImage({ imageId: 'img_1', method: 'quick', options: ['upscale'] })).rejects.toThrow(
+      'INSUFFICIENT_FEEDS',
+    )
     expect((await api.getFeed()).balance).toBe(left)
   })
 })
@@ -163,27 +227,25 @@ describe('AI 輔助描述', () => {
 })
 
 describe('品牌套用（行銷 PO 文）', () => {
-  it('applyBrand=true 帶入品牌 hashtag', async () => {
-    const post = await api.generatePost({ intro: 'x', applyBrand: true, outputType: 'both' })
+  it('useBrand=true 帶入品牌 hashtag', async () => {
+    const post = await api.generatePost({ outputType: 'both', productDesc: 'x', useBrand: true })
     expect(post.hashtags).toEqual(['#日安選物', '#選物日常', '#質感生活'])
   })
 
-  it('applyBrand=false 使用預設 hashtag', async () => {
-    const post = await api.generatePost({ intro: 'x', applyBrand: false, outputType: 'both' })
+  it('useBrand=false 使用預設 hashtag', async () => {
+    const post = await api.generatePost({ outputType: 'both', productDesc: 'x', useBrand: false })
     expect(post.hashtags).toEqual(['#新品', '#日常'])
   })
 })
 
 describe('圖生影非同步任務', () => {
-  it('未知 id 回傳 failed / NOT_FOUND', async () => {
-    const j = await api.getVideoJob('job_不存在')
-    expect(j.status).toBe('failed')
-    expect(j.error).toBe('NOT_FOUND')
+  it('未知 id 同真後端 404：丟 NOT_FOUND', async () => {
+    await expect(api.getVideoJob('job_不存在')).rejects.toThrow('NOT_FOUND')
   })
 
-  it('依經過時間由 pending → processing → done 並回傳進度', async () => {
+  it('依經過時間由 pending → processing → done 並回傳進度；done 自動入庫一次、listVideoJobs 列得到', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5)
-    const job = await api.createVideoJob({ template: '鏡頭推移', ratio: '9:16', modelTier: 'standard' })
+    const job = await api.createVideoJob({ ...VIDEO_REQ, taskName: '圖生影_入庫' })
     // 剛建立：pending
     const pending = await api.getVideoJob(job.id)
     expect(pending.status).toBe('pending')
@@ -200,16 +262,33 @@ describe('圖生影非同步任務', () => {
     const done = await api.getVideoJob(job.id)
     expect(done.status).toBe('done')
     expect(done.progress).toBe(100)
-    expect(done.resultUrl).toBeTruthy()
+    expect(done.durationMs).toBeGreaterThan(0)
+    await api.getVideoJob(job.id) // 再查一次不重複入庫
+    const videos = (await api.listImages({ mediaType: 'video', pageSize: 100 })).items.filter(
+      (a) => a.name === '圖生影_入庫',
+    )
+    expect(videos).toHaveLength(1)
+    expect((await api.listVideoJobs()).map((j) => [j.id, j.status])).toEqual([[job.id, 'done']])
+  })
+
+  it('processing 抽中上游失敗：failReason=upstreamError、costFeeds 為 0，預扣退回餘額', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    const before = (await api.getFeed()).balance
+    const job = await api.createVideoJob(VIDEO_REQ)
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 3000)
+    const failed = await api.getVideoJob(job.id)
+    expect(failed).toMatchObject({ status: 'failed', error: 'upstreamError', cost: 0 })
+    expect((await api.getFeed()).balance).toBe(before)
   })
 })
 
 describe('素材（圖庫）', () => {
-  it('uploadImage 以 File 建立「上傳」來源並置頂', async () => {
+  it('uploadImage 以 File 建立「上傳」來源並置頂，並像真後端一樣帶可顯示的 url', async () => {
     const file = new File(['x'], '新圖.png', { type: 'image/png' })
     const a = await api.uploadImage(file)
     expect(a.source).toBe('upload')
     expect(a.name).toBe('新圖.png')
+    expect(a.url).toMatch(/^blob:/) // 選圖彈窗上傳後要能直接當編輯器底圖（picker-direct-upload 決策 6）
     expect((await api.listImages()).items[0].id).toBe(a.id)
   })
 
@@ -232,8 +311,18 @@ describe('素材（圖庫）', () => {
   })
 
   it('saveGenerated 落地成「AI 生成」素材', async () => {
-    const a = await api.saveGenerated('生成結果')
+    const a = await api.saveGenerated('生成結果', { generationId: 'g_x', id: 'r_x' })
     expect(a.source).toBe('aiGenerate')
+  })
+
+  it('uploadImage 帶 source=tryonModel 標成模特照、算進 upload 格，GET /images?source=tryonModel 只回模特照', async () => {
+    const uploadBefore = (await api.listImages()).counts.upload
+    const a = await api.uploadImage(new File(['x'], '模特.png'), undefined, undefined, undefined, 'tryonModel')
+    expect(a.source).toBe('tryonModel')
+    const res = await api.listImages({ source: 'tryonModel' })
+    expect(res.items.map((x) => x.id)).toContain(a.id)
+    expect(res.items.every((x) => x.source === 'tryonModel')).toBe(true)
+    expect(res.counts.upload).toBe(uploadBefore + 1)
   })
 
   it('uploadImage 指定資料夾則落到該資料夾', async () => {
@@ -260,6 +349,62 @@ describe('素材（圖庫）', () => {
 
     const byKeyword = await api.listImages({ q: '春季' })
     expect(byKeyword.items.every((a) => a.name.includes('春季'))).toBe(true)
+  })
+
+  it('listImages 不帶 source 時合併內建素材：使用者的圖在前、內建在後、不重複，total＝counts.all', async () => {
+    const all = await api.listImages({ pageSize: 100 })
+    const firstBuiltin = all.items.findIndex((a) => a.source === 'builtin')
+    expect(firstBuiltin).toBeGreaterThan(0)
+    expect(all.items.slice(0, firstBuiltin).every((a) => a.source !== 'builtin')).toBe(true)
+    expect(all.items.slice(firstBuiltin).every((a) => a.source === 'builtin')).toBe(true)
+    expect(new Set(all.items.map((a) => a.id)).size).toBe(all.items.length)
+    expect(all.total).toBe(all.counts.all)
+  })
+
+  it('listImages source=builtin 只回內建：一律圖片、沒有資料夾、帶 category，total＝counts.builtin', async () => {
+    const builtin = await api.listImages({ source: 'builtin', pageSize: 100 })
+    expect(builtin.items.length).toBeGreaterThan(0)
+    expect(
+      builtin.items.every(
+        (a) => a.source === 'builtin' && a.type === 'image' && a.folderId === undefined && a.category !== undefined,
+      ),
+    ).toBe(true)
+    expect(builtin.total).toBe(builtin.counts.builtin)
+  })
+
+  it('listImages 帶 folderId（含未分類）或 mediaType=video 都不含內建', async () => {
+    const queries = [{ folderId: null }, { folderId: 'folder_spring' }, { mediaType: 'video' as const }]
+    for (const q of queries) {
+      const res = await api.listImages({ ...q, pageSize: 100 })
+      expect(res.items.some((a) => a.source === 'builtin')).toBe(false)
+    }
+  })
+
+  it('listImages source=object 含內建的物件類素材（與 counts.object 一致），不含其他類別的內建', async () => {
+    const objects = await api.listImages({ source: 'object', pageSize: 100 })
+    expect(objects.items.some((a) => a.source === 'object')).toBe(true)
+    expect(objects.items.some((a) => a.source === 'builtin' && a.category === 'object')).toBe(true)
+    expect(objects.items.every((a) => a.source === 'object' || a.category === 'object')).toBe(true)
+    expect(objects.total).toBe(objects.counts.object)
+  })
+
+  it('counts：all／builtin／object 含內建，其餘桶不含，各桶加總等於 all', async () => {
+    const { counts } = await api.listImages()
+    const builtin = (await api.listImages({ source: 'builtin', pageSize: 100 })).items
+    const builtinObjects = builtin.filter((a) => a.category === 'object').length
+    const userObjects = (await api.listImages({ source: 'object', pageSize: 100 })).items.filter(
+      (a) => a.source === 'object',
+    ).length
+    expect(counts.builtin).toBe(builtin.length)
+    expect(counts.object).toBe(userObjects + builtinObjects)
+    expect(counts.all).toBe(
+      counts.upload +
+        counts.aiGenerate +
+        counts.edit +
+        counts.video +
+        counts.builtin +
+        (counts.object - builtinObjects),
+    )
   })
 
   it('updateImage 改名不影響 folderId（folderId 這個 key 沒帶＝不動）', async () => {
@@ -348,26 +493,67 @@ describe('內建素材與機器人清單', () => {
 })
 
 describe('用量與指標', () => {
-  it('getUsage 的 percent = 已用 / 上限，remaining = 餘額', async () => {
-    const u = await api.getUsage()
-    expect(u.percent).toBe(Math.round((u.used / u.monthlyLimit) * 100))
-    expect(u.remaining).toBe((await api.getFeed()).balance)
+  it('getUsage 依 groupBy 二選一，daily 補滿區間每一天', async () => {
+    const custom = { period: 'custom' as const, startDate: '2026-07-01', endDate: '2026-07-10' }
+    const day = await api.getUsage({ ...custom, groupBy: 'day' })
+    expect(day.period).toEqual({ from: '2026-07-01', to: '2026-07-10' })
+    expect(day.daily?.length).toBe(10)
+    expect(day.daily?.[0].date).toBe('2026-07-01')
+    expect(day.totalUsed).toBe(day.daily!.reduce((sum, d) => sum + d.used, 0))
+    expect(day.byModule).toBeNull()
+    const mod = await api.getUsage({ ...custom, groupBy: 'module' })
+    expect(mod.daily).toBeNull()
+    expect(mod.byModule?.map((m) => m.type)).toEqual(['generate', 'marketingImage', 'marketingText', 'video', 'tryon'])
   })
 
   it('generateImages 會累加本月已生成張數', async () => {
-    const before = (await api.getUsage()).generatedThisMonth
-    await api.generateImages({ modelId: 'sdxl', prompt: 'x', count: 2 }, 3)
-    expect((await api.getUsage()).generatedThisMonth).toBe(before + 2)
+    const before = (await api.getMetrics({ period: 'month' })).monthGenerated
+    await api.generateImages({ modelKey: 'imageStandard', imageId: 'img_1', prompt: 'x', count: 2, useBrand: false })
+    expect((await api.getMetrics({ period: 'month' })).monthGenerated).toBe(before + 2)
   })
 
-  it('recordAdoption 會拉高採用率', async () => {
-    const before = (await api.getMetrics()).adoptionRate
-    await api.recordAdoption()
-    expect((await api.getMetrics()).adoptionRate).toBeGreaterThan(before)
+  const genOne = async () =>
+    (
+      await api.generateImages({ modelKey: 'imageStandard', imageId: 'img_1', prompt: 'x', count: 2, useBrand: false })
+    )[0]
+
+  it('recordAdoption 會拉高採用率，同一張重複採用率不變', async () => {
+    const r = await genOne()
+    const before = (await api.getMetrics({ period: '30d' })).adoptionRate!
+    await api.recordAdoption(r)
+    const after = (await api.getMetrics({ period: '30d' })).adoptionRate!
+    expect(after).toBeGreaterThan(before)
+    await api.recordAdoption(r)
+    expect((await api.getMetrics({ period: '30d' })).adoptionRate!).toBe(after)
+  })
+
+  it('saveGenerated 帶 from 也算一次採用，之後同一張下載不重複計', async () => {
+    const r = await genOne()
+    const before = (await api.getMetrics({ period: '30d' })).adoptionRate!
+    await api.saveGenerated('生成結果', r)
+    const after = (await api.getMetrics({ period: '30d' })).adoptionRate!
+    expect(after).toBeGreaterThan(before)
+    await api.recordAdoption(r)
+    expect((await api.getMetrics({ period: '30d' })).adoptionRate!).toBe(after)
+  })
+
+  it('下載行銷海報不算採用（採用率只算圖生圖，同後端）', async () => {
+    const post = await api.generatePost({ outputType: 'imageOnly', posterText: 'y', useBrand: true })
+    const before = (await api.getMetrics({ period: '30d' })).adoptionRate!
+    await api.recordAdoption(post.poster!)
+    expect((await api.getMetrics({ period: '30d' })).adoptionRate!).toBe(before)
+  })
+
+  it('試穿結果的存入／下載不算採用（採用率只算 type=generate，同後端 metrics_calc）', async () => {
+    const r = await api.tryOn({ modelSource: 'material', modelRefId: 'm1', clothImageId: 'a1' })
+    const before = (await api.getMetrics({ period: '30d' })).adoptionRate!
+    await api.saveGenerated('試穿', r)
+    await api.recordAdoption(r)
+    expect((await api.getMetrics({ period: '30d' })).adoptionRate!).toBe(before)
   })
 
   it('getMetrics 的成功率不超過 100%', async () => {
-    const m = await api.getMetrics()
+    const m = await api.getMetrics({ period: '30d' })
     expect(m.successRate).toBeLessThanOrEqual(100)
     expect(m.successRate).toBeGreaterThan(0)
   })
@@ -431,10 +617,26 @@ describe('登入／登出', () => {
 })
 
 describe('模型清單', () => {
-  it('listModels 回傳 6 個模型且都帶單價', async () => {
-    const models = await api.listModels()
-    expect(models).toHaveLength(6)
-    expect(models.every((m) => m.costPerImage > 0)).toBe(true)
-    expect(models.map((m) => m.id)).toContain('nano-banana')
+  it("listModels('image') 回 3 個檔位，價格 8／12／24", async () => {
+    const models = await api.listModels('image')
+    expect(models.map((m) => [m.modelKey, m.costFeeds])).toEqual([
+      ['imageStandard', 8],
+      ['imageAdvanced', 12],
+      ['imagePro', 24],
+    ])
+  })
+
+  it("listModels('marketing') 回 marketingImage 5／marketingText 0", async () => {
+    const models = await api.listModels('marketing')
+    expect(models.map((m) => [m.modelKey, m.costFeeds])).toEqual([
+      ['marketingImage', 5],
+      ['marketingText', 0],
+    ])
+  })
+
+  it('listInspirations 回傳 {id,name,url}', async () => {
+    const items = await api.listInspirations()
+    expect(items.length).toBeGreaterThan(0)
+    expect(Object.keys(items[0]).sort()).toEqual(['id', 'name', 'url'])
   })
 })

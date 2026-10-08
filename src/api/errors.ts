@@ -28,11 +28,20 @@ export const API_ERROR_CODES = {
   DUPLICATE_NAME: 'DUPLICATE_NAME',
   FOLDER_LIMIT_EXCEEDED: 'FOLDER_LIMIT_EXCEEDED',
   ASSET_IN_USE: 'ASSET_IN_USE',
+  // 付費生成：同一把 Idempotency-Key 的前一發還在後端跑（real.ts 的 postPaid 靠它決定重送）
+  IDEMPOTENCY_IN_PROGRESS: 'IDEMPOTENCY_IN_PROGRESS',
+  // 付費生成：上游失敗（502／504），後端已釋放預留；postPaid 據此放掉這把 key
+  UPSTREAM_ERROR: 'UPSTREAM_ERROR',
+  // 存入圖庫：這張已經存過了（連點、或前一發的回應遺失）；圖生圖頁當成已存入
+  ALREADY_SAVED: 'ALREADY_SAVED',
+  // 試穿：用上傳的真人照但該使用者還沒同意肖像使用（403，擋在扣點之前）；試穿頁改開同意視窗
+  CONSENT_REQUIRED: 'CONSENT_REQUIRED',
 } as const
 
 /**
  * 純前端的錯誤碼——請求根本沒到後端，所以不會有後端的碼。
- * 刻意跟後端碼放在不同物件：這兩個永遠不會出現在 `docs/api.md` 的碼表裡。
+ * 也包含前端依輪詢結果合成的碼（GENERATION_*）。
+ * 刻意跟後端碼放在不同物件：這些碼永遠不會出現在 `docs/api.md` 的碼表裡。
  */
 export const CLIENT_ERROR_CODES = {
   /** 連不到伺服器（後端沒起來、網路斷了、CORS 被擋） */
@@ -41,6 +50,12 @@ export const CLIENT_ERROR_CODES = {
   TIMEOUT: 'TIMEOUT',
   /** 有回應但不是後端的統一格式（例如反向代理吐的 HTML 502） */
   UNEXPECTED_RESPONSE: 'UNEXPECTED_RESPONSE',
+  /** 202 之後輪詢到 status: failed */
+  GENERATION_FAILED: 'GENERATION_FAILED',
+  /** 輪詢超過上限仍是 processing（後端之後完成仍會結清飼料） */
+  GENERATION_STILL_PROCESSING: 'GENERATION_STILL_PROCESSING',
+  /** 付費請求送出後登入身分變了（登出、換帳號）：不重送、不輪詢、回應丟棄 */
+  SESSION_CHANGED: 'SESSION_CHANGED',
 } as const
 
 export type ApiErrorCode =
@@ -91,9 +106,16 @@ export function isApiError(error: unknown): error is ApiError {
   return error instanceof ApiError
 }
 
-/** `hasErrorCode(e, 'TOKEN_EXPIRED')`——比 `e instanceof ApiError && e.code === …` 短 */
+/**
+ * 判斷錯誤是不是某個錯誤碼——全專案唯一的一份，同時認得兩種來源：
+ * - 真後端擲的 `ApiError`：比 `code`（`message` 是給人看的文案，不比）
+ * - 假後端（mock.ts）與純前端擲的 `new Error(CODE)`：碼放在 `message`
+ *
+ * 切換資料來源時呼叫端不必改，就是靠這裡吸收掉差異。
+ */
 export function hasErrorCode(error: unknown, code: ApiErrorCode): boolean {
-  return isApiError(error) && error.code === code
+  if (isApiError(error)) return error.code === code
+  return error instanceof Error && error.message === code
 }
 
 /** 取某個欄位的錯誤訊息，沒有就回空陣列——樣板可以直接 v-for */

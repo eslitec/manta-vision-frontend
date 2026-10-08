@@ -15,8 +15,8 @@ const deleteImage = vi.fn()
 vi.mock('@/api', () => ({
   api: {
     listImages: (q: unknown) => listImages(q),
-    uploadImage: (f: File, folderId?: string) => uploadImage(f, folderId),
-    saveGenerated: (n: string) => saveGenerated(n),
+    uploadImage: (...args: unknown[]) => uploadImage(...args),
+    saveGenerated: (n: string, from: unknown) => saveGenerated(n, from),
     editImage: (n: string, o?: unknown) => editImage(n, o),
     listFolders: () => listFolders(),
     createFolder: (n: string) => createFolder(n),
@@ -29,7 +29,7 @@ vi.mock('@/api', () => ({
 
 const asset = (id: string, name: string): Asset => ({ id, name, source: 'upload', dim: '1024×768', type: 'image' })
 const folder = (id: string, name: string): Folder => ({ folderId: id, folderName: name, imageCount: 0 })
-const emptyCounts = { all: 0, upload: 0, aiGenerate: 0, edit: 0, object: 0, video: 0 }
+const emptyCounts = { all: 0, upload: 0, aiGenerate: 0, edit: 0, object: 0, video: 0, builtin: 0 }
 
 // useAssets 的資料夾清單是模組層級單例（圖庫頁與彈窗共用同一份），
 // 但素材清單改成每次呼叫都是獨立的一份狀態——所以每個測試只需要 resetModules
@@ -75,15 +75,23 @@ describe('useAssets（素材清單）', () => {
     uploadImage.mockResolvedValue(asset('a2', '新圖'))
     const { upload } = useAssets()
     const a = await upload(new File(['x'], '新圖.png'), 'folder_1')
-    expect(uploadImage).toHaveBeenCalledWith(expect.any(File), 'folder_1')
+    expect(uploadImage).toHaveBeenCalledWith(expect.any(File), 'folder_1', undefined, undefined, undefined)
     expect(a.id).toBe('a2')
+  })
+
+  it('upload 把 source 原樣轉給 uploadImage（試穿頁的模特照帶 tryonModel）', async () => {
+    uploadImage.mockResolvedValue(asset('a3', '模特'))
+    const { upload } = useAssets()
+    await upload(new File(['x'], '模特.png'), undefined, undefined, undefined, 'tryonModel')
+    expect(uploadImage).toHaveBeenCalledWith(expect.any(File), undefined, undefined, undefined, 'tryonModel')
   })
 
   it('saveGenerated 落地成 AI 生成素材', async () => {
     saveGenerated.mockResolvedValue({ id: 'g1', name: '生成', source: 'aiGenerate', dim: '1024×768', type: 'image' })
     const { saveGenerated: save } = useAssets()
-    const a = await save('生成')
+    const a = await save('生成', { generationId: 'g1', id: 'r1' })
     expect(a.source).toBe('aiGenerate')
+    expect(saveGenerated).toHaveBeenCalledWith('生成', { generationId: 'g1', id: 'r1' })
   })
 
   it('saveEdited 呼叫 editImage 建立編輯產物，不動原圖', async () => {
