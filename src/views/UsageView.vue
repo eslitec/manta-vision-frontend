@@ -120,6 +120,7 @@ import TopUpDialog from '@/components/TopUpDialog.vue'
 import { IconAlertTriangleFilled, IconChevronDown, IconFeedBottleSmall } from '@/components/icons'
 import { useDismissableMenu } from '@/composables/useDismissableMenu'
 import { getUsageAlertLevel } from '@/utils/usage'
+import { downloadBlob } from '@/utils/download'
 import legendActualUrl from '@/assets/images/usage-legend-actual.svg'
 import legendForecastUrl from '@/assets/images/usage-legend-forecast.svg'
 import legendDailyUrl from '@/assets/images/usage-legend-daily.svg'
@@ -357,12 +358,8 @@ function exportUsage() {
     ...periodData.value.modules.map((module) => [module.name, module.value, `${module.share}%`]),
   ]
   const csv = `\uFEFF${rows.map((row) => row.map((cell) => `"${String(cell ?? '').replaceAll('"', '""')}"`).join(',')).join('\r\n')}`
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = `manta-vision-usage-${periodData.value.start}-${periodData.value.end}.csv`
-  anchor.click()
-  URL.revokeObjectURL(url)
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  downloadBlob(blob, `manta-vision-usage-${periodData.value.start}-${periodData.value.end}.csv`)
 }
 const metricCards = computed(() =>
   [

@@ -1,4 +1,15 @@
-import type { Asset } from './asset'
+import type {
+  Asset,
+  BatchResult,
+  Bot,
+  Folder,
+  FolderListResponse,
+  ImageCounts,
+  ImageListQuery,
+  ImageListResponse,
+  Material,
+  MaterialListResponse,
+} from './asset'
 
 // ── 圖生圖模型 ──
 export interface AiModel {
@@ -41,7 +52,9 @@ export interface GeneratedPost {
 }
 
 // ── 非同步任務（圖生影）──
-export type JobStatus = 'pending' | 'processing' | 'succeeded' | 'failed'
+// 狀態值對齊後端影片任務狀態機（pending → processing → done → failed）；
+// 舊版前端用 succeeded，跟後端對不上會導致輪詢永遠等不到「完成」。
+export type JobStatus = 'pending' | 'processing' | 'done' | 'failed'
 export type VideoModelTier = 'standard' | 'advanced' | 'pro'
 export const VIDEO_MODEL_TIERS: { key: VideoModelTier; label: string; multiplier: number }[] = [
   { key: 'standard', label: '標準', multiplier: 1 },
@@ -65,7 +78,9 @@ export interface VideoJob {
 
 // ── 背景生成任務（跨頁面，圖生圖／圖生影共用；驅動頂部工具列「任務」按鈕與任務中心面板）──
 export type GenerationTaskKind = 'image' | 'video'
-export type GenerationTaskStatus = 'pending' | 'processing' | 'succeeded' | 'failed'
+// 圖生圖任務也共用這個型別（純前端內部概念，沒有對應的後端輪詢端點），
+// 但值域跟著 JobStatus 一起改，兩者目前是同一組字面值、指派時才不會型別對不上。
+export type GenerationTaskStatus = 'pending' | 'processing' | 'done' | 'failed'
 export interface GenerationTask {
   id: string
   kind: GenerationTaskKind
@@ -117,6 +132,10 @@ export interface BrandProfile {
   avoidWords: string
   logoName?: string // Logo 檔名（顯示用）
   logoUrl?: string // Logo 圖片來源（mock 為 data URL；後端就緒後改存 R2 URL）
+  /** 肖像權同意條款模板（合規頁）；對齊後端 portraitConsentTemplate */
+  portraitConsent: string
+  /** 圖片授權／使用聲明（合規頁）；對齊後端 imageLicense */
+  imageLicense: string
 }
 
 // ── 圖片編輯與 AI 修圖（MV-09 / MV-09b）──
@@ -155,7 +174,30 @@ export interface RetouchResult {
 
 export type AdoptionKind = 'download' | 'save'
 
-export type { Asset }
+// ── 登入／帳號 ──
+export interface LoginReq {
+  username: string
+  password: string
+}
+export interface RegisterReq {
+  username: string
+  password: string
+}
+export interface Session {
+  username: string
+  displayName: string
+  /** 後端簽發的存取憑證。假後端模式下為空字串——空的就不會送出 Authorization */
+  token: string
+  /** 目前操作的機器人；每支 bot-scoped API 都要帶（`X-Bot-Id`） */
+  botId: string
+  /** 後端回的角色（開帳號的人是 `admin`） */
+  role: string
+  /**
+   * 憑證到期的**絕對時間**（毫秒）。後端回的是剩餘秒數，這裡換算成絕對時間，
+   * 重新整理後才判斷得出來還有沒有效——憑證沒有續期機制，過期就是要重新登入。
+   */
+  expiresAt: number
+}
 
 // ── 飼料儲值（MV「儲值」彈窗，mock-only）──
 // 套餐識別碼；套餐的顆數與顯示文字定義在 TopUpDialog.vue 的常數陣列，這裡只約束 id 格式。
@@ -167,3 +209,16 @@ export type FeedPackageId = 'pkg-500' | 'pkg-1500' | 'pkg-3000'
  * `api.topUpFeed?.(...)` 選擇性呼叫，避免真後端環境下呼叫到不存在的方法。
  */
 export type TopUpFeedFn = (packageId: string) => Promise<{ balance: number }>
+
+export type {
+  Asset,
+  BatchResult,
+  Bot,
+  Folder,
+  FolderListResponse,
+  ImageCounts,
+  ImageListQuery,
+  ImageListResponse,
+  Material,
+  MaterialListResponse,
+}

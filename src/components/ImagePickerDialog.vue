@@ -18,10 +18,11 @@ Teleport(to="body")
             span.pick__check(:class="{ isOn: selectedIds.includes(a.id) }" aria-hidden="true")
               IconCheck(v-if="selectedIds.includes(a.id)")
             IconMovie(v-if="a.type === 'video'")
+            img.pick__thumbImage(v-else-if="a.url && !brokenIds.has(a.id)" :src="a.url" :alt="a.name" @error="markBroken(a.id)")
             IconImagePlaceholder(v-else)
           .pick__meta
             span.pick__name {{ a.name }}
-            span.tag {{ sourceLabel(a.tag) }}
+            span.tag {{ sourceLabel(a.source) }}
       footer.picker__foot
         span.picker__count {{ t('imagePicker.selectedCount', { count }) }}
         .picker__actions
@@ -64,17 +65,25 @@ const resolvedSubtitle = computed(() => props.subtitle ?? t('imagePicker.subtitl
 const sources = computed(() => [
   { label: t('sources.all'), value: 'all' },
   { label: t('sources.upload'), value: 'upload' },
-  { label: t('sources.ai'), value: 'ai' },
+  { label: t('sources.aiGenerate'), value: 'aiGenerate' },
 ])
 const activeSource = ref('all')
 const selectedIds = ref<string[]>([])
+// 素材有 url 才畫真圖，網址失效（載入失敗）就記下來退回內建示意圖示，不留破圖
+const brokenIds = ref<Set<string>>(new Set())
+function markBroken(id: string) {
+  brokenIds.value = new Set(brokenIds.value).add(id)
+}
 
 const count = computed(() => selectedIds.value.length)
 const sourceLabel = (source: string) => t(`sources.${source}`)
 
+// 篩選跟關鍵字都在前端做（不像圖庫頁另外打 GET /images）：這個彈窗一次把整個圖庫拉回來
+// （pageSize 帶到後端上限 100），資料量不大，本地篩選比每次點 pill／打字都重打一次後端划算；
+// 真的超過 100 筆時目前沒有翻頁 UI，會看不到後面的素材——量體大到那個程度前，這裡先不做分頁。
 const filtered = computed(() =>
   assets.value.filter((a) => {
-    const bySource = activeSource.value === 'all' || a.tag === activeSource.value
+    const bySource = activeSource.value === 'all' || a.source === activeSource.value
     const byKeyword = !keyword.value || a.name.includes(keyword.value)
     return bySource && byKeyword
   }),
@@ -95,7 +104,8 @@ watch(open, (v) => {
     selectedIds.value = []
     keyword.value = ''
     activeSource.value = 'all'
-    load()
+    brokenIds.value = new Set()
+    load({ pageSize: 100 })
   }
 })
 
@@ -215,6 +225,13 @@ const confirm = () => {
       width: 2.75rem;
       height: 2.75rem;
     }
+  }
+  &__thumbImage {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
   }
   &.isSelected &__thumb {
     border-color: $blue-dark-500;
