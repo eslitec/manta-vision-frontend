@@ -380,12 +380,10 @@ function exportUsage() {
     ...moduleCards.value.map((m) => [m.name, m.used, `${m.sharePct}%`]),
   ]
   const csv = `﻿${rows.map((row) => row.map((cell) => `"${String(cell ?? '').replaceAll('"', '""')}"`).join(',')).join('\r\n')}`
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = `manta-vision-usage-${data.period.from}-${data.period.to}.csv`
-  anchor.click()
-  URL.revokeObjectURL(url)
+  downloadBlob(
+    new Blob([csv], { type: 'text/csv;charset=utf-8' }),
+    `manta-vision-usage-${data.period.from}-${data.period.to}.csv`,
+  )
 }
 
 // ── 指標卡：值與較前期各自判 null；較前期是絕對差，文案依欄位單位 ──
